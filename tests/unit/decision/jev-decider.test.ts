@@ -8,9 +8,10 @@ interface CapturedRequest {
   body: Record<string, unknown>;
 }
 
-function createFetch(
-  responses: { status: number; body: unknown }[],
-): { fetch: (request: Request) => Promise<Response>; captured: CapturedRequest[] } {
+function createFetch(responses: { status: number; body: unknown }[]): {
+  fetch: (request: Request) => Promise<Response>;
+  captured: CapturedRequest[];
+} {
   const captured: CapturedRequest[] = [];
   let call = 0;
 
