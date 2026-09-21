@@ -1,0 +1,8 @@
+{
+  "//": "Tipos: com comentarios. E daqui que o editor tira a documentacao no hover.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "removeComments": false,
+    "emitDeclarationOnly": true
+  }
+}
