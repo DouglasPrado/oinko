@@ -82,7 +82,9 @@ O primeiro ponto a usar o decisor é o gate de extração de memória (`src/memo
 - [x] Gate de extração de memória com degradação para a heurística
 - [x] `AgentConfig.decider` e `memory.minConfidence`
 - [ ] Medir em produção: memórias extraídas por 100 turnos e custo de extração, antes e depois
-- [ ] Avaliar os demais pontos (relevância, skills, roteamento) após a medição
+- [x] Relevância de memória, gate e rerank de knowledge, ativação de skill,
+      classificação de erro de tool e roteamento de modelo — os seis pontos
+      do levantamento, cada um com degradação própria
 
 ---
 
@@ -99,3 +101,4 @@ O primeiro ponto a usar o decisor é o gate de extração de memória (`src/memo
 | Data | Mudança |
 | ---- | ------- |
 | 2026-09-21 | Criada e aceita |
+| 2026-09-21 | Seis pontos de decisão implementados; falta a medição em produção |

@@ -34,6 +34,7 @@ import { createLogger, type Logger } from './utils/logger.js';
 import { runTurnEndHooks, type TurnEndHook } from './core/turn-end-hooks.js';
 import { estimateTokens } from './utils/token-counter.js';
 import { getModelContextWindow } from './utils/model-context.js';
+import { routeModel } from './llm/model-router.js';
 import { buildToolUsagePrompt, buildEnvironmentPrompt } from './core/prompt-builders.js';
 import { homedir } from 'node:os';
 
@@ -188,14 +189,31 @@ export class Agent {
     const threadId = options?.threadId ?? 'default';
     if (!validateThreadId(threadId))
       throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
-    const model = options?.model ?? this.config.model;
-    const ctx = createExecutionContext(threadId, model);
+    const requestedModel = options?.model ?? this.config.model;
 
     // Add user message
     const userContent =
       typeof input === 'string'
         ? input
         : input.map((p) => (p.type === 'text' ? p.text : '[image]')).join('');
+
+    // Route trivial turns to a cheaper model. An explicit options.model is the
+    // caller's decision and is never second-guessed.
+    const model =
+      options?.model === undefined && this.config.routing && this.config.decider
+        ? await routeModel(
+            userContent,
+            {
+              capableModel: requestedModel,
+              fastModel: this.config.routing.fastModel,
+              minConfidence: this.config.routing.minConfidence,
+            },
+            this.config.decider,
+            { logger: this.logger },
+          )
+        : requestedModel;
+
+    const ctx = createExecutionContext(threadId, model);
     await this.conversations.withThread(threadId, () => {
       this.conversations.appendMessage(
         {

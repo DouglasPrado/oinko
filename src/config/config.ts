@@ -119,6 +119,17 @@ export const AgentConfigSchema = z.object({
     )
     .optional(),
 
+  /**
+   * Routes trivial turns to a cheaper model. Requires a `decider`; without
+   * one, every turn uses `model` as before.
+   */
+  routing: z
+    .object({
+      fastModel: z.string().min(1),
+      minConfidence: z.number().min(0).max(1).default(0.7),
+    })
+    .optional(),
+
   // MCP
   mcp: z.array(MCPConnectionConfigSchema).optional(),
 

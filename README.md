@@ -378,6 +378,21 @@ interface Decider {
 
 Questions come in three shapes — `bool`, `choice` and `score` — and every question about the same state travels in a single request. If the decider errors or times out, the harness falls back to the sampling heuristic, so behaviour without a decider is unchanged. See [ADR-007](docs/adr/adr-007-pluggable-decider.md).
 
+Where the decider is consulted, when one is configured:
+
+| Point               | Without a decider                 | With one                                    |
+| ------------------- | --------------------------------- | ------------------------------------------- |
+| Memory extraction   | `Math.random() < samplingRate`    | Asked whether the turn holds a durable fact |
+| Memory relevance    | A full LLM call picking filenames | One yes/no per candidate, in one request    |
+| Knowledge retrieval | Searched on every single turn     | Skipped when the turn needs no lookup       |
+| Knowledge ranking   | Cosine similarity, `minScore` cut | Reranked by judged relevance                |
+| Skill activation    | One embedding per skill, per turn | A single choice question                    |
+| Tool retry          | Retries any non-abort error       | Only errors judged transient                |
+| Model routing       | Always `model`                    | Trivial turns go to `routing.fastModel`     |
+
+Each point degrades on its own: an unreachable decider falls back to the
+behaviour in the middle column, never to an error.
+
 ## Knowledge (RAG)
 
 ```typescript
@@ -992,6 +1007,21 @@ interface Decider {
 ```
 
 As perguntas tem tres formatos — `bool`, `choice` e `score` — e todas sobre o mesmo estado viajam numa unica requisicao. Se o decisor falhar ou estourar o timeout, o harness cai na heuristica de amostragem: sem decisor, o comportamento e o mesmo de sempre. Veja a [ADR-007](docs/adr/adr-007-pluggable-decider.md).
+
+Onde o decisor e consultado, quando ha um configurado:
+
+| Ponto                   | Sem decisor                               | Com decisor                                |
+| ----------------------- | ----------------------------------------- | ------------------------------------------ |
+| Extracao de memoria     | `Math.random() < samplingRate`            | Pergunta se o turno tem fato duravel       |
+| Relevancia de memoria   | Uma chamada LLM escolhendo arquivos       | Um sim/nao por candidato, numa requisicao  |
+| Busca de conhecimento   | Busca em todo turno                       | Pula quando o turno nao precisa            |
+| Ranking de conhecimento | Similaridade de cosseno, corte `minScore` | Rerank por relevancia julgada              |
+| Ativacao de skill       | Um embedding por skill, por turno         | Uma unica pergunta de escolha              |
+| Retry de tool           | Retenta qualquer erro nao-abort           | So os erros julgados transitorios          |
+| Roteamento de modelo    | Sempre `model`                            | Turno trivial vai para `routing.fastModel` |
+
+Cada ponto degrada sozinho: decisor fora do ar cai no comportamento da coluna
+do meio, nunca em erro.
 
 ## Knowledge (RAG)
 
