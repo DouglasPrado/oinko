@@ -28,6 +28,19 @@ export const config = {
   tavily: {
     apiKey: process.env.TAVILY_API_KEY,
   },
+  /**
+   * TypeSafe AI (Jev) — decisor tipado para as escolhas internas do agente.
+   *
+   * Sem a chave o bot roda exatamente como antes: cada ponto de decisao cai na
+   * heuristica que ja existia.
+   */
+  typesafe: {
+    apiKey: process.env.TYPESAFE_API_KEY,
+    // Onde gravar o log de decisoes para `pnpm analyze:decisions`.
+    decisionLog: process.env.DECISION_LOG ?? './data/decisions.jsonl',
+    // Modelo barato para turnos triviais. Sem isso, nao ha roteamento.
+    fastModel: process.env.FAST_MODEL,
+  },
   mcp: {
     albert: {
       url: process.env.MCP_ALBERT_URL,
