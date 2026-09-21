@@ -1,0 +1,18 @@
+# Pacote unico, mas o arquivo precisa existir: o pnpm 11 nao le mais o campo
+# `pnpm` (nem `overrides`) de manifests de pacote. As pinagens de seguranca e a
+# liberacao de build scripts so valem se vierem daqui.
+#
+# O `overrides` do package.json continua la, duplicado de proposito: ele e o que
+# chega a quem instala o @gba/ai-harness com npm.
+allowBuilds:
+  # better-sqlite3 compila binding nativo no postinstall. Sem isto, o pacote
+  # instala sem binario e a falha so aparece na primeira query.
+  better-sqlite3: true
+  esbuild: true
+
+overrides:
+  hono: '>=4.12.16'
+  '@hono/node-server': '>=1.19.13'
+  postcss: '>=8.5.10'
+  ip-address: '>=10.1.1'
+  fast-uri: '>=3.1.2'

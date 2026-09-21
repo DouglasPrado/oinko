@@ -1,0 +1,474 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, readFile, writeFile, rm, symlink } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import {
+  FileMemorySystem,
+  truncateEntrypointContent,
+} from '../../../src/memory/file-memory-system.js';
+import type { LLMClient } from '../../../src/llm/llm-client.js';
+import type { Logger } from '../../../src/utils/logger.js';
+
+function createMockClient(selectedMemories: string[] = []): LLMClient {
+  return {
+    chat: vi.fn().mockResolvedValue({
+      content: JSON.stringify({ selected_memories: selectedMemories }),
+    }),
+  } as unknown as LLMClient;
+}
+
+function createMockLogger(): Logger {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  } as unknown as Logger;
+}
+
+describe('FileMemorySystem', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+  let client: LLMClient;
+  let logger: Logger;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-test-'));
+    client = createMockClient();
+    logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  describe('ensureDir', () => {
+    it('should create memory directory', async () => {
+      const newDir = join(tempDir, 'sub', 'memory');
+      const s = new FileMemorySystem({ memoryDir: newDir }, client, logger);
+      await s.ensureDir();
+
+      const { stat } = await import('node:fs/promises');
+      const dirStat = await stat(newDir);
+      expect(dirStat.isDirectory()).toBe(true);
+    });
+  });
+
+  describe('saveMemory', () => {
+    it('should create a memory file with frontmatter', async () => {
+      const filename = await system.saveMemory({
+        name: 'User Role',
+        description: 'User is a data scientist',
+        type: 'user',
+        content: 'The user works as a data scientist focused on ML.',
+      });
+
+      expect(filename).toBe('user-role.md');
+
+      const content = await readFile(join(tempDir, filename), 'utf-8');
+      expect(content).toContain('---');
+      expect(content).toContain('name: User Role');
+      expect(content).toContain('description: User is a data scientist');
+      expect(content).toContain('type: user');
+      expect(content).toContain('The user works as a data scientist');
+    });
+
+    it('should update MEMORY.md index', async () => {
+      await system.saveMemory({
+        name: 'Test Memory',
+        description: 'A test',
+        type: 'feedback',
+        content: 'Content',
+      });
+
+      const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
+      expect(index).toContain('test-memory.md');
+      expect(index).toContain('A test');
+    });
+
+    it('should not duplicate index entries', async () => {
+      await system.saveMemory({
+        name: 'Test',
+        description: 'desc',
+        type: 'project',
+        content: 'c',
+      });
+      await system.saveMemory({
+        name: 'Test',
+        description: 'desc updated',
+        type: 'project',
+        content: 'c2',
+      });
+
+      const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
+      const matches = index.match(/test\.md/g);
+      expect(matches?.length).toBe(1);
+    });
+  });
+
+  describe('readMemory', () => {
+    it('should read and parse a memory file', async () => {
+      await writeFile(
+        join(tempDir, 'test.md'),
+        '---\nname: Test\ndescription: A test\ntype: user\n---\n\nBody content here',
+      );
+
+      const result = await system.readMemory('test.md');
+      expect(result).not.toBeNull();
+      expect(result!.name).toBe('Test');
+      expect(result!.description).toBe('A test');
+      expect(result!.type).toBe('user');
+      expect(result!.content).toBe('Body content here');
+    });
+
+    it('should return null for non-existent file', async () => {
+      const result = await system.readMemory('nonexistent.md');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('deleteMemory', () => {
+    it('should delete the file and remove from index', async () => {
+      const filename = await system.saveMemory({
+        name: 'To Delete',
+        description: 'Will be deleted',
+        type: 'reference',
+        content: 'temp',
+      });
+
+      const deleted = await system.deleteMemory(filename);
+      expect(deleted).toBe(true);
+
+      const result = await system.readMemory(filename);
+      expect(result).toBeNull();
+
+      const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
+      expect(index).not.toContain(filename);
+    });
+
+    it('should return false for non-existent file', async () => {
+      const deleted = await system.deleteMemory('nonexistent.md');
+      expect(deleted).toBe(false);
+    });
+  });
+
+  describe('scanMemories', () => {
+    it('should scan all memory files', async () => {
+      await writeFile(join(tempDir, 'a.md'), '---\nname: A\ntype: user\n---\n');
+      await writeFile(join(tempDir, 'b.md'), '---\nname: B\ntype: feedback\n---\n');
+
+      const result = await system.scanMemories();
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('findRelevant', () => {
+    it('should return memory files selected by LLM', async () => {
+      await writeFile(
+        join(tempDir, 'relevant.md'),
+        '---\nname: Relevant\ndescription: Very relevant\ntype: user\n---\n\nRelevant content',
+      );
+      await writeFile(
+        join(tempDir, 'other.md'),
+        '---\nname: Other\ndescription: Not relevant\ntype: project\n---\n\nOther content',
+      );
+
+      client = createMockClient(['relevant.md']);
+      system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+
+      const result = await system.findRelevant('find relevant stuff');
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('Relevant');
+      expect(result[0].content).toBe('Relevant content');
+    });
+
+    it('should return empty array when no memories exist', async () => {
+      const result = await system.findRelevant('query');
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('buildContextPrompt', () => {
+    it('should return MEMORY.md content', async () => {
+      await writeFile(join(tempDir, 'MEMORY.md'), '- [Test](test.md) — A test memory\n');
+
+      const result = await system.buildContextPrompt();
+      expect(result).toContain('test.md');
+      expect(result).toContain('A test memory');
+    });
+
+    it('should return empty string when no MEMORY.md', async () => {
+      const result = await system.buildContextPrompt();
+      expect(result).toBe('');
+    });
+  });
+
+  describe('buildFullContext', () => {
+    it('should combine index and relevant memories', async () => {
+      await writeFile(join(tempDir, 'MEMORY.md'), '- [Test](test.md) — test\n');
+      await writeFile(
+        join(tempDir, 'test.md'),
+        '---\nname: Test\ndescription: test\ntype: user\n---\n\nTest body',
+      );
+
+      client = createMockClient(['test.md']);
+      system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+
+      const result = await system.buildFullContext('query');
+      expect(result).toContain('Memory Index');
+      expect(result).toContain('Relevant Memories');
+      expect(result).toContain('Test body');
+    });
+  });
+});
+
+describe('truncateEntrypointContent', () => {
+  it('should return content as-is when within limits', () => {
+    const content = 'Line 1\nLine 2\nLine 3';
+    expect(truncateEntrypointContent(content)).toBe(content);
+  });
+
+  it('should truncate at 200 lines', () => {
+    const lines = Array.from({ length: 250 }, (_, i) => `Line ${i + 1}`);
+    const content = lines.join('\n');
+    const result = truncateEntrypointContent(content);
+    expect(result).toContain('Line 200');
+    expect(result).not.toContain('Line 201');
+    expect(result).toContain('truncated');
+    expect(result).toContain('50 more lines');
+  });
+
+  it('should truncate at 25KB', () => {
+    // Create content just over 25KB
+    const line = 'x'.repeat(500) + '\n';
+    const content = line.repeat(60); // ~30KB
+    const result = truncateEntrypointContent(content);
+    const bytes = new TextEncoder().encode(result.split('\n\n[...')[0]).length;
+    expect(bytes).toBeLessThanOrEqual(25_000);
+    expect(result).toContain('truncated');
+  });
+});
+
+describe('FileMemorySystem — threadId path traversal', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-tid-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('rejects threadId with path traversal sequences', async () => {
+    await expect(
+      system.saveMemory(
+        { name: 'test', description: 'd', type: 'user', content: 'c' },
+        '../../../tmp/evil',
+      ),
+    ).rejects.toThrow(/invalid threadid/i);
+  });
+
+  it('rejects threadId with path separators', async () => {
+    await expect(
+      system.saveMemory({ name: 'test', description: 'd', type: 'user', content: 'c' }, 'foo/bar'),
+    ).rejects.toThrow(/invalid threadid/i);
+  });
+});
+
+describe('FileMemorySystem — frontmatter injection prevention', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-fm-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('sanitizes newlines in description to prevent YAML injection', async () => {
+    await system.saveMemory({
+      name: 'Test',
+      description: 'First line\nmalicious: injected-value',
+      type: 'user',
+      content: 'body',
+    });
+
+    const fileContent = await readFile(join(tempDir, 'test.md'), 'utf-8');
+    const fm = fileContent.split('---')[1] ?? '';
+    expect(fm).not.toMatch(/^malicious:/m);
+  });
+
+  it('sanitizes newlines in name to prevent YAML injection', async () => {
+    await system.saveMemory({
+      name: 'NameLine',
+      description: 'ok',
+      type: 'user',
+      content: 'body',
+    });
+    // Above should work fine. Now with injected newline:
+    await system.saveMemory({
+      name: 'Inject\nbad: value',
+      description: 'ok',
+      type: 'user',
+      content: 'body',
+    });
+    // Both files should parse correctly
+    const files = (await import('node:fs/promises')).readdir;
+    const list = await files(tempDir);
+    const mdFiles = list.filter((f) => f.endsWith('.md') && f !== 'MEMORY.md');
+    for (const f of mdFiles) {
+      const content = await readFile(join(tempDir, f), 'utf-8');
+      const fm = content.split('---')[1] ?? '';
+      expect(fm).not.toMatch(/^bad:/m);
+    }
+  });
+});
+
+describe('FileMemorySystem — concurrent writes (withWriteLock)', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-lock-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('should write all entries to MEMORY.md without corruption under concurrent saves', async () => {
+    const saves = Array.from({ length: 5 }, (_, i) =>
+      system.saveMemory({
+        name: `mem ${i}`,
+        description: `desc-${i}`,
+        type: 'user',
+        content: `content ${i}`,
+      }),
+    );
+
+    await Promise.all(saves);
+
+    const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
+    for (let i = 0; i < 5; i++) {
+      expect(index).toContain(`mem-${i}.md`);
+    }
+  });
+});
+
+describe('FileMemorySystem — symlink path traversal in readMemory/deleteMemory (#171)', () => {
+  let tempDir: string;
+  let outsideDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-sym-'));
+    outsideDir = await mkdtemp(join(tmpdir(), 'fms-outside-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+    await rm(outsideDir, { recursive: true, force: true });
+  });
+
+  it('readMemory — rejects symlink pointing outside memory dir', async () => {
+    const victimPath = join(outsideDir, 'secret.md');
+    await writeFile(victimPath, 'sensitive content', 'utf-8');
+
+    // Create symlink inside memory dir pointing to victim outside
+    await symlink(victimPath, join(tempDir, 'evil.md'));
+
+    // Should be blocked — symlink escapes memory dir
+    const result = await system.readMemory('evil.md');
+    expect(result).toBeNull();
+  });
+
+  it('deleteMemory — rejects symlink pointing outside memory dir', async () => {
+    const victimPath = join(outsideDir, 'target.md');
+    await writeFile(victimPath, 'do not delete', 'utf-8');
+
+    await symlink(victimPath, join(tempDir, 'evil.md'));
+
+    const deleted = await system.deleteMemory('evil.md');
+    expect(deleted).toBe(false);
+
+    // Confirm victim file was NOT deleted
+    const content = await readFile(victimPath, 'utf-8');
+    expect(content).toBe('do not delete');
+  });
+});
+
+describe('FileMemorySystem — path traversal in readMemory/deleteMemory (#86)', () => {
+  let tempDir: string;
+  let system: FileMemorySystem;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'fms-pt-'));
+    const client = createMockClient();
+    const logger = createMockLogger();
+    system = new FileMemorySystem({ memoryDir: tempDir }, client, logger);
+    await system.ensureDir();
+  });
+
+  afterEach(async () => {
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('readMemory — rejects path traversal via ../', async () => {
+    const result = await system.readMemory('../../etc/passwd');
+    expect(result).toBeNull();
+  });
+
+  it('readMemory — rejects null byte in filename', async () => {
+    const result = await system.readMemory('valid\x00../../etc/shadow');
+    expect(result).toBeNull();
+  });
+
+  it('readMemory — rejects URL-encoded traversal', async () => {
+    const result = await system.readMemory('%2e%2e%2fetc%2fpasswd');
+    expect(result).toBeNull();
+  });
+
+  it('readMemory — still reads a valid file within the memory dir', async () => {
+    await system.saveMemory({ name: 'safe', description: 'ok', type: 'user', content: 'body' });
+    const result = await system.readMemory('safe.md');
+    expect(result).not.toBeNull();
+    expect(result!.content).toBe('body');
+  });
+
+  it('deleteMemory — rejects path traversal via ../', async () => {
+    const result = await system.deleteMemory('../../important.txt');
+    expect(result).toBe(false);
+  });
+
+  it('deleteMemory — rejects null byte in filename', async () => {
+    const result = await system.deleteMemory('valid\x00../../tmp/evil');
+    expect(result).toBe(false);
+  });
+
+  it('deleteMemory — still deletes a valid file within the memory dir', async () => {
+    await system.saveMemory({ name: 'todelete', description: 'ok', type: 'user', content: 'c' });
+    const deleted = await system.deleteMemory('todelete.md');
+    expect(deleted).toBe(true);
+  });
+});

@@ -1,0 +1,36 @@
+# Build e dependencias
+node_modules/
+dist/
+*.tsbuildinfo
+*.tgz
+*.log
+.DS_Store
+
+# Bancos locais e segredos
+*.db
+*.db-wal
+*.db-shm
+.env
+
+# Estado de runtime do Harness
+.harness/
+data/
+
+# Saidas de ferramentas
+coverage/
+reports/
+docs/api/
+.jscpd-tmp/
+.stryker-tmp/
+
+# Exemplos: ignora artefatos locais, mas mantem os manifests versionados
+examples/*/node_modules/
+examples/*/dist/
+examples/*/data/
+examples/*/.env
+examples/*/package-lock.json
+examples/teams-bot/src/knowledge/
+
+# Restos historicos
+/docs/src/*
+/old_src/*

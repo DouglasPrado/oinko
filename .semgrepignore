@@ -1,0 +1,11 @@
+dist/
+node_modules/
+documentation/
+docs/
+examples/
+data/
+coverage/
+.harness/
+.pnpm-store/
+tests/e2e/fixtures/
+*.min.js

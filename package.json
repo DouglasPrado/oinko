@@ -1,0 +1,94 @@
+{
+  "name": "@gba/ai-harness",
+  "version": "2.1.2",
+  "packageManager": "pnpm@11.17.0",
+  "description": "AI Harness SDK by GBA - Standalone TypeScript agent library with streaming, tools, memory, knowledge (RAG), and skills",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:mutation": "stryker run",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:deadcode": "knip",
+    "lint:dup": "jscpd src/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate:publish": "publint && attw --pack . --ignore-rules cjs-resolves-to-esm",
+    "size": "size-limit",
+    "size:why": "size-limit --why",
+    "docs:dev": "cd documentation && npx mintlify@latest dev",
+    "docs:build": "cd documentation && npx mintlify@latest build",
+    "docs:api": "typedoc",
+    "docs:api:check": "typedoc --treatWarningsAsErrors --emit none"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DouglasPrado/oinko.git"
+  },
+  "homepage": "https://github.com/DouglasPrado/oinko#readme",
+  "bugs": {
+    "url": "https://github.com/DouglasPrado/oinko/issues"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@eslint/js": "^10.0.1",
+    "@size-limit/file": "^12.1.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/typescript-checker": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-sonarjs": "^4.0.3",
+    "globals": "^15.15.0",
+    "jscpd": "^5.0.16",
+    "knip": "^6.11.0",
+    "prettier": "^3.8.3",
+    "publint": "^0.3.18",
+    "size-limit": "^12.1.0",
+    "typedoc": "^0.28.19",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^4.1.11"
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "overrides": {
+    "hono": ">=4.12.16",
+    "@hono/node-server": ">=1.19.13",
+    "postcss": ">=8.5.10",
+    "ip-address": ">=10.1.1",
+    "fast-uri": ">=3.1.2"
+  },
+  "license": "MIT",
+  "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.dify.com.br/"
+  }
+}

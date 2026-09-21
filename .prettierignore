@@ -1,0 +1,15 @@
+dist
+node_modules
+documentation
+docs
+data
+coverage
+.harness
+.pnpm-store
+.claude
+examples
+pnpm-lock.yaml
+*.tsbuildinfo
+
+# gerado pelo Release Please; formatar cria conflito a cada release
+CHANGELOG.md

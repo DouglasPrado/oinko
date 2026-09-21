@@ -1,0 +1,192 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { SQLiteDatabase } from '../../../src/storage/sqlite-database.js';
+import { SQLiteConversationStore } from '../../../src/storage/sqlite-conversation-store.js';
+import type { ChatMessage } from '../../../src/contracts/entities/chat-message.js';
+import type { Logger } from '../../../src/utils/logger.js';
+
+function msg(role: ChatMessage['role'], content: string, pinned = false): ChatMessage {
+  return { role, content, pinned, createdAt: Date.now() };
+}
+
+describe('SQLiteConversationStore', () => {
+  let database: SQLiteDatabase;
+  let store: SQLiteConversationStore;
+
+  beforeEach(() => {
+    database = new SQLiteDatabase(':memory:');
+    database.initialize();
+    store = new SQLiteConversationStore(database);
+  });
+
+  afterEach(() => {
+    database.close();
+  });
+
+  it('should append and list messages by thread', () => {
+    store.appendMessage(msg('user', 'hello'), 'thread-1');
+    store.appendMessage(msg('assistant', 'hi there'), 'thread-1');
+
+    const messages = store.listThread('thread-1');
+    expect(messages).toHaveLength(2);
+    expect(messages[0]!.role).toBe('user');
+    expect(messages[0]!.content).toBe('hello');
+    expect(messages[1]!.content).toBe('hi there');
+  });
+
+  it('should isolate threads', () => {
+    store.appendMessage(msg('user', 'a'), 'thread-1');
+    store.appendMessage(msg('user', 'b'), 'thread-2');
+
+    expect(store.listThread('thread-1')).toHaveLength(1);
+    expect(store.listThread('thread-2')).toHaveLength(1);
+  });
+
+  it('should list only pinned messages', () => {
+    store.appendMessage(msg('user', 'important', true), 'thread-1');
+    store.appendMessage(msg('user', 'normal', false), 'thread-1');
+
+    const pinned = store.listPinned('thread-1');
+    expect(pinned).toHaveLength(1);
+    expect(pinned[0]!.content).toBe('important');
+  });
+
+  it('should clear a thread', () => {
+    store.appendMessage(msg('user', 'a'), 'thread-1');
+    store.appendMessage(msg('user', 'b'), 'thread-1');
+    store.clearThread('thread-1');
+
+    expect(store.listThread('thread-1')).toHaveLength(0);
+  });
+
+  it('should persist tool_calls and tool_call_id', () => {
+    const toolMsg: ChatMessage = {
+      role: 'assistant',
+      content: '',
+      toolCalls: [
+        { id: 'tc1', type: 'function', function: { name: 'weather', arguments: '{"city":"NYC"}' } },
+      ],
+      createdAt: Date.now(),
+    };
+    store.appendMessage(toolMsg, 'thread-1');
+
+    const toolResult: ChatMessage = {
+      role: 'tool',
+      content: 'Sunny 25C',
+      toolCallId: 'tc1',
+      createdAt: Date.now(),
+    };
+    store.appendMessage(toolResult, 'thread-1');
+
+    const messages = store.listThread('thread-1');
+    expect(messages).toHaveLength(2);
+    expect(messages[0]!.toolCalls).toHaveLength(1);
+    expect(messages[0]!.toolCalls![0]!.function.name).toBe('weather');
+    expect(messages[1]!.toolCallId).toBe('tc1');
+  });
+
+  // --- issue #25: corrupted tool_calls must not be silently discarded ---
+
+  it('should throw on corrupted tool_calls JSON (not silently discard)', () => {
+    // Simulates a row written by a partial write, migration error, or manual DB edit.
+    database.db
+      .prepare(
+        `
+      INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+      )
+      .run('t-corrupt', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
+
+    // Must throw with context (row id + thread id) so operators can diagnose the issue.
+    expect(() => store.listThread('t-corrupt')).toThrow(/tool_calls|Corrupted/i);
+  });
+
+  it('should warn via console.warn when tool_calls JSON is corrupt (issue #25)', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    database.db
+      .prepare(
+        `
+      INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+      )
+      .run('t-corrupt-warn', 'assistant', '""', 'NOT_VALID_JSON{{{', null, 0, Date.now());
+
+    // Corrupted tool_calls also throws (see test above) — assert both warn AND throw.
+    expect(() => store.listThread('t-corrupt-warn')).toThrow(/tool_calls|Corrupted/i);
+
+    expect(warnSpy).toHaveBeenCalledOnce();
+    const [firstArg] = warnSpy.mock.calls[0]!;
+    expect(firstArg).toMatch(/SQLiteConversationStore/);
+    expect(firstArg).toMatch(/tool_calls/);
+    warnSpy.mockRestore();
+  });
+
+  it('should return empty array for unknown thread', () => {
+    expect(store.listThread('nonexistent')).toHaveLength(0);
+  });
+
+  it('should throw on invalid role value from database (issue #5)', () => {
+    // If the SQLite file is manually edited or corrupted, an invalid role must be
+    // caught at the storage boundary — not propagated silently to the LLM layer.
+    database.db
+      .prepare(
+        `
+      INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+      )
+      .run('t-badrole', 'INVALID_ROLE', 'hello', null, null, 0, Date.now());
+
+    expect(() => store.listThread('t-badrole')).toThrow(/Invalid message role/);
+  });
+
+  it('should order messages by created_at', () => {
+    store.appendMessage({ ...msg('user', 'first'), createdAt: 100 }, 'thread-1');
+    store.appendMessage({ ...msg('user', 'third'), createdAt: 300 }, 'thread-1');
+    store.appendMessage({ ...msg('user', 'second'), createdAt: 200 }, 'thread-1');
+
+    const messages = store.listThread('thread-1');
+    expect(messages[0]!.content).toBe('first');
+    expect(messages[1]!.content).toBe('second');
+    expect(messages[2]!.content).toBe('third');
+  });
+
+  it('should use injected logger.warn instead of console.warn directly (#63)', () => {
+    const warnMessages: string[] = [];
+    const customLogger: Logger = {
+      level: 'silent',
+      debug: () => {},
+      info: () => {},
+      warn: (msg: string) => {
+        warnMessages.push(msg);
+      },
+      error: () => {},
+      child: () => customLogger,
+    };
+
+    const storeWithLogger = new (SQLiteConversationStore as any)(
+      database,
+      customLogger,
+    ) as SQLiteConversationStore;
+    database.db
+      .prepare(
+        `
+      INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+      )
+      .run('t-custom-logger', 'assistant', '""', 'NOT_VALID_JSON', null, 0, Date.now());
+
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Corrupted tool_calls also throws (issue #25) — the warn call must
+    // happen before the throw so we wrap in expect.toThrow.
+    expect(() => storeWithLogger.listThread('t-custom-logger')).toThrow(/tool_calls|Corrupted/i);
+    const consoleWarnCalled = consoleSpy.mock.calls.length > 0;
+    consoleSpy.mockRestore();
+
+    expect(consoleWarnCalled).toBe(false);
+    expect(warnMessages).toHaveLength(1);
+    expect(warnMessages[0]).toMatch(/tool_calls/i);
+  });
+});

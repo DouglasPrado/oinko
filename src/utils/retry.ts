@@ -1,0 +1,71 @@
+export interface RetryOptions {
+  maxRetries: number;
+  initialDelay?: number;
+  backoffMultiplier?: number;
+  maxDelay?: number;
+  signal?: AbortSignal;
+  isRetryable?: (error: unknown) => boolean;
+}
+
+function abortError(signal: AbortSignal): Error {
+  return signal.reason instanceof Error ? signal.reason : new Error('Aborted');
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError(signal));
+      return;
+    }
+
+    const timer = setTimeout(resolve, ms);
+
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(abortError(signal));
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
+ * Retries an async function with exponential backoff.
+ */
+export async function retry<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
+  const {
+    maxRetries,
+    initialDelay = 1000,
+    backoffMultiplier = 2,
+    maxDelay = 30_000,
+    signal,
+    isRetryable = () => true,
+  } = options;
+
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (signal?.aborted) {
+        throw signal.reason ?? new Error('Aborted');
+      }
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (attempt >= maxRetries || !isRetryable(error)) {
+        throw error;
+      }
+
+      // Respect retryAfterMs from rate-limited errors (e.g. 429 with Retry-After header)
+      const retryAfterMs = (error as { retryAfterMs?: number })?.retryAfterMs;
+      const backoffDelay = Math.min(initialDelay * backoffMultiplier ** attempt, maxDelay);
+      const delay = retryAfterMs ? Math.max(retryAfterMs, backoffDelay) : backoffDelay;
+      await sleep(delay, signal);
+    }
+  }
+
+  throw lastError;
+}

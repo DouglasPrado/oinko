@@ -1,0 +1,498 @@
+import { describe, it, expect, vi } from 'vitest';
+import { StreamingToolExecutor } from '../../../src/core/streaming-tool-executor.js';
+import { ToolExecutor } from '../../../src/tools/tool-executor.js';
+import type { Logger } from '../../../src/utils/logger.js';
+import { z } from 'zod';
+import type { AgentTool } from '../../../src/contracts/entities/agent-tool.js';
+
+function makeLogger(): Logger & { warn: ReturnType<typeof vi.fn> } {
+  return {
+    level: 'warn' as const,
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn().mockReturnThis(),
+  };
+}
+
+function createTool(overrides: Partial<AgentTool> = {}): AgentTool {
+  return {
+    name: 'test_tool',
+    description: 'A test tool',
+    parameters: z.object({ input: z.string() }),
+    execute: vi.fn().mockResolvedValue('result'),
+    ...overrides,
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+describe('StreamingToolExecutor', () => {
+  it('should execute a tool added during streaming', async () => {
+    const executor = new ToolExecutor();
+    executor.register(
+      createTool({
+        name: 'search',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockResolvedValue('found it'),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+
+    // Simulate: tool call arrives during streaming
+    streaming.addTool('call_1', 'search', '{"input":"hello"}');
+
+    // Wait a tick for execution to start
+    await delay(10);
+
+    // Collect completed results
+    const completed = [...streaming.getCompletedResults()];
+    expect(completed).toHaveLength(1);
+    expect(completed[0]!.id).toBe('call_1');
+    expect(completed[0]!.result.content).toBe('found it');
+  });
+
+  it('should execute multiple safe tools concurrently', async () => {
+    const executor = new ToolExecutor();
+    const order: string[] = [];
+
+    executor.register(
+      createTool({
+        name: 'read_a',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('a:start');
+          await delay(50);
+          order.push('a:end');
+          return 'a';
+        }),
+      }),
+    );
+
+    executor.register(
+      createTool({
+        name: 'read_b',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('b:start');
+          await delay(50);
+          order.push('b:end');
+          return 'b';
+        }),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+
+    // Add both tools quickly (as if arriving from stream)
+    streaming.addTool('c1', 'read_a', '{"input":"x"}');
+    streaming.addTool('c2', 'read_b', '{"input":"y"}');
+
+    // Both should start before either finishes
+    await delay(10);
+    expect(order).toContain('a:start');
+    expect(order).toContain('b:start');
+
+    // Get remaining results after streaming ends
+    const results: { id: string; result: { content: string } }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    // Results should be in order
+    expect(results).toHaveLength(2);
+    expect(results[0]!.id).toBe('c1');
+    expect(results[1]!.id).toBe('c2');
+  });
+
+  it('should return results in order even if later tool finishes first', async () => {
+    const executor = new ToolExecutor();
+
+    executor.register(
+      createTool({
+        name: 'slow',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          await delay(80);
+          return 'slow_result';
+        }),
+      }),
+    );
+
+    executor.register(
+      createTool({
+        name: 'fast',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          await delay(10);
+          return 'fast_result';
+        }),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c1', 'slow', '{"input":"x"}');
+    streaming.addTool('c2', 'fast', '{"input":"y"}');
+
+    const results: { id: string; result: { content: string } }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    // c1 (slow) must come before c2 (fast) — ordered by submission, not completion
+    expect(results[0]!.id).toBe('c1');
+    expect(results[0]!.result.content).toBe('slow_result');
+    expect(results[1]!.id).toBe('c2');
+    expect(results[1]!.result.content).toBe('fast_result');
+  });
+
+  it('should handle tool execution errors without breaking other tools', async () => {
+    const executor = new ToolExecutor();
+
+    executor.register(
+      createTool({
+        name: 'bad_tool',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockRejectedValue(new Error('boom')),
+      }),
+    );
+
+    executor.register(
+      createTool({
+        name: 'good_tool',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockResolvedValue('ok'),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c1', 'bad_tool', '{"input":"x"}');
+    streaming.addTool('c2', 'good_tool', '{"input":"y"}');
+
+    const results: { id: string; result: { content: string; isError?: boolean } }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    expect(results).toHaveLength(2);
+    expect(results[0]!.result.isError).toBe(true);
+    expect(results[0]!.result.content).toContain('boom');
+    expect(results[1]!.result.content).toBe('ok');
+  });
+
+  it('should respect AbortSignal', async () => {
+    const executor = new ToolExecutor();
+    executor.register(
+      createTool({
+        name: 'long_task',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async (_args: unknown, signal: AbortSignal) => {
+          if (signal.aborted) throw new Error('Aborted');
+          await delay(200);
+          if (signal.aborted) throw new Error('Aborted');
+          return 'done';
+        }),
+      }),
+    );
+
+    const controller = new AbortController();
+    const streaming = new StreamingToolExecutor(executor, controller.signal);
+    streaming.addTool('c1', 'long_task', '{"input":"x"}');
+
+    // Abort after 20ms
+    await delay(20);
+    controller.abort();
+
+    const results: { id: string; result: { content: string; isError?: boolean } }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.result.isError).toBe(true);
+  });
+
+  it('should execute unsafe tools serially (not in parallel)', async () => {
+    const executor = new ToolExecutor();
+    const order: string[] = [];
+
+    executor.register(
+      createTool({
+        name: 'write_a',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('a:start');
+          await delay(30);
+          order.push('a:end');
+          return 'a';
+        }),
+      }),
+    );
+
+    executor.register(
+      createTool({
+        name: 'write_b',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('b:start');
+          await delay(30);
+          order.push('b:end');
+          return 'b';
+        }),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c1', 'write_a', '{"input":"x"}');
+    streaming.addTool('c2', 'write_b', '{"input":"y"}');
+
+    const results: { id: string }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    // Serial: a must finish before b starts
+    expect(order).toEqual(['a:start', 'a:end', 'b:start', 'b:end']);
+    expect(results).toHaveLength(2);
+    expect(results[0]!.id).toBe('c1');
+    expect(results[1]!.id).toBe('c2');
+  });
+
+  it('should wait for unsafe tool to finish before starting safe tools', async () => {
+    const executor = new ToolExecutor();
+    const order: string[] = [];
+
+    executor.register(
+      createTool({
+        name: 'write',
+        isConcurrencySafe: false,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('write:start');
+          await delay(40);
+          order.push('write:end');
+          return 'w';
+        }),
+      }),
+    );
+
+    executor.register(
+      createTool({
+        name: 'read',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          order.push('read:start');
+          await delay(10);
+          order.push('read:end');
+          return 'r';
+        }),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c1', 'write', '{"input":"x"}');
+    streaming.addTool('c2', 'read', '{"input":"y"}');
+
+    const results: { id: string }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    // write must finish before read starts
+    expect(order.indexOf('write:end')).toBeLessThan(order.indexOf('read:start'));
+    expect(results).toHaveLength(2);
+  });
+
+  it('should return error result for malformed JSON args instead of using {} (#61)', async () => {
+    const executor = new ToolExecutor();
+    const mockExecute = vi.fn().mockResolvedValue('should not be called');
+    executor.register(
+      createTool({
+        name: 'my_tool',
+        execute: mockExecute,
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c_bad', 'my_tool', '{invalid json{{');
+
+    const results: { id: string; result: { content: string; isError?: boolean } }[] = [];
+    for await (const r of streaming.getRemainingResults()) {
+      results.push(r);
+    }
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.id).toBe('c_bad');
+    expect(results[0]!.result.isError).toBe(true);
+    expect(results[0]!.result.content).toMatch(/JSON/i);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('should parse tool args exactly once per tool call (issue #3)', async () => {
+    // Double JSON.parse wastes CPU and creates inconsistency when JSON is malformed.
+    // parsedArgs computed in addTool() must be reused in executeTool() without re-parsing.
+    const executor = new ToolExecutor();
+    const receivedArgs: unknown[] = [];
+
+    executor.register(
+      createTool({
+        name: 'probe',
+        parameters: z.object({ input: z.string() }),
+        isConcurrencySafe: (args: unknown) => {
+          receivedArgs.push(args);
+          return true;
+        },
+        execute: vi.fn().mockImplementation((args: unknown) => {
+          receivedArgs.push(args);
+          return Promise.resolve('ok');
+        }),
+      }),
+    );
+
+    let parseCount = 0;
+    const origParse = JSON.parse;
+    vi.spyOn(JSON, 'parse').mockImplementation((text: string) => {
+      parseCount++;
+      return origParse(text);
+    });
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c1', 'probe', '{"input":"hello"}');
+    for await (const _ of streaming.getRemainingResults()) {
+      /* drain */
+    }
+
+    vi.restoreAllMocks();
+
+    // Should parse args only once — not twice (addTool + executeTool)
+    expect(parseCount).toBe(1);
+    // Both isConcurrencySafe and execute should receive the same parsed object
+    expect(receivedArgs).toHaveLength(2);
+    expect(receivedArgs[0]).toEqual({ input: 'hello' });
+    expect(receivedArgs[1]).toEqual({ input: 'hello' });
+  });
+
+  // Tests for "throw on broken invariant" removed: the original RED test for
+  // issue #27 (commit b0024cb) specified SKIP semantics (resilient stream), not
+  // throw. The throw-based tests added later contradicted that intent and the
+  // implementation now follows the original — see test below.
+
+  it('getCompletedResults should skip tool with undefined result despite completed status (issue #27)', () => {
+    const executor = new ToolExecutor();
+    const streaming = new StreamingToolExecutor(executor);
+
+    // Simulate invariant violation: status='completed' but result/duration not set
+    (streaming as unknown as { tools: unknown[] }).tools.push({
+      id: 'broken',
+      name: 'test',
+      args: '{}',
+      parsedArgs: {},
+      isSafe: false,
+      status: 'completed',
+      result: undefined,
+      duration: undefined,
+      progressEvents: [],
+    });
+
+    const results = [...streaming.getCompletedResults()];
+    // Guard must skip this tool rather than yielding result: undefined
+    expect(results).toHaveLength(0);
+  });
+
+  it('getCompletedResults should be non-blocking and yield only finished tools', async () => {
+    const executor = new ToolExecutor();
+    executor.register(
+      createTool({
+        name: 'slow',
+        isConcurrencySafe: true,
+        execute: vi.fn().mockImplementation(async () => {
+          await delay(100);
+          return 'slow';
+        }),
+      }),
+    );
+
+    const streaming = new StreamingToolExecutor(executor);
+    streaming.addTool('c1', 'slow', '{"input":"x"}');
+
+    // Immediately check — tool hasn't finished yet
+    const immediate = [...streaming.getCompletedResults()];
+    expect(immediate).toHaveLength(0);
+
+    // Wait for completion
+    await delay(150);
+    const completed = [...streaming.getCompletedResults()];
+    expect(completed).toHaveLength(1);
+    expect(completed[0]!.id).toBe('c1');
+  });
+
+  // issue #144 — defensive warnings must go through injected logger, not console.warn
+  describe('injected logger instead of console.warn (issue #144)', () => {
+    it('routes defensive warn to injected logger and not to console.warn (getCompletedResults)', () => {
+      const executor = new ToolExecutor();
+      const logger = makeLogger();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Pass logger as 3rd constructor arg (not yet accepted — RED phase)
+      const streaming = new StreamingToolExecutor(executor, undefined, logger);
+
+      // Inject a tool with status='completed' but missing result/duration (invariant violation)
+      // This forces the defensive warn path.
+      (streaming as unknown as { tools: unknown[] }).tools.push({
+        id: 'broken-1',
+        name: 'broken',
+        args: '{}',
+        parsedArgs: {},
+        isSafe: true,
+        status: 'completed',
+        result: undefined,
+        duration: undefined,
+        progressEvents: [],
+      });
+
+      const results = [...streaming.getCompletedResults()];
+      expect(results).toHaveLength(0); // Broken tool skipped
+
+      // After fix: console.warn must NOT be called; logger.warn must BE called
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledOnce();
+
+      warnSpy.mockRestore();
+    });
+
+    it('routes defensive warn to injected logger and not to console.warn (getRemainingResults)', async () => {
+      const executor = new ToolExecutor();
+      const logger = makeLogger();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const streaming = new StreamingToolExecutor(executor, undefined, logger);
+
+      (streaming as unknown as { tools: unknown[] }).tools.push({
+        id: 'broken-2',
+        name: 'broken',
+        args: '{}',
+        parsedArgs: {},
+        isSafe: true,
+        status: 'executing',
+        promise: Promise.resolve(),
+        result: undefined,
+        duration: undefined,
+        progressEvents: [],
+      });
+
+      const results: unknown[] = [];
+      for await (const r of streaming.getRemainingResults()) {
+        results.push(r);
+      }
+      expect(results).toHaveLength(0);
+
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledOnce();
+
+      warnSpy.mockRestore();
+    });
+  });
+});
