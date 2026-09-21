@@ -393,6 +393,45 @@ Where the decider is consulted, when one is configured:
 Each point degrades on its own: an unreachable decider falls back to the
 behaviour in the middle column, never to an error.
 
+### Measuring it
+
+None of the above is worth trusting until it is measured against the column it
+replaced. The instrumentation ships with the SDK:
+
+```typescript
+import { Agent, JevDecider, RecordingDecider, JsonlSink } from '@gba/ai-harness';
+
+const sink = new JsonlSink('./decisions.jsonl');
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new RecordingDecider(
+    new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+    (record) => sink.write(record),
+  ),
+});
+```
+
+Every decision is logged with its point, verdict, confidence and latency. The
+evaluated state is stored as a short digest by default, so no user content
+reaches the file — `{ stateMode: 'full' }` keeps the raw text and belongs only
+where storing it is intended.
+
+`ShadowDecider` runs a challenger alongside the engine in charge and logs how
+often they disagree, without letting the challenger change any behaviour.
+
+Then read the log:
+
+```bash
+pnpm analyze:decisions decisions.jsonl --labels labels.jsonl
+```
+
+Without labels it reports volume, latency, verdict mix and how much expensive
+work each point avoided. With a labels file (one `{"id","outcome"}` per line)
+it adds accuracy and a calibration table — whether a stated confidence of 0.8
+really means right 80% of the time, which is what makes the threshold in each
+gate meaningful rather than a guess.
+
 ## Knowledge (RAG)
 
 ```typescript
@@ -1022,6 +1061,45 @@ Onde o decisor e consultado, quando ha um configurado:
 
 Cada ponto degrada sozinho: decisor fora do ar cai no comportamento da coluna
 do meio, nunca em erro.
+
+### Como medir
+
+Nada disso merece confianca antes de ser medido contra a coluna que substituiu.
+O instrumental vem junto:
+
+```typescript
+import { Agent, JevDecider, RecordingDecider, JsonlSink } from '@gba/ai-harness';
+
+const sink = new JsonlSink('./decisions.jsonl');
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new RecordingDecider(
+    new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+    (record) => sink.write(record),
+  ),
+});
+```
+
+Cada decisao vai para o log com ponto, veredito, confianca e latencia. O estado
+avaliado e gravado como digest por padrao, entao nenhum conteudo do usuario
+chega ao arquivo — `{ stateMode: 'full' }` guarda o texto cru e so cabe onde
+guardar isso e intencional.
+
+O `ShadowDecider` roda um desafiante ao lado do motor no comando e registra
+quantas vezes discordam, sem deixar o desafiante mudar comportamento nenhum.
+
+Depois, leia o log:
+
+```bash
+pnpm analyze:decisions decisions.jsonl --labels labels.jsonl
+```
+
+Sem rotulos ele reporta volume, latencia, mistura de vereditos e quanto
+trabalho caro cada ponto evitou. Com um arquivo de rotulos (um
+`{"id","outcome"}` por linha) entram acuracia e a tabela de calibracao — se uma
+confianca declarada de 0.8 significa mesmo acertar 80% das vezes, que e o que
+torna o limiar de cada gate uma escolha e nao um chute.
 
 ## Knowledge (RAG)
 

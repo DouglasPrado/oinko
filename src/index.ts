@@ -32,6 +32,12 @@ export { SQLiteDatabase } from './storage/sqlite-database.js';
 
 // Decision engine (System One decider)
 export { JevDecider, JevError } from './decision/jev-decider.js';
+export { RecordingDecider, inferDecisionPoint } from './decision/recording-decider.js';
+export type { DecisionRecord, DecisionPoint, StateMode } from './decision/recording-decider.js';
+export { ShadowDecider } from './decision/shadow-decider.js';
+export type { ShadowRecord } from './decision/shadow-decider.js';
+export { JsonlSink } from './decision/jsonl-sink.js';
+export type { JsonlSinkOptions, JsonlSinkStats } from './decision/jsonl-sink.js';
 export type { JevDeciderOptions } from './decision/jev-decider.js';
 export { shouldExtractWithDecider, DURABLE_FACT_QUESTION } from './memory/extraction-gate.js';
 export { shouldRetrieveKnowledge, KNOWLEDGE_NEEDED_QUESTION } from './knowledge/retrieval-gate.js';
