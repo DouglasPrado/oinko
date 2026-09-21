@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
+import type { Decider } from '../contracts/entities/decider.js';
 
 /** MCP server connection configuration */
 const MCPConnectionConfigSchema = z.object({
@@ -35,6 +36,8 @@ const MemoryConfigSchema = z.object({
   extractionEnabled: z.boolean().default(true),
   samplingRate: z.number().min(0).max(1).default(0.3),
   extractionInterval: z.number().int().positive().default(10),
+  /** Confidence floor for a decider verdict on whether a turn is worth remembering. */
+  minConfidence: z.number().min(0).max(1).default(0.7),
 });
 
 /** Knowledge/RAG subsystem configuration */
@@ -98,6 +101,18 @@ export const AgentConfigSchema = z.object({
     .object({
       store: z.custom<ConversationStore>().optional(),
     })
+    .optional(),
+
+  /**
+   * Decision engine for in-loop choices that would otherwise cost a model call
+   * or fall back to a blind heuristic. Without it, behaviour is unchanged.
+   *
+   * z.custom because it is an interface with methods — structural check only.
+   */
+  decider: z
+    .custom<Decider>(
+      (v) => typeof v === 'object' && v !== null && typeof (v as Decider).decide === 'function',
+    )
     .optional(),
 
   // MCP

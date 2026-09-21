@@ -346,6 +346,38 @@ Memories are `.md` files with YAML frontmatter in `.harness/memory/` (configurab
 
 Add `pinned: true` to the frontmatter to always inject a memory into the context, bypassing the LLM relevance selector. Use sparingly for durable reference content (team rosters, platform catalogs, global preferences).
 
+## Decider (typed in-loop decisions)
+
+Some decisions inside the loop are not about generating text — they are classifications. Without a decider, the harness decides whether a turn is worth remembering with a coin flip (`Math.random() < samplingRate`), which drops most facts a user states in passing.
+
+A `Decider` answers typed questions with calibrated confidence, cheaply enough to ask on every turn:
+
+```typescript
+import { Agent, JevDecider } from '@gba/ai-harness';
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+  memory: { minConfidence: 0.7 },
+});
+```
+
+With a decider configured, memory extraction runs when the turn actually holds a durable fact instead of when the dice say so — the expensive LLM extractor only fires on a positive verdict.
+
+The interface is provider-agnostic; implement `Decider` to plug any engine:
+
+```typescript
+interface Decider {
+  decide<Q extends Record<string, Question>>(
+    state: string,
+    questions: Q,
+    signal?: AbortSignal,
+  ): Promise<Answers<Q>>;
+}
+```
+
+Questions come in three shapes — `bool`, `choice` and `score` — and every question about the same state travels in a single request. If the decider errors or times out, the harness falls back to the sampling heuristic, so behaviour without a decider is unchanged. See [ADR-007](docs/adr/adr-007-pluggable-decider.md).
+
 ## Knowledge (RAG)
 
 ```typescript
@@ -928,6 +960,38 @@ const memories = await agent.recall('What are the user preferences?');
 Memorias sao arquivos `.md` com frontmatter YAML em `.harness/memory/` (configuravel). Quatro tipos: `user`, `feedback`, `project`, `reference`.
 
 Adicione `pinned: true` no frontmatter para sempre injetar uma memoria no contexto, ignorando o seletor de relevancia LLM. Use com parcimonia para conteudo de referencia durador (mapa do time, catalogo de plataformas, preferencias globais).
+
+## Decider (decisoes tipadas dentro do loop)
+
+Algumas decisoes dentro do loop nao sao sobre gerar texto — sao classificacoes. Sem um decisor, o harness decide se um turno merece virar memoria com um sorteio (`Math.random() < samplingRate`), o que descarta a maior parte dos fatos ditos de passagem.
+
+Um `Decider` responde perguntas tipadas com confianca calibrada, barato o suficiente para perguntar em todo turno:
+
+```typescript
+import { Agent, JevDecider } from '@gba/ai-harness';
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+  memory: { minConfidence: 0.7 },
+});
+```
+
+Com um decisor configurado, a extracao de memoria roda quando o turno realmente tem um fato duravel, em vez de quando o sorteio manda — o extrator LLM, que e o caro, so dispara com veredito positivo.
+
+A interface e agnostica de fornecedor; implemente `Decider` para plugar qualquer engine:
+
+```typescript
+interface Decider {
+  decide<Q extends Record<string, Question>>(
+    state: string,
+    questions: Q,
+    signal?: AbortSignal,
+  ): Promise<Answers<Q>>;
+}
+```
+
+As perguntas tem tres formatos — `bool`, `choice` e `score` — e todas sobre o mesmo estado viajam numa unica requisicao. Se o decisor falhar ou estourar o timeout, o harness cai na heuristica de amostragem: sem decisor, o comportamento e o mesmo de sempre. Veja a [ADR-007](docs/adr/adr-007-pluggable-decider.md).
 
 ## Knowledge (RAG)
 

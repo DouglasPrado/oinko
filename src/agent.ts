@@ -17,7 +17,8 @@ import { SkillManager } from './skills/skill-manager.js';
 import { createSkillTool, SKILL_TOOL_NAME, buildSkillToolPrompt } from './tools/skill-tool.js';
 import { FileMemorySystem } from './memory/file-memory-system.js';
 import { validateThreadId } from './memory/memory-paths.js';
-import { extractMemories, shouldExtract } from './memory/memory-extractor.js';
+import { extractMemories } from './memory/memory-extractor.js';
+import { shouldExtractWithDecider } from './memory/extraction-gate.js';
 import { memoryFreshnessNote } from './memory/memory-age.js';
 import { KnowledgeManager } from './knowledge/knowledge-manager.js';
 import { EmbeddingService } from './knowledge/embedding-service.js';
@@ -457,22 +458,32 @@ export class Agent {
     const prevTurns = this.turnsSinceExtractionByThread.get(threadId) ?? 0;
     const nextTurns = prevTurns + 1;
     this.turnsSinceExtractionByThread.set(threadId, nextTurns);
-    if (
-      this.fileMemorySystem &&
-      this.config.memory?.extractionEnabled !== false &&
-      shouldExtract(userContent, nextTurns, {
-        samplingRate: this.config.memory?.samplingRate,
-        extractionInterval: this.config.memory?.extractionInterval,
-      })
-    ) {
-      this.turnsSinceExtractionByThread.set(threadId, 0);
+    if (this.fileMemorySystem && this.config.memory?.extractionEnabled !== false) {
       const memSystem = this.fileMemorySystem;
       const logger = this.logger;
       const conversations = this.conversations;
       const forkFn = this.fork.bind(this);
+      const decider = this.config.decider;
+      const gateConfig = {
+        samplingRate: this.config.memory?.samplingRate,
+        extractionInterval: this.config.memory?.extractionInterval,
+        minConfidence: this.config.memory?.minConfidence,
+      };
 
       void (async () => {
         try {
+          // The gate may consult an external decider, so it runs off the turn's
+          // critical path — extraction was already fire-and-forget.
+          const shouldRun = await shouldExtractWithDecider(
+            userContent,
+            nextTurns,
+            gateConfig,
+            decider,
+            { logger },
+          );
+          if (!shouldRun) return;
+          this.turnsSinceExtractionByThread.set(threadId, 0);
+
           if (await memSystem.hasWritesSince(turnStartMs, threadId)) {
             logger.debug('Skipping extraction — agent already wrote memories this turn');
             return;

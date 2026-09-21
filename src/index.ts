@@ -30,6 +30,12 @@ export { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 export { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
 export { SQLiteDatabase } from './storage/sqlite-database.js';
 
+// Decision engine (System One decider)
+export { JevDecider, JevError } from './decision/jev-decider.js';
+export type { JevDeciderOptions } from './decision/jev-decider.js';
+export { shouldExtractWithDecider, DURABLE_FACT_QUESTION } from './memory/extraction-gate.js';
+export type { ExtractionGateConfig } from './memory/extraction-gate.js';
+
 // Builtin tools
 export { builtinTools } from './tools/builtin/index.js';
 export {
