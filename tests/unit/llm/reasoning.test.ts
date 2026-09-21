@@ -111,6 +111,41 @@ describe('LLMClient request body for reasoning models', () => {
     expect(body.reasoning_effort).toBe('none');
   });
 
+  /**
+   * The internal name is camelCase; the wire name is snake_case. Spreading the
+   * internal object into the body once leaked `reasoningEffort` alongside the
+   * correct key, and the provider rejected the whole request with
+   * "Unknown parameter". Asserting presence was not enough — absence matters.
+   */
+  it('never leaks the internal camelCase name onto the wire', async () => {
+    const withTools = await captureBody('gpt-6-astra', TOOL);
+    const withoutTools = await captureBody('gpt-6-astra');
+    const chatModel = await captureBody('gpt-4o', TOOL);
+
+    for (const body of [withTools, withoutTools, chatModel]) {
+      expect(body).not.toHaveProperty('reasoningEffort');
+    }
+  });
+
+  it('sends no unknown parameters for a reasoning model with tools', async () => {
+    const body = await captureBody('gpt-6-astra', TOOL);
+    const allowed = new Set([
+      'model',
+      'messages',
+      'stream',
+      'temperature',
+      'tools',
+      'reasoning_effort',
+      'max_completion_tokens',
+      'max_tokens',
+      'response_format',
+      'seed',
+      'stream_options',
+    ]);
+
+    expect(Object.keys(body).filter((k) => !allowed.has(k))).toEqual([]);
+  });
+
   it('omits the field when the model has no tools', async () => {
     const body = await captureBody('gpt-6-astra');
     expect(body).not.toHaveProperty('reasoning_effort');

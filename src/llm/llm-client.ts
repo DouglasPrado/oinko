@@ -91,7 +91,12 @@ export class LLMClient {
    */
   private async sendChatRequest(params: StreamChatParams, streaming: boolean): Promise<Response> {
     const model = params.model ?? this.model;
-    const reasoningArgs = buildReasoningArgs(model, (params.tools?.length ?? 0) > 0);
+    // `reasoningEffort` is an internal name and must not reach the wire —
+    // it is sent below as `reasoning_effort`. Everything else spreads as is.
+    const { reasoningEffort: autoEffort, ...reasoningArgs } = buildReasoningArgs(
+      model,
+      (params.tools?.length ?? 0) > 0,
+    );
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
@@ -114,7 +119,7 @@ export class LLMClient {
     if (params.temperature !== undefined) body.temperature = params.temperature;
     if (params.responseFormat) body.response_format = params.responseFormat;
     // An explicit caller value wins over the automatic 'none' above.
-    const effort = params.reasoningEffort ?? reasoningArgs.reasoningEffort;
+    const effort = params.reasoningEffort ?? autoEffort;
     if (effort !== undefined) body.reasoning_effort = effort;
     if (params.seed !== undefined) body.seed = params.seed;
     if (params.maxTokens !== undefined) {
