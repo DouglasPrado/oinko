@@ -672,7 +672,7 @@ export class Agent {
 
   /** Get effective context window for the current model. */
   getEffectiveContextWindow(): number {
-    return getModelContextWindow(this.config.model, this.config.maxContextTokens);
+    return getModelContextWindow(this.config.model, this.config.maxContextTokens, this.logger);
   }
 
   getHistory(threadId?: string): ChatMessage[] {

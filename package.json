@@ -24,6 +24,7 @@
     "test:mutation": "stryker run",
     "analyze:decisions": "node scripts/analyze-decisions.ts",
     "smoke:jev": "tsc && node --env-file-if-exists=.env scripts/smoke-jev.ts",
+    "check:models": "tsc && node scripts/check-models.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:deadcode": "knip",

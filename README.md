@@ -589,6 +589,31 @@ await agent.chat('Create a GitHub issue with labels bug and urgent');
 // })
 ```
 
+## Model registry
+
+What the SDK knows about a model — context window, whether it is a reasoning
+family, whether it accepts the system role — lives in one file:
+`src/llm/model-registry.ts`. Matching is by first hit, so a specific family
+must sit above the shorter one it contains.
+
+A model nobody registered still works: it falls back to a conservative 128k
+window, and the agent logs a warning naming it once. That warning exists
+because silence was the real bug — a 1M model read as 128k compacts its
+context with most of the window free, and nothing says so.
+
+The registry ages on its own, since providers add models and change windows
+without any commit here. To see the drift:
+
+```bash
+pnpm check:models
+```
+
+It compares the registry against a provider catalogue and reports three
+things: windows that disagree (bugs, and it exits non-zero), catalogue models
+the registry ignores (gaps), and registry families the catalogue no longer
+carries. It needs the network, so it is a script rather than a test — run it
+before publishing a version.
+
 ## Streaming Events
 
 ```typescript
@@ -1270,6 +1295,30 @@ await agent.chat('Crie uma issue no GitHub com labels bug e urgent');
 //   title: "...", labels: ["bug", "urgent"]
 // })
 ```
+
+## Registro de modelos
+
+O que o SDK sabe sobre um modelo — janela de contexto, se e familia de
+raciocinio, se aceita role system — vive num arquivo so:
+`src/llm/model-registry.ts`. O match e por primeira ocorrencia, entao uma
+familia especifica precisa ficar acima da mais curta que a contem.
+
+Modelo que ninguem registrou continua funcionando: cai numa janela
+conservadora de 128k, e o agente loga um aviso nomeando ele uma vez. O aviso
+existe porque o silencio era o bug de verdade — um modelo de 1M lido como
+128k compacta o contexto com quase toda a janela livre, e nada avisa.
+
+O registro envelhece sozinho, porque os provedores mudam catalogo sem commit
+nenhum aqui. Para ver a deriva:
+
+```bash
+pnpm check:models
+```
+
+Ele compara o registro com o catalogo do provedor e reporta tres coisas:
+janelas divergentes (bug, e sai com codigo != 0), modelos do catalogo que o
+registro ignora (lacuna) e familias do registro que o catalogo nao tem mais.
+Precisa de rede, entao e script e nao teste — rode antes de publicar versao.
 
 ## Streaming Events
 

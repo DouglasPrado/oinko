@@ -1,11 +1,8 @@
 import type { StreamChatParams } from './message-types.js';
-
-// Matches reasoning families: o1, o3, o4, and the gpt-5/gpt-6 lines. Accepts an
-// optional "openai/" prefix so it works with both OpenRouter and direct OpenAI.
-const REASONING_MODEL_RE = /^(openai\/)?(o[134](-|$)|gpt-[56](\.|-|$))/i;
+import { findModelFamily } from './model-registry.js';
 
 export function isReasoningModel(model: string): boolean {
-  return REASONING_MODEL_RE.test(model);
+  return findModelFamily(model)?.reasoning === true;
 }
 
 /**
@@ -31,7 +28,7 @@ export function buildReasoningArgs(model: string, hasTools: boolean): Partial<St
   };
 }
 
-// Only the original o1 family rejects system role; o3+, o4, gpt-5 and gpt-6 accept it.
+/** Only the original o1 family rejects the system role. */
 export function requiresNoSystemRole(model: string): boolean {
-  return /^(openai\/)?o1(-|$)/i.test(model);
+  return findModelFamily(model)?.noSystemRole === true;
 }
