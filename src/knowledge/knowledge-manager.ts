@@ -8,6 +8,8 @@ import type {
 import type { EmbeddingService } from './embedding-service.js';
 import { chunkText } from './chunking.js';
 import { LRUCache } from '../utils/cache.js';
+import { rerankChunks } from './rerank.js';
+import type { Decider } from '../contracts/entities/decider.js';
 
 export interface KnowledgeManagerConfig {
   store: VectorStore;
@@ -16,7 +18,14 @@ export interface KnowledgeManagerConfig {
   chunkOverlap?: number;
   topK?: number;
   minScore?: number;
+  /** When set, retrieved chunks are reranked by judged relevance. */
+  decider?: Decider;
+  /** Minimum position on the relevance scale to keep a chunk. */
+  minRelevance?: number;
 }
+
+/** How many extra candidates to pull from the store when reranking. */
+const RERANK_FETCH_MULTIPLIER = 3;
 
 /**
  * Manages knowledge ingestion (chunking + embedding) and RAG search.
@@ -28,6 +37,8 @@ export class KnowledgeManager {
   private readonly chunkOverlap: number;
   private readonly topK: number;
   private readonly minScore: number;
+  private readonly decider?: Decider;
+  private readonly minRelevance?: number;
   private readonly searchCache: LRUCache<string, RetrievedKnowledge[]>;
 
   constructor(config: KnowledgeManagerConfig) {
@@ -37,6 +48,8 @@ export class KnowledgeManager {
     this.chunkOverlap = config.chunkOverlap ?? 64;
     this.topK = config.topK ?? 5;
     this.minScore = config.minScore ?? 0.3;
+    this.decider = config.decider;
+    this.minRelevance = config.minRelevance;
     this.searchCache = new LRUCache<string, RetrievedKnowledge[]>({ maxSize: 100, ttl: 300_000 });
   }
 
@@ -95,9 +108,26 @@ export class KnowledgeManager {
     if (cached) return cached;
 
     const queryEmbedding = await this.embeddingService.embedSingle(query);
-    const results = this.store
-      .search(queryEmbedding, this.topK)
+
+    // With a reranker, cast a wider net first: similarity picks the pool,
+    // judged relevance picks the final topK out of it.
+    const fetchK = this.decider ? this.topK * RERANK_FETCH_MULTIPLIER : this.topK;
+    const candidates = this.store
+      .search(queryEmbedding, fetchK)
       .filter((r) => r.score >= this.minScore);
+
+    let results = candidates.slice(0, this.topK);
+
+    if (this.decider && candidates.length > 0) {
+      try {
+        results = await rerankChunks(query, candidates, this.decider, {
+          topK: this.topK,
+          ...(this.minRelevance !== undefined && { minRelevance: this.minRelevance }),
+        });
+      } catch {
+        // Rerank failed — keep the similarity order.
+      }
+    }
 
     this.searchCache.set(query, results);
     return results;

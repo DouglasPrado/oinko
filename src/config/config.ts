@@ -50,6 +50,8 @@ const KnowledgeConfigSchema = z.object({
   minScore: z.number().min(0).max(1).default(0.3),
   /** Confidence required for a decider to skip retrieval on a turn. */
   minConfidence: z.number().min(0).max(1).default(0.7),
+  /** Minimum judged relevance (0..3 scale) to keep a reranked chunk. */
+  minRelevance: z.number().min(0).max(3).default(1.5),
 });
 
 /** Skills subsystem configuration */

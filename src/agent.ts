@@ -141,6 +141,8 @@ export class Agent {
         chunkOverlap: config.knowledge?.chunkOverlap,
         topK: config.knowledge?.topK,
         minScore: config.knowledge?.minScore,
+        decider: config.decider,
+        minRelevance: config.knowledge?.minRelevance,
       });
     }
 
