@@ -120,6 +120,25 @@ export const AgentConfigSchema = z.object({
     .optional(),
 
   /**
+   * Screens each user message for attempts to get the agent out from under its
+   * instructions. Requires a `decider`.
+   *
+   * 'warn' tells the model what was detected and lets it answer; 'block'
+   * refuses the turn without spending an LLM call. Default 'off' — this is
+   * moderation policy, which belongs to the consumer, not to the library.
+   */
+  jailbreak: z
+    .object({
+      mode: z.enum(['off', 'warn', 'block']).default('off'),
+      minConfidence: z.number().min(0).max(1).default(0.75),
+      /** Reply sent when a blocked turn is refused. */
+      blockedMessage: z
+        .string()
+        .default('Não posso atender esse pedido. Posso ajudar com outra coisa?'),
+    })
+    .optional(),
+
+  /**
    * Routes trivial turns to a cheaper model. Requires a `decider`; without
    * one, every turn uses `model` as before.
    */
