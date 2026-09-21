@@ -32,9 +32,12 @@ describe('KnowledgeManager', () => {
   });
 
   it('should ingest a document and persist chunks', async () => {
-    const count = await manager.ingest({
-      content: 'This is a test document with enough content to be chunked into pieces.',
-    }, 'escopo-de-teste');
+    const count = await manager.ingest(
+      {
+        content: 'This is a test document with enough content to be chunked into pieces.',
+      },
+      'escopo-de-teste',
+    );
     expect(count).toBeGreaterThan(0);
     expect(store.upsert).toHaveBeenCalledTimes(count);
     expect(embeddingService.embed).toHaveBeenCalledOnce();
@@ -77,10 +80,13 @@ describe('KnowledgeManager', () => {
     vi.mocked(embeddingService.embed).mockResolvedValueOnce([[0.1, 0.2, 0.3]]);
 
     await expect(
-      manager.ingest({
-        content:
-          'First chunk content here with enough text. Second chunk content here with enough text.',
-      }, 'escopo-de-teste'),
+      manager.ingest(
+        {
+          content:
+            'First chunk content here with enough text. Second chunk content here with enough text.',
+        },
+        'escopo-de-teste',
+      ),
     ).rejects.toThrow(/embeddingservice returned/i);
   });
 

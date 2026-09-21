@@ -33,11 +33,14 @@ describe('E2E 04 — knowledge RAG (ingest → search)', () => {
     });
 
     // --- Ingest ---
-    await handle.agent.ingestKnowledge({
-      id: 'doc-1',
-      content: 'TypeScript is a strongly-typed superset of JavaScript.',
-      metadata: { source: 'readme', sourceId: 'doc-1' },
-    }, 'default');
+    await handle.agent.ingestKnowledge(
+      {
+        id: 'doc-1',
+        content: 'TypeScript is a strongly-typed superset of JavaScript.',
+        metadata: { source: 'readme', sourceId: 'doc-1' },
+      },
+      'default',
+    );
 
     // --- Search ---
     const results = await handle.agent.searchKnowledge('what is typescript', 'default');
@@ -64,10 +67,13 @@ describe('E2E 04 — knowledge RAG (ingest → search)', () => {
       knowledge: { enabled: true, chunkSize: 2048, chunkOverlap: 0, topK: 5, minScore: 0.3 },
     });
 
-    await handle.agent.ingestKnowledge({
-      id: 'doc-1',
-      content: 'Some doc content.',
-    }, 'default');
+    await handle.agent.ingestKnowledge(
+      {
+        id: 'doc-1',
+        content: 'Some doc content.',
+      },
+      'default',
+    );
 
     const results = await handle.agent.searchKnowledge('unrelated query', 'default');
     expect(results).toHaveLength(0);

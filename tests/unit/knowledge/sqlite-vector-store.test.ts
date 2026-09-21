@@ -172,9 +172,9 @@ describe('SQLiteVectorStore', () => {
     it('search() throws descriptive error when embedding blob byteLength is not multiple of 4', () => {
       insertCorruptBlob(database, 'corrupt-search');
 
-      expect(() => store.search(new Float32Array([0.1, 0.2, 0.3, 0.4]), 10, ['escopo-de-teste'])).toThrow(
-        /byteLength.*multiple of 4|multiple of 4.*byteLength/i,
-      );
+      expect(() =>
+        store.search(new Float32Array([0.1, 0.2, 0.3, 0.4]), 10, ['escopo-de-teste']),
+      ).toThrow(/byteLength.*multiple of 4|multiple of 4.*byteLength/i);
     });
 
     it('listAll() throws descriptive error when embedding blob byteLength is not multiple of 4', () => {
