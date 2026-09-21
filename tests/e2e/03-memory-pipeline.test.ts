@@ -58,7 +58,7 @@ describe('E2E 03 — memory pipeline (save → recall → inject)', () => {
     });
 
     // --- Save a memory via the public API, scoped to a thread ---
-    const filename = await handle.agent.remember('user name is Douglas', 'user', 'thread-42');
+    const filename = await handle.agent.remember('user name is Douglas', 'thread-42', 'user');
     expect(filename).toMatch(/\.md$/);
 
     // File exists under the thread subdir
@@ -87,7 +87,7 @@ describe('E2E 03 — memory pipeline (save → recall → inject)', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(handle.agent.remember('x', 'user', '../../../tmp/evil')).rejects.toThrow(
+    await expect(handle.agent.remember('x', '../../../tmp/evil')).rejects.toThrow(
       /invalid threadid/i,
     );
   });

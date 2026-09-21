@@ -332,11 +332,16 @@ Maximum of 3 simultaneously active skills (configurable via `skills.maxActiveSki
 Persistent file-based memory system inspired by Claude Code.
 
 ```typescript
-// Save memory explicitly
-await agent.remember('User prefers dark mode', 'user');
+// Save memory inside a thread — the scope is required, so it cannot be
+// forgotten into the pile every conversation reads.
+await agent.remember('User prefers dark mode', 'thread-42');
 
-// Search relevant memories
-const memories = await agent.recall('What are the user preferences?');
+// Save something every thread should see — a named, deliberate call.
+await agent.rememberGlobal('Always answer in Portuguese', 'project');
+
+// List what this thread can see, ranked by affinity with the query.
+// Local and deterministic: no model call.
+const memories = await agent.recall('What are the user preferences?', 'thread-42');
 
 // Automatic extraction: after each turn, the agent extracts memories
 // from the conversation in the background (fire-and-forget)
@@ -1001,11 +1006,16 @@ Maximo de 3 skills ativas simultaneamente (configuravel via `skills.maxActiveSki
 Sistema de memoria persistente baseado em arquivos markdown (inspirado no Claude Code).
 
 ```typescript
-// Salvar memoria explicitamente
-await agent.remember('User prefers dark mode', 'user');
+// Salva memoria dentro de uma thread — o escopo e obrigatorio, entao nao da
+// para esquecer e cair no acervo que toda conversa le.
+await agent.remember('User prefers dark mode', 'thread-42');
 
-// Buscar memorias relevantes
-const memories = await agent.recall('What are the user preferences?');
+// Salva algo que toda thread deve ver — chamada propria, dita em voz alta.
+await agent.rememberGlobal('Always answer in Portuguese', 'project');
+
+// Lista o que esta thread enxerga, ordenado por afinidade com a query.
+// Local e deterministico: sem chamada de modelo.
+const memories = await agent.recall('What are the user preferences?', 'thread-42');
 
 // Extracao automatica: apos cada turn, o agente extrai memorias
 // da conversa em background (fire-and-forget)

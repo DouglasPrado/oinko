@@ -131,7 +131,7 @@ describe('Agent', () => {
 
   it('should remember and recall explicitly (file-based)', async () => {
     const agent = Agent.create({ apiKey: 'test-key' });
-    const filename = await agent.remember('User prefers dark mode');
+    const filename = await agent.rememberGlobal('User prefers dark mode');
     expect(typeof filename).toBe('string');
     expect(filename).toMatch(/\.md$/);
   });

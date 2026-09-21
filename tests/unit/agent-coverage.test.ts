@@ -202,7 +202,9 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.remember('something')).rejects.toThrow(/Memory subsystem not enabled/);
+    await expect(agent.remember('something', 'thread-1')).rejects.toThrow(
+      /Memory subsystem not enabled/,
+    );
   });
 
   it('recall() rejects when memory subsystem is disabled', async () => {
@@ -212,7 +214,9 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.recall('anything')).rejects.toThrow(/Memory subsystem not enabled/);
+    await expect(agent.recall('anything', 'thread-1')).rejects.toThrow(
+      /Memory subsystem not enabled/,
+    );
   });
 
   // ---------------------------------------------------------------------------

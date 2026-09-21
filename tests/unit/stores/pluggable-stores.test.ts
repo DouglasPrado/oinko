@@ -54,7 +54,7 @@ describe('Pluggable Stores (ENT-011)', () => {
       knowledge: { enabled: false },
     });
 
-    const filename = await agent.remember('Custom file memory works');
+    const filename = await agent.rememberGlobal('Custom file memory works');
     expect(typeof filename).toBe('string');
     expect(filename).toMatch(/\.md$/);
 

@@ -7,7 +7,8 @@ import type { ChatMessage } from './contracts/entities/chat-message.js';
 import type { KnowledgeDocument, RetrievedKnowledge } from './contracts/entities/knowledge.js';
 import type { TokenUsage } from './contracts/entities/token-usage.js';
 import type { ContentPart } from './contracts/entities/content-part.js';
-import type { MemoryFile } from './memory/memory-types.js';
+import type { MemoryFile, MemoryType, SaveMemoryInput } from './memory/memory-types.js';
+import { scoreMemoryAgainstQuery } from './memory/memory-relevance.js';
 import type { ContextInjection } from './core/context-builder.js';
 import type { Terminal } from './core/loop-types.js';
 import { LLMClient } from './llm/llm-client.js';
@@ -61,6 +62,8 @@ export class Agent {
   private readonly mcpAdapter: MCPAdapter;
   private database?: SQLiteDatabase;
   private costAccumulator: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  /** Per-thread usage — a thread must not be able to read another's spend. */
+  private readonly usageByThread = new Map<string, TokenUsage>();
   /** Per-thread turn count for memory extraction scheduling. */
   private readonly turnsSinceExtractionByThread = new Map<string, number>();
   private destroyed = false;
@@ -453,6 +456,16 @@ export class Agent {
     this.costAccumulator.outputTokens += terminal.usage.outputTokens;
     this.costAccumulator.totalTokens += terminal.usage.totalTokens;
 
+    const threadUsage = this.usageByThread.get(threadId) ?? {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    };
+    threadUsage.inputTokens += terminal.usage.inputTokens;
+    threadUsage.outputTokens += terminal.usage.outputTokens;
+    threadUsage.totalTokens += terminal.usage.totalTokens;
+    this.usageByThread.set(threadId, threadUsage);
+
     // Cleanup skill-scoped tools and SkillTool
     for (const name of skillToolNames) {
       this.toolExecutor.unregister(name);
@@ -711,30 +724,73 @@ export class Agent {
     return this.mcpAdapter.getHealth();
   }
 
-  async remember(
-    content: string,
-    type: 'user' | 'feedback' | 'project' | 'reference' = 'user',
-    threadId?: string,
-  ): Promise<string> {
+  /**
+   * Save a memory inside a thread.
+   *
+   * `threadId` is required on purpose: the scope used to be an optional third
+   * argument, so forgetting it wrote into the shared pile that every
+   * conversation reads. Writing to that pile is now a separate, named call —
+   * see {@link rememberGlobal}.
+   */
+  async remember(content: string, threadId: string, type: MemoryType = 'user'): Promise<string> {
     if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
+    const invalid = validateThreadId(threadId) ? undefined : `Invalid threadId: ${threadId}`;
+    if (invalid) throw new Error(invalid);
+    return this.fileMemorySystem.saveMemory(this.buildMemoryInput(content, type), threadId);
+  }
+
+  /**
+   * Save a memory every thread can read.
+   *
+   * The shared pile still has its uses — a house style, a glossary — but
+   * reaching it now takes saying so out loud.
+   */
+  async rememberGlobal(content: string, type: MemoryType = 'user'): Promise<string> {
+    if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
+    return this.fileMemorySystem.saveMemory(this.buildMemoryInput(content, type));
+  }
+
+  private buildMemoryInput(content: string, type: MemoryType): SaveMemoryInput {
     const name = content
       .slice(0, 40)
       .replace(/[^a-zA-Z0-9\s]/g, '')
       .trim();
-    return this.fileMemorySystem.saveMemory(
-      {
-        name: name || 'memory',
-        description: content.slice(0, 100),
-        type,
-        content,
-      },
-      threadId,
-    );
+    return {
+      name: name || 'memory',
+      description: content.slice(0, 100),
+      type,
+      content,
+    };
   }
 
-  async recall(query: string, threadId?: string): Promise<MemoryFile[]> {
+  /**
+   * List what the given thread can see — its own memories plus the global
+   * ones — ordered by textual affinity with the query.
+   *
+   * This reads files and ranks them locally: no model call, no cost, same
+   * answer every time. Semantic selection belongs to the context pipeline,
+   * which runs a model (or a decider) over the same scope before a turn.
+   */
+  async recall(query: string, threadId: string, limit = 10): Promise<MemoryFile[]> {
     if (!this.fileMemorySystem) throw new Error('Memory subsystem not enabled');
-    return this.fileMemorySystem.findRelevant(query, undefined, undefined, threadId);
+    if (!validateThreadId(threadId)) throw new Error(`Invalid threadId: ${threadId}`);
+
+    const memorySystem = this.fileMemorySystem;
+    const headers = await memorySystem.scanMemories(undefined, threadId);
+
+    const files = await Promise.all(
+      headers.map(async (header) => {
+        const inThread = await memorySystem.readMemory(header.filename, threadId);
+        return inThread ?? (await memorySystem.readMemory(header.filename));
+      }),
+    );
+
+    return files
+      .filter((file): file is MemoryFile => file !== null)
+      .map((file) => ({ file, score: scoreMemoryAgainstQuery(file, query) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ file }) => file);
   }
 
   async ingestKnowledge(document: KnowledgeDocument): Promise<void> {
@@ -748,8 +804,15 @@ export class Agent {
     return this.knowledgeManager.search(query);
   }
 
-  getUsage(): TokenUsage {
-    return { ...this.costAccumulator };
+  /**
+   * Token usage for one thread, or for the whole process when no thread is
+   * given. The per-thread reading exists so one conversation cannot bill or
+   * inspect another's spend.
+   */
+  getUsage(threadId?: string): TokenUsage {
+    if (threadId === undefined) return { ...this.costAccumulator };
+    const usage = this.usageByThread.get(threadId);
+    return usage ? { ...usage } : { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   }
 
   async destroy(): Promise<void> {

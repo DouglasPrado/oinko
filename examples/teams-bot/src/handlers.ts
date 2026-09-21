@@ -72,7 +72,9 @@ export class AIHarnessBot extends TeamsActivityHandler {
   private async handleUsage(context: TurnContext): Promise<void> {
     const conversationId = context.activity.conversation.id;
     const agent = await getAgent(conversationId);
-    const usage = agent.getUsage();
+    // Usage for THIS conversation — the process total would show other
+    // conversations' spend.
+    const usage = agent.getUsage(conversationId);
     await context.sendActivity(
       "**Token Usage**\n\n" +
         `Input: ${usage.inputTokens.toLocaleString()}\n` +
@@ -116,7 +118,9 @@ export class AIHarnessBot extends TeamsActivityHandler {
     const conversationId = context.activity.conversation.id;
     const agent = await getAgent(conversationId);
     try {
-      const filename = await agent.remember(text);
+      // Scoped to this conversation: /memory used to write into the shared
+      // pile that every other conversation reads.
+      const filename = await agent.remember(text, conversationId);
       await context.sendActivity(`Memory saved: ${filename}`);
     } catch {
       await context.sendActivity(
