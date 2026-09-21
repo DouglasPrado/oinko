@@ -14,6 +14,9 @@ import { applyToolResultBudget } from './compaction/tool-result-budget.js';
 import { snipCompact } from './compaction/snip-compact.js';
 import { autocompact } from './compaction/autocompact.js';
 import { runStopHooks } from './stop-hooks.js';
+import { isLoopProductive } from './progress-gate.js';
+import type { Decider } from '../contracts/entities/decider.js';
+import type { Logger } from '../utils/logger.js';
 import {
   PromptTooLongError,
   OverloadedError,
@@ -57,6 +60,11 @@ export interface ReactLoopConfig {
   stopHooks?: StopHook[];
   deps?: Partial<LoopDeps>;
   tokenBudget?: TokenBudgetConfig;
+  /** Judges whether the loop is still getting anywhere. Without it, only maxIterations stops it. */
+  decider?: Decider;
+  /** Iterations between progress checks. Default 5; 0 disables. */
+  progressCheckInterval?: number;
+  logger?: Logger;
   // Phase 4: Tool intelligence
   /** Called after tool execution with file paths extracted from tool results.
    *  Returns newly activated skill names (e.g., for conditional skill activation). */
@@ -76,6 +84,9 @@ export async function* executeReactLoop(
     client,
     toolExecutor,
     maxIterations,
+    decider,
+    progressCheckInterval: progressInterval = 5,
+    logger,
     maxConsecutiveErrors,
     onToolError,
     costPolicy,
@@ -131,6 +142,29 @@ export async function* executeReactLoop(
     if (turnCount > maxIterations) {
       yield { type: 'warning', message: 'Max iterations reached', code: 'max_iterations' };
       return { reason: 'max_iterations', usage };
+    }
+
+    // --- Progress check ---
+    // Only every few iterations: this is a network round trip, and a loop
+    // needs a couple of turns before repetition is even visible.
+    if (
+      decider &&
+      progressInterval > 0 &&
+      turnCount > progressInterval &&
+      (turnCount - 1) % progressInterval === 0
+    ) {
+      const productive = await isLoopProductive(messages, turnCount - 1, decider, {
+        ...(config.signal !== undefined && { signal: config.signal }),
+        ...(logger !== undefined && { logger }),
+      });
+      if (!productive) {
+        yield {
+          type: 'warning',
+          message: 'Loop stopped early: the last turns repeated without progress',
+          code: 'no_progress',
+        };
+        return { reason: 'max_iterations', usage };
+      }
     }
 
     // --- Compaction pipeline (before LLM call) ---

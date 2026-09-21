@@ -328,6 +328,9 @@ export class Agent {
       toolExecutor: this.toolExecutor,
       model,
       maxIterations: this.config.maxIterations,
+      ...(this.config.decider !== undefined && { decider: this.config.decider }),
+      progressCheckInterval: this.config.progressCheckInterval,
+      logger: this.logger,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,
       onToolError: this.config.onToolError,
       costPolicy: this.config.costPolicy

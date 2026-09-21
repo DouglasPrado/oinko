@@ -136,6 +136,12 @@ export const AgentConfigSchema = z.object({
   // Behavior
   maxIterations: z.number().int().positive().default(10),
   maxConsecutiveErrors: z.number().int().positive().default(3),
+  /**
+   * Iterations between progress checks when a decider is configured: it
+   * judges whether the loop is still getting anywhere, instead of leaving
+   * `maxIterations` as the only brake. 0 disables.
+   */
+  progressCheckInterval: z.number().int().min(0).default(5),
   onToolError: z.enum(['continue', 'stop', 'retry']).default('continue'),
 
   // Context budget

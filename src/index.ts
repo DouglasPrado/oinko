@@ -48,6 +48,7 @@ export { classifyToolError, TOOL_ERROR_KINDS } from './tools/error-classifier.js
 export { screenUntrustedContent, UNTRUSTED_WRAPPER } from './tools/injection-guard.js';
 export type { ScreenResult } from './tools/injection-guard.js';
 export { routeModel, ROUTE_TIERS } from './llm/model-router.js';
+export { isLoopProductive, PROGRESS_QUESTION } from './core/progress-gate.js';
 export type { ModelRouteOptions } from './llm/model-router.js';
 export type { ToolErrorKind } from './tools/error-classifier.js';
 export type { ExtractionGateConfig } from './memory/extraction-gate.js';
