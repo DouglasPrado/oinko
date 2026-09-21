@@ -40,6 +40,7 @@ import {
 } from './memory-paths.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
 import { selectRelevantMemories, selectRelevantMemoriesWithDecider } from './memory-relevance.js';
+import { findDuplicateMemory } from './dedup.js';
 import { memoryFreshnessNote } from './memory-age.js';
 import { buildMemoryInstructions } from './memory-prompts.js';
 
@@ -69,6 +70,30 @@ export class FileMemorySystem {
     this.logger = logger;
     this.relevanceModel = config.relevanceModel;
     this.decider = config.decider;
+  }
+
+  /**
+   * The filename of an existing memory that already covers `input`, if any.
+   * Returns undefined whenever there is no decider, no candidate, or no
+   * confident match — every one of those means "write a new file".
+   */
+  private async findDuplicateFilename(
+    input: SaveMemoryInput,
+    threadId?: string,
+  ): Promise<string | undefined> {
+    if (!this.decider) return undefined;
+
+    const existing = await this.scanMemories(undefined, threadId);
+    if (existing.length === 0) return undefined;
+
+    const duplicate = await findDuplicateMemory(
+      { name: input.name, description: input.description },
+      existing,
+      this.decider,
+      { logger: this.logger },
+    );
+
+    return duplicate ?? undefined;
   }
 
   /** Ensure the memory directory exists (idempotent). */
@@ -107,7 +132,12 @@ export class FileMemorySystem {
     await this.ensureThreadDir(threadId);
 
     const dir = this.resolveDir(threadId);
-    const filename = sanitizeFilename(input.name);
+    // With a decider, a memory that restates one already on disk updates that
+    // file instead of adding a near-duplicate beside it. The floor is high on
+    // purpose: merging the wrong pair loses a memory, while a stray duplicate
+    // only costs a file.
+    const filename =
+      (await this.findDuplicateFilename(input, threadId)) ?? sanitizeFilename(input.name);
     const filePath = join(dir, filename);
 
     const fileContent = [

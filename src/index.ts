@@ -40,6 +40,7 @@ export { JsonlSink } from './decision/jsonl-sink.js';
 export type { JsonlSinkOptions, JsonlSinkStats } from './decision/jsonl-sink.js';
 export type { JevDeciderOptions } from './decision/jev-decider.js';
 export { shouldExtractWithDecider, DURABLE_FACT_QUESTIONS } from './memory/extraction-gate.js';
+export { findDuplicateMemory, NO_DUPLICATE } from './memory/dedup.js';
 export { shouldRetrieveKnowledge, KNOWLEDGE_NEEDED_QUESTION } from './knowledge/retrieval-gate.js';
 export { rerankChunks, RELEVANCE_LEVELS } from './knowledge/rerank.js';
 export { decideSkill, NO_SKILL } from './skills/skill-decider.js';
