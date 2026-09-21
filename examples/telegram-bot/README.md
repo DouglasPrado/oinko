@@ -86,6 +86,23 @@ The log stores a digest of each evaluated message, never its text — the conten
 of a chat does not belong in a metrics file.
 
 
+### Working against the local SDK
+
+This example depends on the repo itself (`"@gba/ai-harness": "file:../../"`).
+pnpm does not symlink that — it copies the package into its store using
+hardlinks, which makes two different rules:
+
+- **Changed an existing SDK file?** `pnpm build` at the repo root is enough;
+  the hardlink means the example sees it immediately.
+- **Added a new SDK file?** The copy has no such file and never will. Run
+  `pnpm install --ignore-workspace --force` here, or you get
+  `ERR_MODULE_NOT_FOUND` for a module that plainly exists at the root.
+
+`--ignore-workspace` is required in both cases: the root `pnpm-workspace.yaml`
+makes plain `pnpm install` resolve to the root package and report
+"Already up to date" without installing anything here.
+
+
 ## Commands
 
 | Command | Description |
