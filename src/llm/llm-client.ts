@@ -7,7 +7,12 @@ import type {
 } from './message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import { retry } from '../utils/retry.js';
-import { buildReasoningArgs, isReasoningModel, requiresNoSystemRole } from './reasoning.js';
+import {
+  buildReasoningArgs,
+  isReasoningModel,
+  requiresNoSystemRole,
+  rejectsToolsOnChatCompletions,
+} from './reasoning.js';
 import { validateSsrfUrl } from '../utils/ssrf-guard.js';
 
 /**
@@ -91,12 +96,16 @@ export class LLMClient {
    */
   private async sendChatRequest(params: StreamChatParams, streaming: boolean): Promise<Response> {
     const model = params.model ?? this.model;
-    // `reasoningEffort` is an internal name and must not reach the wire —
-    // it is sent below as `reasoning_effort`. Everything else spreads as is.
-    const { reasoningEffort: autoEffort, ...reasoningArgs } = buildReasoningArgs(
-      model,
-      (params.tools?.length ?? 0) > 0,
-    );
+    if ((params.tools?.length ?? 0) > 0 && rejectsToolsOnChatCompletions(model)) {
+      throw new Error(
+        `Model "${model}" does not accept function tools on /chat/completions, which is the ` +
+          'only endpoint this client speaks. Use a model that does (the gpt-5 line works), ' +
+          'run the agent without tools, or route this model through a gateway that speaks ' +
+          '/v1/responses.',
+      );
+    }
+
+    const reasoningArgs = buildReasoningArgs(model);
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
@@ -118,9 +127,8 @@ export class LLMClient {
     if (params.tools?.length) body.tools = params.tools;
     if (params.temperature !== undefined) body.temperature = params.temperature;
     if (params.responseFormat) body.response_format = params.responseFormat;
-    // An explicit caller value wins over the automatic 'none' above.
-    const effort = params.reasoningEffort ?? autoEffort;
-    if (effort !== undefined) body.reasoning_effort = effort;
+    // Only ever sent when the caller asks for it.
+    if (params.reasoningEffort !== undefined) body.reasoning_effort = params.reasoningEffort;
     if (params.seed !== undefined) body.seed = params.seed;
     if (params.maxTokens !== undefined) {
       if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;

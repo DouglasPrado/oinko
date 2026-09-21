@@ -21,6 +21,13 @@ export interface ModelFamily {
   reasoning?: boolean;
   /** The original o1 family rejects the system role. */
   noSystemRole?: boolean;
+  /**
+   * Some reasoning models only accept function tools through /v1/responses.
+   * On /chat/completions they refuse the request outright, and no
+   * `reasoning_effort` value makes it work — the error text suggesting
+   * 'none' is itself wrong, since these models reject 'none' too.
+   */
+  noToolsOnChatCompletions?: boolean;
 }
 
 /** Conservative window for a model nobody registered. */
@@ -61,8 +68,21 @@ export const MODEL_REGISTRY: ModelFamily[] = [
   { name: 'claude-3-haiku', match: family('claude-3-haiku'), contextWindow: 200_000 },
 
   // --- OpenAI: reasoning lines, most specific first ---
-  { name: 'gpt-6', match: /(^|\/)gpt-6($|[-.:])/i, contextWindow: 1_050_000, reasoning: true },
-  { name: 'gpt-5.6', match: family('gpt-5.6'), contextWindow: 1_050_000, reasoning: true },
+  {
+    name: 'gpt-6',
+    match: /(^|\/)gpt-6($|[-.:])/i,
+    contextWindow: 1_050_000,
+    reasoning: true,
+    noToolsOnChatCompletions: true,
+  },
+  {
+    name: 'gpt-5.6',
+    match: family('gpt-5.6'),
+    contextWindow: 1_050_000,
+    reasoning: true,
+    // luna, sol and terra all refuse tools on /chat/completions — probed live.
+    noToolsOnChatCompletions: true,
+  },
   { name: 'gpt-5.5', match: family('gpt-5.5'), contextWindow: 1_050_000, reasoning: true },
   {
     name: 'gpt-5.4-image',

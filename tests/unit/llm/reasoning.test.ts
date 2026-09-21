@@ -3,6 +3,7 @@ import {
   isReasoningModel,
   buildReasoningArgs,
   requiresNoSystemRole,
+  rejectsToolsOnChatCompletions,
 } from '../../../src/llm/reasoning.js';
 import { LLMClient } from '../../../src/llm/llm-client.js';
 
@@ -30,28 +31,22 @@ describe('isReasoningModel', () => {
 
 describe('buildReasoningArgs', () => {
   it('drops temperature for reasoning models', () => {
-    expect(buildReasoningArgs('gpt-6-astra', false)).toHaveProperty('temperature', undefined);
+    expect(buildReasoningArgs('gpt-6-astra')).toHaveProperty('temperature', undefined);
   });
 
   it('leaves non-reasoning models untouched', () => {
-    expect(buildReasoningArgs('gpt-4o', true)).toEqual({});
+    expect(buildReasoningArgs('gpt-4o')).toEqual({});
   });
 
   /**
-   * /chat/completions rejects function tools combined with a reasoning budget:
-   * "Function tools with reasoning_effort are not supported". Asking for no
-   * effort is what keeps tool calling working on this endpoint.
+   * Probing the live API: the gpt-5 line takes tools with no effort field, and
+   * the gpt-6 line refuses tools whatever the value. So the client never sets
+   * this on its own — only the caller does.
    */
-  it('asks for no reasoning effort when a reasoning model gets tools', () => {
-    expect(buildReasoningArgs('gpt-6-astra', true)).toMatchObject({ reasoningEffort: 'none' });
-  });
-
-  it('does not set the effort when there are no tools', () => {
-    expect(buildReasoningArgs('gpt-6-astra', false)).not.toHaveProperty('reasoningEffort');
-  });
-
-  it('never sets the effort for a non-reasoning model', () => {
-    expect(buildReasoningArgs('gpt-4o', true)).not.toHaveProperty('reasoningEffort');
+  it('never sets a reasoning effort on its own', () => {
+    expect(buildReasoningArgs('gpt-6-astra')).not.toHaveProperty('reasoningEffort');
+    expect(buildReasoningArgs('gpt-5.4')).not.toHaveProperty('reasoningEffort');
+    expect(buildReasoningArgs('gpt-4o')).not.toHaveProperty('reasoningEffort');
   });
 });
 
@@ -61,6 +56,24 @@ describe('requiresNoSystemRole', () => {
     expect(requiresNoSystemRole('o1-preview')).toBe(true);
     expect(requiresNoSystemRole('o3')).toBe(false);
     expect(requiresNoSystemRole('gpt-6-astra')).toBe(false);
+  });
+});
+
+describe('rejectsToolsOnChatCompletions', () => {
+  it('flags the lines that only take tools via /v1/responses', () => {
+    expect(rejectsToolsOnChatCompletions('gpt-6-astra')).toBe(true);
+    expect(rejectsToolsOnChatCompletions('openai/gpt-6-astra-pro')).toBe(true);
+    expect(rejectsToolsOnChatCompletions('gpt-5.6-luna')).toBe(true);
+    expect(rejectsToolsOnChatCompletions('gpt-5.6-sol')).toBe(true);
+    expect(rejectsToolsOnChatCompletions('gpt-5.6-terra')).toBe(true);
+  });
+
+  it('leaves models that do accept tools alone', () => {
+    expect(rejectsToolsOnChatCompletions('gpt-5.5')).toBe(false);
+    expect(rejectsToolsOnChatCompletions('gpt-5.4')).toBe(false);
+    expect(rejectsToolsOnChatCompletions('gpt-5.4-mini')).toBe(false);
+    expect(rejectsToolsOnChatCompletions('gpt-4o')).toBe(false);
+    expect(rejectsToolsOnChatCompletions('anthropic/claude-sonnet-5')).toBe(false);
   });
 });
 
@@ -106,9 +119,16 @@ describe('LLMClient request body for reasoning models', () => {
     },
   ];
 
-  it('disables reasoning effort when a reasoning model is given tools', async () => {
-    const body = await captureBody('gpt-6-astra', TOOL);
-    expect(body.reasoning_effort).toBe('none');
+  it('refuses tools for a model that cannot take them on this endpoint', async () => {
+    await expect(captureBody('gpt-6-astra', TOOL)).rejects.toThrow(
+      /does not accept function tools on \/chat\/completions/,
+    );
+  });
+
+  it('sends no reasoning_effort for a model that accepts tools', async () => {
+    const body = await captureBody('gpt-5.4', TOOL);
+    expect(body).not.toHaveProperty('reasoning_effort');
+    expect(body.tools).toBeDefined();
   });
 
   /**
@@ -118,7 +138,7 @@ describe('LLMClient request body for reasoning models', () => {
    * "Unknown parameter". Asserting presence was not enough — absence matters.
    */
   it('never leaks the internal camelCase name onto the wire', async () => {
-    const withTools = await captureBody('gpt-6-astra', TOOL);
+    const withTools = await captureBody('gpt-5.4', TOOL);
     const withoutTools = await captureBody('gpt-6-astra');
     const chatModel = await captureBody('gpt-4o', TOOL);
 
@@ -128,7 +148,7 @@ describe('LLMClient request body for reasoning models', () => {
   });
 
   it('sends no unknown parameters for a reasoning model with tools', async () => {
-    const body = await captureBody('gpt-6-astra', TOOL);
+    const body = await captureBody('gpt-5.4', TOOL);
     const allowed = new Set([
       'model',
       'messages',
@@ -157,7 +177,7 @@ describe('LLMClient request body for reasoning models', () => {
   });
 
   it('uses max_completion_tokens for the gpt-6 line', async () => {
-    const body = await captureBody('gpt-6-astra', TOOL);
+    const body = await captureBody('gpt-6-astra');
     expect(body.max_completion_tokens).toBe(100);
     expect(body).not.toHaveProperty('max_tokens');
   });

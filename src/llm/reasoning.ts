@@ -6,26 +6,23 @@ export function isReasoningModel(model: string): boolean {
 }
 
 /**
- * Per-model request adjustments for reasoning families.
+ * Per-model request adjustments for reasoning families: temperature is not
+ * accepted, so it is dropped.
  *
- * Two of them:
- * - temperature is not accepted, so it is dropped;
- * - a reasoning budget cannot coexist with function tools on
- *   /chat/completions ("Function tools with reasoning_effort are not
- *   supported"), so a turn that carries tools asks for no effort. Without
- *   this the provider rejects the whole request and the agent cannot use
- *   tools at all on these models.
- *
- * Callers that set `reasoningEffort` explicitly keep their value — this only
- * fills the gap where the request would otherwise be refused.
+ * No `reasoning_effort` is sent on its own. Probing the live API showed the
+ * gpt-5 line accepts function tools with no effort field at all, while the
+ * gpt-6 line refuses tools on /chat/completions whatever the effort — see
+ * `noToolsOnChatCompletions` in the registry. Sending a value automatically
+ * only narrowed what worked.
  */
-export function buildReasoningArgs(model: string, hasTools: boolean): Partial<StreamChatParams> {
+export function buildReasoningArgs(model: string): Partial<StreamChatParams> {
   if (!isReasoningModel(model)) return {};
+  return { temperature: undefined };
+}
 
-  return {
-    temperature: undefined,
-    ...(hasTools && { reasoningEffort: 'none' as const }),
-  };
+/** True when this model cannot be given function tools on /chat/completions. */
+export function rejectsToolsOnChatCompletions(model: string): boolean {
+  return findModelFamily(model)?.noToolsOnChatCompletions === true;
 }
 
 /** Only the original o1 family rejects the system role. */
