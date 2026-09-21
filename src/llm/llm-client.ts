@@ -91,7 +91,7 @@ export class LLMClient {
    */
   private async sendChatRequest(params: StreamChatParams, streaming: boolean): Promise<Response> {
     const model = params.model ?? this.model;
-    const reasoningArgs = buildReasoningArgs(model);
+    const reasoningArgs = buildReasoningArgs(model, (params.tools?.length ?? 0) > 0);
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
@@ -113,6 +113,9 @@ export class LLMClient {
     if (params.tools?.length) body.tools = params.tools;
     if (params.temperature !== undefined) body.temperature = params.temperature;
     if (params.responseFormat) body.response_format = params.responseFormat;
+    // An explicit caller value wins over the automatic 'none' above.
+    const effort = params.reasoningEffort ?? reasoningArgs.reasoningEffort;
+    if (effort !== undefined) body.reasoning_effort = effort;
     if (params.seed !== undefined) body.seed = params.seed;
     if (params.maxTokens !== undefined) {
       if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;

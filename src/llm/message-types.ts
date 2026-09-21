@@ -43,6 +43,8 @@ export interface StreamChatParams {
   tools?: ToolDefinition[];
   temperature?: number;
   responseFormat?: ResponseFormat;
+  /** Reasoning budget for o-series / gpt-5+ models. 'none' disables it. */
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   signal?: AbortSignal;
   seed?: number;
   maxTokens?: number;
