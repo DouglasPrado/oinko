@@ -83,7 +83,7 @@ export class Agent {
       ...(config.fetch !== undefined && { fetch: config.fetch }),
     });
 
-    this.toolExecutor = new ToolExecutor();
+    this.toolExecutor = new ToolExecutor({ decider: config.decider, logger: this.logger });
     this.mcpAdapter = new MCPAdapter(this.toolExecutor);
 
     // Conversation store — defaults to SQLite when database is available (persists across restarts)

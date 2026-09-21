@@ -3,6 +3,9 @@ import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agen
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { ToolDefinition } from '../llm/message-types.js';
 import { retry } from '../utils/retry.js';
+import { classifyToolError } from './error-classifier.js';
+import type { Decider } from '../contracts/entities/decider.js';
+import type { Logger } from '../utils/logger.js';
 
 export interface ToolCallRequest {
   name: string;
@@ -42,12 +45,23 @@ const TRUNCATE_TAIL_RATIO = 0.2;
  *   9. Result mapping (tool.mapResult)
  *  10. After hook
  */
+/** Hooks plus the optional collaborators the executor can consult. */
+export interface ToolExecutorOptions extends ToolHooks {
+  /** When set, a failed retryable tool has its error classified before retrying. */
+  decider?: Decider;
+  logger?: Logger;
+}
+
 export class ToolExecutor {
   private readonly tools = new Map<string, AgentTool>();
   private readonly hooks: ToolHooks;
+  private readonly decider?: Decider;
+  private readonly logger?: Logger;
 
-  constructor(hooks: ToolHooks = {}) {
-    this.hooks = hooks;
+  constructor(options: ToolExecutorOptions = {}) {
+    this.hooks = options;
+    this.decider = options.decider;
+    this.logger = options.logger;
   }
 
   register(tool: AgentTool): void {
@@ -280,10 +294,20 @@ export class ToolExecutor {
     const isRetryable =
       typeof tool.retryable === 'function'
         ? tool.retryable
-        : (error: unknown) => {
-            // Don't retry abort errors
+        : async (error: unknown) => {
+            // Don't retry abort errors — exact and free, no decision needed.
             if (error instanceof DOMException && error.name === 'AbortError') return false;
-            return true;
+            if (!this.decider) return true;
+
+            try {
+              const kind = await classifyToolError(error, tool.name, this.decider, {
+                ...(this.logger !== undefined && { logger: this.logger }),
+              });
+              return kind === 'transient';
+            } catch {
+              // Classifier unreachable — retry blindly, as before.
+              return true;
+            }
           };
 
     return retry(execFn, {
