@@ -6,7 +6,16 @@ export interface VectorStore {
   upsert(chunk: KnowledgeChunk): void;
   /** Optional: batch insert in a single atomic transaction — avoids partial-state on error. */
   upsertMany?(chunks: KnowledgeChunk[]): void;
-  search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[];
+  /**
+   * Searches inside the given scopes and nowhere else. Several scopes are
+   * allowed so a conversation can read its own documents plus a shared
+   * collection, without either becoming visible to everyone.
+   */
+  search(
+    queryEmbedding: Float32Array,
+    topK: number,
+    scopes: readonly string[],
+  ): RetrievedKnowledge[];
   delete(id: string): void;
   listAll(): KnowledgeChunk[];
   deleteBySource(sourceId: string): void;

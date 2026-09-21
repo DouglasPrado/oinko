@@ -145,7 +145,7 @@ async function createAgent(conversationId: string): Promise<Agent> {
   });
 
   // Register tools — pass agent getter so search_knowledge can reference this instance
-  for (const tool of createTools(() => agent)) {
+  for (const tool of createTools(() => agent, conversationId)) {
     agent.addTool(tool);
   }
 

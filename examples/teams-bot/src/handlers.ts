@@ -95,10 +95,15 @@ export class AIHarnessBot extends TeamsActivityHandler {
     const conversationId = context.activity.conversation.id;
     const agent = await getAgent(conversationId);
     try {
-      await agent.ingestKnowledge({
-        content: text,
-        metadata: { source: 'teams-chat', ingestedAt: new Date().toISOString() },
-      });
+      // Escopo da propria conversa: o /learn de um chat nao pode virar
+      // contexto dos outros.
+      await agent.ingestKnowledge(
+        {
+          content: text,
+          metadata: { source: 'teams-chat', ingestedAt: new Date().toISOString() },
+        },
+        conversationId,
+      );
       await context.sendActivity(`Knowledge ingested successfully.`);
     } catch (error) {
       console.error('Learn error:', error);

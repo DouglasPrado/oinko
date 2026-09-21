@@ -230,7 +230,7 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.ingestKnowledge({ id: 'doc-1', content: 'body' })).rejects.toThrow(
+    await expect(agent.ingestKnowledge({ id: 'doc-1', content: 'body' }, 'escopo-de-teste')).rejects.toThrow(
       /Knowledge subsystem not enabled/,
     );
   });
@@ -242,7 +242,7 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.searchKnowledge('q')).rejects.toThrow(/Knowledge subsystem not enabled/);
+    await expect(agent.searchKnowledge('q', 'escopo-de-teste')).rejects.toThrow(/Knowledge subsystem not enabled/);
   });
 
   // ---------------------------------------------------------------------------

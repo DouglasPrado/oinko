@@ -95,7 +95,7 @@ describe('E2E 07 — persistence across Agent instances', () => {
       memory: { enabled: false },
       knowledge: { enabled: true, chunkSize: 2048, chunkOverlap: 0, minScore: 0 },
     });
-    await agentA.ingestKnowledge({ id: 'd1', content: 'Hello durable world.' });
+    await agentA.ingestKnowledge({ id: 'd1', content: 'Hello durable world.' }, 'default');
     await agentA.destroy();
 
     // --- Agent B: search ---
@@ -107,7 +107,7 @@ describe('E2E 07 — persistence across Agent instances', () => {
       memory: { enabled: false },
       knowledge: { enabled: true, chunkSize: 2048, chunkOverlap: 0, minScore: 0 },
     });
-    const results = await agentB.searchKnowledge('durable');
+    const results = await agentB.searchKnowledge('durable', 'default');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.content).toContain('durable');
 

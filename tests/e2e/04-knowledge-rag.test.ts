@@ -37,10 +37,10 @@ describe('E2E 04 — knowledge RAG (ingest → search)', () => {
       id: 'doc-1',
       content: 'TypeScript is a strongly-typed superset of JavaScript.',
       metadata: { source: 'readme', sourceId: 'doc-1' },
-    });
+    }, 'default');
 
     // --- Search ---
-    const results = await handle.agent.searchKnowledge('what is typescript');
+    const results = await handle.agent.searchKnowledge('what is typescript', 'default');
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.score).toBeGreaterThanOrEqual(0.5);
     expect(results[0]!.content).toContain('TypeScript');
@@ -67,9 +67,9 @@ describe('E2E 04 — knowledge RAG (ingest → search)', () => {
     await handle.agent.ingestKnowledge({
       id: 'doc-1',
       content: 'Some doc content.',
-    });
+    }, 'default');
 
-    const results = await handle.agent.searchKnowledge('unrelated query');
+    const results = await handle.agent.searchKnowledge('unrelated query', 'default');
     expect(results).toHaveLength(0);
   });
 });

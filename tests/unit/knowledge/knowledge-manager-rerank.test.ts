@@ -39,7 +39,7 @@ describe('KnowledgeManager with a reranking decider', () => {
       decider,
     });
 
-    await manager.search('query');
+    await manager.search('query', 'escopo-de-teste');
 
     // topK 5 × multiplier 3
     expect((store.search as ReturnType<typeof vi.fn>).mock.calls[0]![1]).toBe(15);
@@ -53,7 +53,7 @@ describe('KnowledgeManager with a reranking decider', () => {
       topK: 5,
     });
 
-    await manager.search('query');
+    await manager.search('query', 'escopo-de-teste');
 
     expect((store.search as ReturnType<typeof vi.fn>).mock.calls[0]![1]).toBe(5);
   });
@@ -79,7 +79,7 @@ describe('KnowledgeManager with a reranking decider', () => {
       decider,
     });
 
-    const results = await manager.search('query');
+    const results = await manager.search('query', 'escopo-de-teste');
 
     expect(results.map((r) => r.id)).toEqual(['2', '3', '1']);
   });
@@ -101,7 +101,7 @@ describe('KnowledgeManager with a reranking decider', () => {
       decider,
     });
 
-    const results = await manager.search('query');
+    const results = await manager.search('query', 'escopo-de-teste');
 
     expect(results.map((r) => r.id)).toEqual(['1', '2']);
   });

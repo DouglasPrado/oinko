@@ -440,14 +440,22 @@ gate meaningful rather than a guess.
 ## Knowledge (RAG)
 
 ```typescript
-await agent.ingestKnowledge({
-  id: 'docs-api',
-  content: apiDocs,
-  metadata: { source: 'api-docs.md' },
-});
+// Documents belong to a scope. Every agent in a pool shares one database, so
+// an unscoped ingest would turn one conversation's document into everyone's
+// context.
+await agent.ingestKnowledge(
+  { id: 'docs-api', content: apiDocs, metadata: { source: 'api-docs.md' } },
+  'thread-42',
+);
 
-// The agent automatically searches knowledge when relevant
-await agent.chat('How do I authenticate with the API?');
+// A shared collection is a scope like any other — deliberate, and named.
+await agent.ingestKnowledge({ content: platformDocs }, 'platform-docs');
+
+// Read a conversation's own documents plus the shared collection.
+const found = await agent.searchKnowledge('how do I authenticate?', ['thread-42', 'platform-docs']);
+
+// During a turn the agent searches the thread's own scope automatically.
+await agent.chat('How do I authenticate with the API?', { threadId: 'thread-42' });
 ```
 
 ## MCP (Model Context Protocol)
@@ -1114,11 +1122,19 @@ torna o limiar de cada gate uma escolha e nao um chute.
 ## Knowledge (RAG)
 
 ```typescript
-await agent.ingestKnowledge({
-  id: 'docs-api',
-  content: apiDocs,
-  metadata: { source: 'api-docs.md' },
-});
+// Documento pertence a um escopo. Todos os agentes de um pool compartilham o
+// mesmo banco, entao um ingest sem escopo transforma o documento de uma
+// conversa em contexto de todas.
+await agent.ingestKnowledge(
+  { id: 'docs-api', content: apiDocs, metadata: { source: 'api-docs.md' } },
+  'thread-42',
+);
+
+// Um acervo compartilhado e um escopo como outro qualquer — deliberado e com nome.
+await agent.ingestKnowledge({ content: platformDocs }, 'platform-docs');
+
+// Le o que a conversa ingeriu mais o acervo compartilhado.
+const found = await agent.searchKnowledge('como autentico?', ['thread-42', 'platform-docs']);
 
 // O agente busca automaticamente no knowledge quando relevante
 await agent.chat('How do I authenticate with the API?');

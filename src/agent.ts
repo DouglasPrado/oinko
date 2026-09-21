@@ -793,15 +793,29 @@ export class Agent {
       .map(({ file }) => file);
   }
 
-  async ingestKnowledge(document: KnowledgeDocument): Promise<void> {
+  /**
+   * Ingest a document into one conversation's knowledge base.
+   *
+   * `threadId` is required: every agent in a pool points at the same database,
+   * so an unscoped ingest turns one conversation's document into everyone's
+   * context.
+   */
+  async ingestKnowledge(document: KnowledgeDocument, threadId: string): Promise<void> {
     if (!this.knowledgeManager) throw new Error('Knowledge subsystem not enabled');
-    const chunks = await this.knowledgeManager.ingest(document);
-    this.logger.info('Knowledge ingested', { chunks });
+    const chunks = await this.knowledgeManager.ingest(document, threadId);
+    this.logger.info('Knowledge ingested', { chunks, threadId });
   }
 
-  async searchKnowledge(query: string): Promise<RetrievedKnowledge[]> {
+  /**
+   * Search a conversation's knowledge base, optionally together with shared
+   * collections the caller is entitled to read.
+   */
+  async searchKnowledge(
+    query: string,
+    threadId: string | readonly string[],
+  ): Promise<RetrievedKnowledge[]> {
     if (!this.knowledgeManager) throw new Error('Knowledge subsystem not enabled');
-    return this.knowledgeManager.search(query);
+    return this.knowledgeManager.search(query, threadId);
   }
 
   /**
@@ -939,7 +953,9 @@ export class Agent {
           this.config.decider,
           { logger: this.logger },
         );
-        const results = shouldRetrieve ? await this.knowledgeManager.search(userInput) : [];
+        const results = shouldRetrieve
+          ? await this.knowledgeManager.search(userInput, threadId)
+          : [];
         if (results.length > 0) {
           const content = results.map((r) => r.content).join('\n\n');
           const tokens = estimateTokens(content);

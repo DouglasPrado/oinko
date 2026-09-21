@@ -23,7 +23,7 @@
     "test:coverage": "vitest run --coverage",
     "test:mutation": "stryker run",
     "analyze:decisions": "node scripts/analyze-decisions.ts",
-    "smoke:jev": "tsc && node scripts/smoke-jev.ts",
+    "smoke:jev": "tsc && node --env-file-if-exists=.env scripts/smoke-jev.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:deadcode": "knip",

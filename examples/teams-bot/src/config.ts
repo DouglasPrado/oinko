@@ -44,3 +44,12 @@ export const config = {
     },
   },
 };
+
+/**
+ * Acervo de RAG que toda conversa pode ler — a documentacao da plataforma,
+ * ingerida pelo scripts/ingest-docs.ts.
+ *
+ * O que um usuario ensina pelo /learn vai para o escopo da propria conversa;
+ * so o que e ingerido aqui, deliberadamente, e compartilhado.
+ */
+export const SHARED_KNOWLEDGE_SCOPE = 'platform-docs';

@@ -13,6 +13,7 @@ import 'dotenv/config';
 import { readFileSync, existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { Agent } from '@gba/ai-harness';
+import { SHARED_KNOWLEDGE_SCOPE } from '../src/config.js';
 import { config } from '../src/config.js';
 
 async function main() {
@@ -51,14 +52,19 @@ async function main() {
 
     console.log(`  ${name} (${content.length} chars)`);
 
-    await agent.ingestKnowledge({
-      content,
-      metadata: {
-        source: name,
-        filePath: path,
-        ingestedAt: new Date().toISOString(),
+    // Documentacao da plataforma vai para o acervo compartilhado, que toda
+    // conversa pode ler — diferente do que os usuarios ensinam pelo /learn.
+    await agent.ingestKnowledge(
+      {
+        content,
+        metadata: {
+          source: name,
+          filePath: path,
+          ingestedAt: new Date().toISOString(),
+        },
       },
-    });
+      SHARED_KNOWLEDGE_SCOPE,
+    );
 
     console.log(`  -> ingested`);
   }
