@@ -36,6 +36,7 @@ export type { JevDeciderOptions } from './decision/jev-decider.js';
 export { shouldExtractWithDecider, DURABLE_FACT_QUESTION } from './memory/extraction-gate.js';
 export { shouldRetrieveKnowledge, KNOWLEDGE_NEEDED_QUESTION } from './knowledge/retrieval-gate.js';
 export { rerankChunks, RELEVANCE_LEVELS } from './knowledge/rerank.js';
+export { decideSkill, NO_SKILL } from './skills/skill-decider.js';
 export type { ExtractionGateConfig } from './memory/extraction-gate.js';
 export type { RetrievalGateConfig } from './knowledge/retrieval-gate.js';
 export type { RerankOptions } from './knowledge/rerank.js';

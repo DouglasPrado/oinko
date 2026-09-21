@@ -150,6 +150,8 @@ export class Agent {
     this.skillManager = new SkillManager({
       embeddingService: this.embeddingService,
       maxActiveSkills: config.skills?.maxActiveSkills,
+      decider: config.decider,
+      logger: this.logger,
     });
 
     // Auto-load skills from directory (fire-and-forget)

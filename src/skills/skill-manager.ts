@@ -3,6 +3,9 @@ import type { EmbeddingService } from '../knowledge/embedding-service.js';
 import { scanSkillFiles } from './skill-loader.js';
 import { substituteArgs } from './skill-args.js';
 import { matchAnyGlob } from './skill-glob.js';
+import { decideSkill } from './skill-decider.js';
+import type { Decider } from '../contracts/entities/decider.js';
+import type { Logger } from '../utils/logger.js';
 import { cosineSimilarity } from '../utils/vector-math.js';
 
 export interface SkillMatchResult {
@@ -39,10 +42,19 @@ export class SkillManager {
   private readonly stickySessions = new Map<string, Map<string, StickySession>>();
 
   private readonly embeddingService?: EmbeddingService;
+  private readonly decider?: Decider;
+  private readonly logger?: Logger;
   private readonly maxActiveSkills: number;
 
-  constructor(options?: { embeddingService?: EmbeddingService; maxActiveSkills?: number }) {
+  constructor(options?: {
+    embeddingService?: EmbeddingService;
+    maxActiveSkills?: number;
+    decider?: Decider;
+    logger?: Logger;
+  }) {
     this.embeddingService = options?.embeddingService;
+    this.decider = options?.decider;
+    this.logger = options?.logger;
     this.maxActiveSkills = options?.maxActiveSkills ?? 3;
   }
 
@@ -192,9 +204,28 @@ export class SkillManager {
 
     // 4. Semantic match — only if no prefix/alias/custom/sticky matches found
     //    and there are skills that lack explicit matchers
-    if (this.embeddingService && matches.length === 0 && this.hasSkillsNeedingSemantic(eligible)) {
-      const semanticMatches = await this.semanticMatch(input, eligible);
-      matches.push(...semanticMatches);
+    if (matches.length === 0 && this.hasSkillsNeedingSemantic(eligible)) {
+      // A decision — including "none" — settles it without any embedding.
+      // Only an unreachable decider falls through to similarity matching.
+      let decided = false;
+      if (this.decider) {
+        try {
+          const chosen = await decideSkill(input, eligible, this.decider, {
+            ...(this.logger !== undefined && { logger: this.logger }),
+          });
+          matches.push(...chosen);
+          decided = true;
+        } catch (error) {
+          this.logger?.warn('Decider unavailable — falling back to semantic skill matching', {
+            error: String(error),
+          });
+        }
+      }
+
+      if (!decided && this.embeddingService) {
+        const semanticMatches = await this.semanticMatch(input, eligible);
+        matches.push(...semanticMatches);
+      }
     }
 
     // Sort: exclusive first, then by match type priority, then by skill.priority
