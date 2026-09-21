@@ -117,6 +117,7 @@ export class Agent {
           memoryDir: config.memory?.memoryDir,
           relevanceModel: config.memory?.relevanceModel,
           extractionEnabled: config.memory?.extractionEnabled,
+          decider: config.decider,
         },
         this.client,
         this.logger,

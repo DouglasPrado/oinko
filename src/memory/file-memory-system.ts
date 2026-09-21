@@ -22,6 +22,7 @@ import { readFile, writeFile, unlink, stat, readdir, mkdir } from 'node:fs/promi
 import { join } from 'node:path';
 import type { LLMClient } from '../llm/llm-client.js';
 import type { Logger } from '../utils/logger.js';
+import type { Decider } from '../contracts/entities/decider.js';
 import type { MemoryFile, MemoryHeader, SaveMemoryInput } from './memory-types.js';
 import {
   ENTRYPOINT_NAME,
@@ -38,7 +39,7 @@ import {
   validateMemoryPathResolved,
 } from './memory-paths.js';
 import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memory-scanner.js';
-import { selectRelevantMemories } from './memory-relevance.js';
+import { selectRelevantMemories, selectRelevantMemoriesWithDecider } from './memory-relevance.js';
 import { memoryFreshnessNote } from './memory-age.js';
 import { buildMemoryInstructions } from './memory-prompts.js';
 
@@ -48,6 +49,8 @@ export interface FileMemoryConfig {
   relevanceModel?: string;
   maxMemoryFiles?: number;
   extractionEnabled?: boolean;
+  /** When set, relevance is decided here instead of by a full LLM call. */
+  decider?: Decider;
 }
 
 const THREADS_DIR = 'threads';
@@ -57,6 +60,7 @@ export class FileMemorySystem {
   private readonly client: LLMClient;
   private readonly logger: Logger;
   private readonly relevanceModel?: string;
+  private readonly decider?: Decider;
   private lockChain: Promise<void> = Promise.resolve();
 
   constructor(config: FileMemoryConfig, client: LLMClient, logger: Logger) {
@@ -64,6 +68,7 @@ export class FileMemorySystem {
     this.client = client;
     this.logger = logger;
     this.relevanceModel = config.relevanceModel;
+    this.decider = config.decider;
   }
 
   /** Ensure the memory directory exists (idempotent). */
@@ -216,7 +221,23 @@ export class FileMemorySystem {
     const manifest = formatMemoryManifest(filtered);
     const validFilenames = new Set(filtered.map((m) => m.filename));
 
-    const selectedFilenames = await selectRelevantMemories(
+    // A decider answers one yes/no per candidate in a single round trip;
+    // the LLM selector stays as the fallback.
+    let selectedFilenames: string[] | undefined;
+    if (this.decider) {
+      try {
+        selectedFilenames = await selectRelevantMemoriesWithDecider(query, filtered, this.decider, {
+          signal,
+          logger: this.logger,
+        });
+      } catch (error) {
+        this.logger.warn('Decider unavailable — falling back to LLM relevance selection', {
+          error: String(error),
+        });
+      }
+    }
+
+    selectedFilenames ??= await selectRelevantMemories(
       query,
       manifest,
       validFilenames,
