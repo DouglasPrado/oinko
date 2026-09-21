@@ -52,7 +52,7 @@ O SDK segue uma arquitetura em camadas com interfaces plugaveis:
 +------------------------------------------------------+
 |               Infrastructure Layer                    |
 |   LLMClient   SQLiteDatabase   FileSystem             |
-|   (fetch)     (better-sqlite3) (node:fs)              |
+|   (fetch)     (node:sqlite)    (node:fs)              |
 +------------------------------------------------------+
 ```
 
@@ -72,16 +72,15 @@ O SDK segue uma arquitetura em camadas com interfaces plugaveis:
 | Linguagem | TypeScript | 5.x |
 | Runtime | Node.js | 22+ |
 | Validacao | Zod | 3.x |
-| Persistencia | better-sqlite3 + SQLite | 3.x |
-| Contratos de tools | zod-to-json-schema | 3.x |
+| Persistencia | `node:sqlite` (embutido no Node) | Node 22.5+ |
 
 <Info>
-O SDK mantem no maximo **4 dependencias diretas** em producao. HTTP e feito via `fetch()` nativo do Node.js 22+ — sem axios, sem SDKs de LLM.
+O SDK tem **1 dependencia direta** em producao: o Zod. HTTP e feito via `fetch()` nativo, e o SQLite vem do `node:sqlite`, embutido no Node — sem axios, sem SDKs de LLM, sem build nativo.
 </Info>
 
 ## Principios de Design
 
-- **Dependencias minimas** — apenas Zod, better-sqlite3 e zod-to-json-schema
+- **Dependencias minimas** — apenas Zod. SQLite vem do `node:sqlite`, embutido no Node
 - **Streaming first** — `stream()` e a API primaria; `chat()` consome `stream()` internamente
 - **Interfaces plugaveis** — `VectorStore`, `ConversationStore` sao interfaces; SQLite e o default
 - **Falhe explicitamente, recupere graciosamente** — retry com backoff, fallback de modelo, erros com traceId

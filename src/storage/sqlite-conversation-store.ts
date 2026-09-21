@@ -38,7 +38,7 @@ export class SQLiteConversationStore implements ConversationStore {
   listThread(threadId: string): ChatMessage[] {
     const rows = this.database.db
       .prepare('SELECT * FROM conversations WHERE thread_id = ? ORDER BY created_at ASC')
-      .all(threadId) as ConversationRow[];
+      .all(threadId) as unknown as ConversationRow[];
     return rows.map((row) => rowToMessage(row, this.logger));
   }
 
@@ -47,7 +47,7 @@ export class SQLiteConversationStore implements ConversationStore {
       .prepare(
         'SELECT * FROM conversations WHERE thread_id = ? AND pinned = 1 ORDER BY created_at ASC',
       )
-      .all(threadId) as ConversationRow[];
+      .all(threadId) as unknown as ConversationRow[];
     return rows.map((row) => rowToMessage(row, this.logger));
   }
 

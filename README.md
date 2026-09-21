@@ -599,7 +599,7 @@ Interfaces: `ConversationStore`, `VectorStore` — implement to use any backend.
 | Language     | TypeScript 5.x                           |
 | Runtime      | Node.js 22+                              |
 | Validation   | Zod 3.x                                  |
-| Persistence  | better-sqlite3 + SQLite                  |
+| Persistence  | node:sqlite (Node built-in)              |
 | Tools schema | zod-to-json-schema                       |
 | LLM          | Any OpenAI-compatible API (native fetch) |
 
@@ -1182,7 +1182,7 @@ Interfaces: `ConversationStore`, `VectorStore` — implemente para usar qualquer
 | Linguagem    | TypeScript 5.x                                |
 | Runtime      | Node.js 22+                                   |
 | Validacao    | Zod 3.x                                       |
-| Persistencia | better-sqlite3 + SQLite                       |
+| Persistencia | node:sqlite (embutido no Node)                |
 | Tools schema | zod-to-json-schema                            |
 | LLM          | Qualquer API OpenAI-compatible (fetch nativo) |
 

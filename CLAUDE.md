@@ -18,16 +18,16 @@ Todo codigo DEVE implementar fielmente o que esta documentado nos blueprints.
 
 ## Stack Tecnologica
 
-| Camada             | Tecnologia                        | Versao  | Justificativa                                     |
-| ------------------ | --------------------------------- | ------- | ------------------------------------------------- |
-| Linguagem          | TypeScript                        | 5.x     | Tipagem estatica, API publica clara               |
-| Runtime            | Node.js                           | 22+     | `fetch()` nativo, `AbortSignal`, dynamic import   |
-| Framework          | Nenhum                            | N/A     | Biblioteca standalone in-process                  |
-| Validacao          | Zod                               | 4.x     | Unico sistema de validacao permitido              |
-| Persistencia       | `better-sqlite3` + SQLite         | 3.x     | Arquivo unico, WAL mode, FTS5, zero config        |
-| Contratos de tools | `zod-to-json-schema`              | 3.x     | Conversao Zod → JSON Schema para function calling |
-| Cache              | LRU em memoria                    | Interno | TTL configuravel, zero deps extras                |
-| Streaming          | `AsyncIterableIterator` + eventos | Interno | Streaming first, sem broker externo               |
+| Camada             | Tecnologia                        | Versao     | Justificativa                                                 |
+| ------------------ | --------------------------------- | ---------- | ------------------------------------------------------------- |
+| Linguagem          | TypeScript                        | 5.x        | Tipagem estatica, API publica clara                           |
+| Runtime            | Node.js                           | 22+        | `fetch()` nativo, `AbortSignal`, dynamic import               |
+| Framework          | Nenhum                            | N/A        | Biblioteca standalone in-process                              |
+| Validacao          | Zod                               | 4.x        | Unico sistema de validacao permitido                          |
+| Persistencia       | `node:sqlite` (embutido no Node)  | Node 22.5+ | Arquivo unico, WAL mode, FTS5, zero config, zero build nativo |
+| Contratos de tools | `zod-to-json-schema`              | 3.x        | Conversao Zod → JSON Schema para function calling             |
+| Cache              | LRU em memoria                    | Interno    | TTL configuravel, zero deps extras                            |
+| Streaming          | `AsyncIterableIterator` + eventos | Interno    | Streaming first, sem broker externo                           |
 
 **Limite:** <= 4 dependencias diretas em `dependencies`.
 

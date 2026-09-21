@@ -16,7 +16,7 @@ Define a stack tecnologica, principios de design e objetivos do backend. Este do
 | Runtime            | Node.js                                      | 22+            | `fetch()` nativo, `AbortSignal`, dynamic import e filesystem disponivel     |
 | Framework          | Nenhum                                       | N/A            | O sistema e uma biblioteca standalone in-process, nao um servidor HTTP      |
 | Validacao          | Zod                                          | 3.x            | Unico sistema de validacao permitido pelos ADRs                             |
-| Persistencia       | `better-sqlite3` + SQLite                    | 3.x / SQLite 3 | Arquivo unico, WAL mode, FTS5 e zero config                                 |
+| Persistencia       | `node:sqlite` (embutido no Node)             | Node 22.5+     | Arquivo unico, WAL mode, FTS5, zero config e zero build nativo              |
 | Contratos de tools | `zod-to-json-schema`                         | 3.x            | Conversao de schemas Zod para function/tool calling                         |
 | Cache              | Cache LRU em memoria                         | Interno        | Zero dependencias extras; TTL configuravel para embeddings e buscas         |
 | Mensageria         | `AsyncIterableIterator` + eventos in-process | Interno        | Streaming first; sem broker externo por padrao                              |
@@ -109,7 +109,7 @@ Arquitetura em camadas com nucleo orientado a dominio e interfaces plugaveis. Na
 | Servico            | Provedor                  | Funcao                                                     | Ambiente            |
 | ------------------ | ------------------------- | ---------------------------------------------------------- | ------------------- |
 | LLM gateway        | OpenRouter API            | Chat completions, streaming SSE e embeddings               | Dev, Test E2E, Prod |
-| Persistencia local | SQLite (`better-sqlite3`) | Conversas, memórias e vetores                              | Dev, Test, Prod     |
+| Persistencia local | SQLite (`node:sqlite`)    | Conversas, memórias e vetores                              | Dev, Test, Prod     |
 | Tools externas     | Servidores MCP            | Ferramentas dinamicas via stdio/SSE                        | Opcional            |
 | Filesystem do host | Sistema operacional       | Armazenar `.harness/data.db` e assets locais do consumidor | Dev, Prod           |
 

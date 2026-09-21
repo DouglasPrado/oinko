@@ -196,7 +196,7 @@ const agent = Agent.create({
 
 ## Built-in SQLite Stores
 
-The default stores use `better-sqlite3` with WAL mode and require zero configuration. They are ideal for local development, single-server deployments, and prototyping.
+The default stores use `node:sqlite` (built into Node) with WAL mode and require zero configuration. They are ideal for local development, single-server deployments, and prototyping.
 
 ```typescript
 import {

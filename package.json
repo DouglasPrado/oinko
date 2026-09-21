@@ -37,7 +37,7 @@
     "docs:api:check": "typedoc --treatWarningsAsErrors --emit none"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.5.0"
   },
   "repository": {
     "type": "git",
@@ -48,7 +48,6 @@
     "url": "https://github.com/DouglasPrado/oinko/issues"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -58,7 +57,6 @@
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/typescript-checker": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
-    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.3.0",

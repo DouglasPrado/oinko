@@ -20,7 +20,7 @@
 | ------- | ------- |
 | **Runtime** | Node.js 18+ (fetch nativo, dynamic import) |
 | **Formato** | Pacote TypeScript importável (`src/agent/index.ts` re-exports) |
-| **Persistência** | SQLite via `better-sqlite3` — arquivo único, zero config |
+| **Persistência** | SQLite via `node:sqlite` — arquivo único, zero config, sem build nativo |
 | **Configuração** | Via `AgentConfig` (Zod schema) no código — sem arquivos de config externos |
 | **Segredos** | API key via `AgentConfig.apiKey` — passada programaticamente pelo consumidor |
 

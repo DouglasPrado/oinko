@@ -28,7 +28,7 @@ graph TB
     HostApp -->|"Invoca chat()/stream()"| System
     System -->|"HTTPS + SSE streaming"| OpenRouter
     System -->|"stdio / SSE (MCP SDK)"| MCP
-    System -->|"better-sqlite3 (embutido)"| SQLite
+    System -->|"node:sqlite (embutido no Node)"| SQLite
 
     %% -------------------------------------------------------
     %% Estilos C4

@@ -26,7 +26,7 @@ Esta seção estabelece a visão de alto nível do sistema: quem o utiliza, com 
 | --- | --- | --- | --- |
 | OpenRouter API | REST API (HTTPS) + SSE streaming | Gateway unificado para LLMs (chat completions, embeddings, structured output) | Crítico — sem ele o agente não funciona. Rate limits e billing gerenciados pelo OpenRouter |
 | Servidores MCP | stdio / SSE (Model Context Protocol SDK) | Fornecem tools dinâmicas ao agente em runtime | Opcional — dependência `@modelcontextprotocol/sdk` carregada via dynamic import. Reconexão automática com backoff |
-| SQLite (local) | Biblioteca embutida (better-sqlite3) | Persistência local de memórias, vetores (knowledge), histórico de conversas | Arquivo único (`.harness/data.db`), WAL mode, zero config. Não é um serviço externo, mas é uma dependência de infraestrutura |
+| SQLite (local) | Modulo embutido do Node (`node:sqlite`) | Persistência local de memórias, vetores (knowledge), histórico de conversas | Arquivo único (`.harness/data.db`), WAL mode, zero config. Não é um serviço externo, mas é uma dependência de infraestrutura |
 
 <!-- APPEND:external-systems -->
 
@@ -71,7 +71,7 @@ Esta seção estabelece a visão de alto nível do sistema: quem o utiliza, com 
 | --- | --- |
 | Técnica | Zero frameworks de IA — HTTP via `fetch()` nativo (Node 18+), sem SDKs de LLM |
 | Técnica | Validação exclusivamente via Zod — proibido uso de TypeBox, AJV ou outros sistemas de schema |
-| Técnica | Dependências mínimas: apenas `zod`, `better-sqlite3`, `zod-to-json-schema` e opcionalmente `@modelcontextprotocol/sdk` |
+| Técnica | Dependências mínimas: apenas `zod` em runtime e opcionalmente `@modelcontextprotocol/sdk`. O SQLite vem do `node:sqlite`, embutido no Node |
 | Técnica | 100% independente do dify-agent — nenhum import interno permitido |
 | Técnica | Busca vetorial em SQLite aceitável para até ~100K vetores; volumes maiores requerem store plugável (PgVector, Pinecone) |
 | Técnica | Node.js 18+ obrigatório (fetch nativo, dynamic import) |

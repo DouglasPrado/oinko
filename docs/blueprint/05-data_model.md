@@ -10,7 +10,7 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 
 > Qual banco de dados será usado? Relacional ou NoSQL? Justifique a escolha considerando os padrões de leitura/escrita do sistema.
 
-- **Tecnologia:** SQLite (via `better-sqlite3`)
+- **Tecnologia:** SQLite (via `node:sqlite`, embutido no Node)
 - **Justificativa:** Arquivo único (`.harness/data.db`), zero config, sem servidor. WAL mode para leitura concorrente sem locks. FTS5 para busca full-text em memórias. Ideal para persistência local de um pacote standalone. Para volumes acima de 100K vetores, o consumidor pode plugar `PgVectorStore` ou similar via interface `VectorStore`.
 
 ---
@@ -154,7 +154,7 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 - Cache LRU de embeddings em memória JS — evita I/O repetido para vetores já carregados (TTL: sessão do processo)
 - FTS5 para busca textual em memórias — ordens de magnitude mais rápido que LIKE ou regex
 - Busca vetorial brute-force em JS aceitável para ≤100K vetores (~50ms para 50K). Acima disso, consumidor deve plugar PgVector/Pinecone
-- Prepared statements reutilizados via `better-sqlite3` — evita parsing repetido de SQL
+- Prepared statements reutilizados via `node:sqlite` — evita parsing repetido de SQL
 - Transactions para operações batch (ingestão de múltiplos chunks, consolidação de memórias)
 - `journal_mode=WAL` + `synchronous=NORMAL` para melhor throughput de escrita sem risco significativo de perda
 
@@ -162,7 +162,7 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 
 ## Referências
 
-- [better-sqlite3 documentation](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md)
+- [node:sqlite documentation](https://nodejs.org/api/sqlite.html)
 - [SQLite FTS5 documentation](https://www.sqlite.org/fts5.html)
 - [SQLite WAL mode](https://www.sqlite.org/wal.html)
 - PRD: `docs/prd.md` — schemas SQL originais e decisões de design

@@ -5,9 +5,6 @@
 # O `overrides` do package.json continua la, duplicado de proposito: ele e o que
 # chega a quem instala o @gba/ai-harness com npm.
 allowBuilds:
-  # better-sqlite3 compila binding nativo no postinstall. Sem isto, o pacote
-  # instala sem binario e a falha so aparece na primeira query.
-  better-sqlite3: true
   esbuild: true
 
 overrides:

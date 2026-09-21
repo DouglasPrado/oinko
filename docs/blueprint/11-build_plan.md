@@ -353,7 +353,7 @@
 | Risco | Impacto | Probabilidade | Mitigação |
 |-------|---------|---------------|-----------|
 | SSE parsing do OpenRouter tem edge cases não documentados (reconnect, chunking parcial) | Alto | Média | Implementar parser robusto com testes contra respostas reais; retry com backoff |
-| better-sqlite3 falha na compilação em ambientes sem build tools (node-gyp) | Médio | Média | Documentar pré-requisitos; testar em CI com múltiplas plataformas |
+| ~~better-sqlite3 falha na compilação em ambientes sem build tools (node-gyp)~~ — materializou-se no Node 26, resolvido em 2026-09-21 | Médio | — | Driver trocado para o `node:sqlite` (ver ADR-002): não há mais compilação nativa |
 | Busca vetorial brute-force O(n) degrada com >100K vetores | Médio | Baixa | Log warning acima de 50K; documentar migração para VectorStore plugável |
 | MCP SDK é dependência opcional — dynamic import pode ter edge cases | Médio | Média | Testes com e sem SDK instalado; erro amigável e documentado |
 | Mutex por thread com Promise-based lock pode ter edge cases de deadlock | Alto | Baixa | Timeout no lock; testes de concorrência com múltiplas threads simultâneas |
@@ -369,7 +369,7 @@
 | Dependência | Tipo | Responsável | Status | Impacto se Atrasar |
 |-------------|------|-------------|--------|---------------------|
 | OpenRouter API | Serviço externo | OpenRouter (terceiro) | Disponível | Bloqueante — sem ele o agente não funciona. Mitigação: baseUrl configurável |
-| better-sqlite3 (npm) | Biblioteca | WiseLibs (open source) | Disponível | Bloqueante — persistência local depende dele |
+| `node:sqlite` | Módulo embutido do Node | Node.js (core) | Disponível a partir do Node 22.5 | Bloqueante — persistência local depende dele |
 | zod (npm) | Biblioteca | Colin McDonnell (open source) | Disponível | Bloqueante — validação de config e tools |
 | zod-to-json-schema (npm) | Biblioteca | Open source | Disponível | Bloqueante — conversão de tools para function calling |
 | @modelcontextprotocol/sdk (npm) | Biblioteca (opcional) | Anthropic (open source) | Disponível | Não bloqueante — MCP é feature Should, dynamic import |

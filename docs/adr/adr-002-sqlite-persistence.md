@@ -2,7 +2,7 @@
 
 **Data:** 2026-04-01
 
-**Status:** Aceita
+**Status:** Aceita — emendada em 2026-09-21 (driver trocado, decisão mantida)
 
 ---
 
@@ -78,8 +78,42 @@ O sistema precisa persistir memórias, vetores de knowledge e histórico de conv
 
 ---
 
+## Atualização — 2026-09-21: driver trocado para `node:sqlite`
+
+A decisão desta ADR (SQLite como persistência padrão) **continua valendo**. O que
+mudou foi o driver: `better-sqlite3` saiu, `node:sqlite` entrou.
+
+**Motivo:** o risco registrado acima se concretizou. O `better-sqlite3@11.10.0`
+não tem prebuild para o ABI do Node 26, e o `node-gyp` falha na compilação — o
+`pnpm install` simplesmente morre em qualquer máquina com Node 26.
+
+**Por que o `node:sqlite` serve:** é síncrono, que é o que os contratos
+`ConversationStore` e `VectorStore` (ADR-005) exigem — alternativas como libsql
+obrigariam a tornar as interfaces assíncronas, o que subiria por `agent.ts` e
+pelo loop ReAct. Verificado nas versões 22.23.0, 24.18.0 e 26.8.1: disponível
+sem flag e com FTS5 compilado nas três.
+
+**O que mudou em consequência:**
+
+- as negativas "dependência nativa requer compilação (node-gyp)" e o risco de
+  ambientes restritos **deixam de existir**: não há mais build nativo
+- `zod` passa a ser a única dependência de runtime
+- `engines.node` sobe de `>=22` para `>=22.5.0`, versão em que o `node:sqlite`
+  surgiu. No Node 22 ele emite `ExperimentalWarning`; do 24 em diante, não
+- `db.pragma()` e `db.transaction()` eram atalhos do better-sqlite3 e não
+  existem no `node:sqlite`: o primeiro virou `exec('PRAGMA ...')`, o segundo
+  virou `SQLiteDatabase.transaction()`, que faz BEGIN/COMMIT/ROLLBACK
+- BLOB agora volta como `Uint8Array` em vez de `Buffer`
+
+A negativa "busca vetorial brute-force O(n)" **permanece** — ela nunca foi do
+driver, e sim do `SQLiteVectorStore`, que lê todas as linhas e calcula cosseno
+em JS.
+
+---
+
 ## Referências
 
-- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
+- [node:sqlite](https://nodejs.org/api/sqlite.html)
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (driver anterior)
 - [SQLite FTS5](https://www.sqlite.org/fts5.html)
 - Modelo de dados: `docs/blueprint/05-data-model.md`

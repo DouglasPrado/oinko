@@ -102,7 +102,7 @@ Checklist adaptado do **OWASP Top 10** para contexto de biblioteca (não aplica�
 
 | Item | Status | Observacoes |
 |------|--------|-------------|
-| Prevenção de Injection (SQL) | ✅ Aplicado | `better-sqlite3` usa prepared statements nativamente. Nenhum SQL construído por concatenação |
+| Prevenção de Injection (SQL) | ✅ Aplicado | `node:sqlite` usa prepared statements nativamente. Nenhum SQL construído por concatenação |
 | Prevenção de Injection (Prompt) | ⚠️ Parcial | Tool results vão como role:"tool", não como system. Consumidor responsável por sanitizar inputs |
 | Validação de entrada | ✅ Aplicado | Todas as configurações validadas via Zod. Args de tools validados via Zod antes de execução |
 | Exposição de dados sensíveis | ✅ Aplicado | API key nunca em logs/eventos. Dados em SQLite sem criptografia (responsabilidade do consumidor) |

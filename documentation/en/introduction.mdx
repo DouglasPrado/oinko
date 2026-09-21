@@ -51,11 +51,10 @@ The `Agent` class is the single entry point. It orchestrates a **ReactLoop** tha
 | Language | TypeScript | 5.x | Static typing, clear public API |
 | Runtime | Node.js | 22+ | Native `fetch()`, `AbortSignal`, dynamic import |
 | Validation | Zod | 3.x | Single validation system for config and tool schemas |
-| Persistence | better-sqlite3 + SQLite | 3.x | Single-file DB, WAL mode, FTS5, zero config |
-| Tool Contracts | zod-to-json-schema | 3.x | Zod to JSON Schema conversion for function calling |
+| Persistence | `node:sqlite` (Node built-in) | Node 22.5+ | Single-file DB, WAL mode, FTS5, zero config, no native build |
 
 <Note>
-  The SDK maintains a strict limit of **4 or fewer direct dependencies** in `package.json`. HTTP is handled via native `fetch()` — no axios or vendor SDKs.
+  The SDK ships with **a single direct dependency** in `package.json`: Zod. HTTP is handled via native `fetch()` and SQLite comes from `node:sqlite`, built into Node — no axios, no vendor SDKs, no native build step.
 </Note>
 
 ## Design Principles

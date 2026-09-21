@@ -47,7 +47,7 @@
 
 ## Key Design Principles
 
-1. **Minimal dependencies** — 3 runtime deps: `zod`, `better-sqlite3`, `zod-to-json-schema`
+1. **Minimal dependencies** — 1 runtime dep: `zod`. SQLite comes from `node:sqlite`, built into Node
 2. **Streaming first** — `stream()` is the primary API; `chat()` is a convenience wrapper
 3. **Pluggable stores** — `MemoryStore`, `VectorStore`, `ConversationStore` are interfaces
 4. **Cost control** — `CostPolicy` with per-execution and per-session limits

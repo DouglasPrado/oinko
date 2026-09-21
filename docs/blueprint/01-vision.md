@@ -22,7 +22,7 @@ Para **desenvolvedores Node.js** que **precisam de agentes conversacionais com t
 - **API minimalista**: Uma única classe `Agent` com `chat()` e `stream()` como ponto de entrada, configurável via `AgentConfig` com Zod
 - **Streaming first**: Todos os eventos granulares (`AgentEvent`) entregues via `AsyncIterableIterator` com backpressure
 - **Subsistemas completos**: Memory (extração + decay + busca híbrida), Knowledge/RAG (chunking + embeddings + busca vetorial), Tools (Zod + parallel/sequential), Skills (prefix + semântico), MCP (dynamic import + reconnect)
-- **Dependências mínimas**: Apenas 4 pacotes (`zod`, `better-sqlite3`, `zod-to-json-schema`, opcionalmente `@modelcontextprotocol/sdk`)
+- **Dependências mínimas**: Apenas `zod` em runtime, opcionalmente `@modelcontextprotocol/sdk`. O SQLite vem do `node:sqlite`, embutido no Node
 - **Produção-ready**: Cost guard, mutex por thread, error recovery, mensagens pinadas, pipeline de contexto com budget
 
 <!-- APPEND:objectives -->

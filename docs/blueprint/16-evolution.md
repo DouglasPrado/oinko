@@ -36,7 +36,7 @@
 | Compactação de histórico depende de chamada LLM | Se modelo de compactação falhar, histórico é truncado perdendo contexto | Baixo — implementar sumarização local com modelo leve | Média |
 | Sem rate limiting no OpenRouterClient | Consumidor pode fazer mais requests que o rate limit do OpenRouter | Baixo — implementar token bucket no client | Média |
 | Memory consolidation (dedup semântica) não implementada no MVP | Memórias duplicadas acumulam, desperdiçando espaço e poluindo recall | Médio — implementar job periódico de dedup por similaridade | Baixa |
-| better-sqlite3 requer compilação nativa (node-gyp) | Pode falhar em ambientes sem build tools | Alto — avaliar alternativa como sql.js (WASM) para fallback | Baixa |
+| ~~better-sqlite3 requer compilação nativa (node-gyp)~~ | **Materializou-se** no Node 26 (sem prebuild) e foi **resolvido em 2026-09-21** | Driver trocado para o `node:sqlite`, embutido no Node — não há mais build nativo (ver ADR-002) | — |
 
 <!-- APPEND:technical-debt -->
 

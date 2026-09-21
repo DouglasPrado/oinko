@@ -43,8 +43,8 @@ export class SQLiteVectorStore implements VectorStore {
       INSERT OR REPLACE INTO vectors (id, content, embedding, metadata, created_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-    const tx = this.database.db.transaction((rows: KnowledgeChunk[]) => {
-      for (const c of rows) {
+    this.database.transaction(() => {
+      for (const c of chunks) {
         stmt.run(
           c.id,
           c.content,
@@ -54,10 +54,14 @@ export class SQLiteVectorStore implements VectorStore {
         );
       }
     });
-    tx(chunks);
   }
 
-  private bufferToFloat32(buf: Buffer): Float32Array {
+  /**
+   * O `node:sqlite` devolve BLOB como `Uint8Array` (o better-sqlite3 devolvia
+   * `Buffer`). So o tipo muda: `.buffer`, `.byteOffset` e `.byteLength` — tudo
+   * que esta funcao usa — existem nos dois.
+   */
+  private bufferToFloat32(buf: Uint8Array): Float32Array {
     if (buf.byteLength % 4 !== 0) {
       throw new Error(
         `Invalid embedding blob: byteLength ${buf.byteLength} is not a multiple of 4`,
@@ -69,7 +73,7 @@ export class SQLiteVectorStore implements VectorStore {
   search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[] {
     const rows = this.database.db
       .prepare('SELECT * FROM vectors LIMIT ?')
-      .all(MAX_SCAN) as VectorRow[];
+      .all(MAX_SCAN) as unknown as VectorRow[];
 
     const scored = rows.map((row) => {
       const embedding = this.bufferToFloat32(row.embedding);
@@ -92,7 +96,7 @@ export class SQLiteVectorStore implements VectorStore {
   listAll(): KnowledgeChunk[] {
     const rows = this.database.db
       .prepare('SELECT * FROM vectors ORDER BY created_at ASC LIMIT ?')
-      .all(MAX_LIST_ALL) as VectorRow[];
+      .all(MAX_LIST_ALL) as unknown as VectorRow[];
     return rows.map((row) => ({
       id: row.id,
       content: row.content,
@@ -112,7 +116,7 @@ export class SQLiteVectorStore implements VectorStore {
 interface VectorRow {
   id: string;
   content: string;
-  embedding: Buffer;
+  embedding: Uint8Array;
   metadata: string | null;
   created_at: number;
 }

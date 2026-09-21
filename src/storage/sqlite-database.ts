@@ -1,20 +1,24 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import Database from 'better-sqlite3';
-import type BetterSqlite3 from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 
 /**
  * Centralized SQLite wrapper with auto-create tables, migrations, and WAL mode.
+ *
+ * Usa o SQLite embutido do Node (`node:sqlite`), e nao um driver nativo: a
+ * compilacao via node-gyp quebrava a cada ABI nova do Node, e o binding do
+ * better-sqlite3 nao tinha prebuild para o Node 26. O modulo e sincrono, que e
+ * o que os contratos `ConversationStore` e `VectorStore` exigem.
  */
 export class SQLiteDatabase {
-  private _db: BetterSqlite3.Database | null = null;
+  private _db: DatabaseSync | null = null;
   private readonly path: string;
 
   constructor(path: string) {
     this.path = path;
   }
 
-  get db(): BetterSqlite3.Database {
+  get db(): DatabaseSync {
     if (!this._db) throw new Error('Database not initialized. Call initialize() first.');
     return this._db;
   }
@@ -27,17 +31,43 @@ export class SQLiteDatabase {
       mkdirSync(dirname(this.path), { recursive: true });
     }
 
-    const db = new Database(this.path);
+    const db = new DatabaseSync(this.path);
 
-    // Enable WAL mode for concurrent reads
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
+    // Enable WAL mode for concurrent reads.
+    // Via exec(): o `node:sqlite` nao tem o atalho `.pragma()` do better-sqlite3.
+    db.exec('PRAGMA journal_mode = WAL');
+    db.exec('PRAGMA synchronous = NORMAL');
 
     try {
       this.migrateV1(db);
       this._db = db;
     } catch (err) {
       db.close();
+      throw err;
+    }
+  }
+
+  /**
+   * Roda `fn` dentro de uma transacao, revertendo tudo se ela lancar.
+   *
+   * Substitui o `db.transaction()` do better-sqlite3, que o `node:sqlite` nao
+   * tem. O ROLLBACK vai dentro de try/catch proprio porque, se a falha original
+   * ja tiver abortado a transacao, o proprio ROLLBACK lanca — e engolir o erro
+   * de verdade para relatar o do rollback trocaria o diagnostico pelo sintoma.
+   */
+  transaction<T>(fn: () => T): T {
+    const db = this.db;
+    db.exec('BEGIN');
+    try {
+      const result = fn();
+      db.exec('COMMIT');
+      return result;
+    } catch (err) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {
+        // transacao ja abortada pelo SQLite; o erro que importa e o `err`
+      }
       throw err;
     }
   }
@@ -49,7 +79,7 @@ export class SQLiteDatabase {
     }
   }
 
-  private migrateV1(db: BetterSqlite3.Database): void {
+  private migrateV1(db: DatabaseSync): void {
     db.exec(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,

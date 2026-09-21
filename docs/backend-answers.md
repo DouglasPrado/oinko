@@ -2,9 +2,9 @@
 
 ## Decisoes Confirmadas
 
-- Stack principal: TypeScript em Node.js 18+, sem framework HTTP, com `fetch()` nativo, `zod`, `better-sqlite3` e `zod-to-json-schema`
+- Stack principal: TypeScript em Node.js 22.5+, sem framework HTTP, com `fetch()` nativo, `zod` e o `node:sqlite` embutido
 - Padrao de implementacao: biblioteca standalone in-process, com API publica TypeScript e interfaces plugaveis
-- Persistencia padrao: SQLite com SQL direto via `better-sqlite3`, prepared statements, WAL mode e migrations em codigo
+- Persistencia padrao: SQLite com SQL direto via `node:sqlite`, prepared statements, WAL mode e migrations em codigo
 - ORM: nao utilizar ORM; repositories/stores encapsulam SQL e mapeamento
 - Deploy: sem deploy proprio; distribuicao como pacote consumido pela aplicacao host
 - CI/CD: `tsc --noEmit`, testes unitarios e integracao por padrao; E2E com OpenRouter apenas quando houver credenciais

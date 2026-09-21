@@ -22,7 +22,7 @@ O `@mariozechner/pi-agent-core` (v0.64.0) oferece agent loop + eventos + tool ex
 
 ```
 zod                           # Validacao de schemas
-better-sqlite3                # SQLite embutido (memoria, knowledge, conversas)
+node:sqlite                   # SQLite embutido no Node (memoria, knowledge, conversas)
 @modelcontextprotocol/sdk     # MCP protocol (opcional, so se usar MCP)
 zod-to-json-schema            # Converter Zod → JSON Schema para function calling
 ```

@@ -43,7 +43,7 @@ Esta seção descreve a arquitetura de alto nível do **AI Harness SDK**, inclui
 | ---------------- | ---------------------------------------------- |
 | **Nome**         | SQLiteDatabase                                 |
 | **Responsabilidade** | Wrapper centralizado de SQLite. Auto-create tables, migrations, WAL mode. Arquivo único para memórias, vetores e conversas |
-| **Tecnologia**   | `better-sqlite3`                               |
+| **Tecnologia**   | `node:sqlite` (embutido no Node)               |
 | **Interface**    | `db` getter, `initialize()`, `close()`         |
 
 ### Memory Subsystem
@@ -145,7 +145,7 @@ Esta seção descreve a arquitetura de alto nível do **AI Harness SDK**, inclui
 | Aspecto | Escolha |
 | ------- | ------- |
 | **Runtime** | Node.js 18+ (fetch nativo, dynamic import) |
-| **Persistência** | SQLite via `better-sqlite3` — arquivo único, zero config |
+| **Persistência** | SQLite via `node:sqlite` — arquivo único, zero config, sem build nativo |
 | **LLM Gateway** | OpenRouter API (HTTPS + SSE) — único ponto de integração com LLMs |
 | **Tools Externas** | MCP Protocol (stdio/SSE) via `@modelcontextprotocol/sdk` (opcional) |
 | **Validação** | Zod + `zod-to-json-schema` |

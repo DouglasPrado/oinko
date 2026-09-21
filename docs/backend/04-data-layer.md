@@ -11,7 +11,7 @@ Define os repositories, schema do ORM, estrategia de migrations, indices critico
 <!-- do blueprint: 05-data-model.md, 14-scalability.md -->
 | Tecnologia | Funcao | Dados | Justificativa |
 | --- | --- | --- | --- |
-| SQLite (`better-sqlite3`) | Persistencia principal | `memories`, `memories_fts`, `vectors`, `conversations` | Zero config, WAL mode, FTS5 e arquivo unico |
+| SQLite (`node:sqlite`) | Persistencia principal | `memories`, `memories_fts`, `vectors`, `conversations` | Zero config, WAL mode, FTS5, arquivo unico e sem build nativo |
 | Cache LRU em memoria | Cache auxiliar | embeddings, resultados de busca, vetores desserializados | Evita I/O e chamadas repetidas ao OpenRouter |
 | Filesystem do host | Storage fisico | arquivo `.harness/data.db` | Persistencia local simples |
 
@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 | Cenario | Tipo | Estrategia |
 | --- | --- | --- |
-| Ingestao de multiplos chunks | Transacao local | `better-sqlite3` transaction para batch |
+| Ingestao de multiplos chunks | Transacao local | `SQLiteDatabase.transaction()` (BEGIN/COMMIT/ROLLBACK) para batch |
 | Consolidacao de memorias | Transacao local | update/delete atomico |
 | Append de historico + persistencia de resposta final | Transacao local leve | append ordenado por thread |
 | Cache + banco | Eventual | cache LRU invalida por TTL ou update |

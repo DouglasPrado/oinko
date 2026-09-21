@@ -1,4 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { SQLiteDatabase } from '../../../src/storage/sqlite-database.js';
 
 describe('SQLiteDatabase', () => {
@@ -29,13 +32,31 @@ describe('SQLiteDatabase', () => {
     expect(tableNames).toContain('conversations');
   });
 
-  it('should enable WAL mode', () => {
+  // Le um PRAGMA via prepare(): o `node:sqlite` nao tem o atalho `.pragma()`
+  // que o better-sqlite3 oferecia.
+  const journalMode = (d: SQLiteDatabase): string =>
+    (d.db.prepare('PRAGMA journal_mode').get() as { journal_mode: string }).journal_mode;
+
+  it('should enable WAL mode on file-based databases', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'harness-db-'));
+    db = new SQLiteDatabase(join(dir, 'nested', 'test.db'));
+    db.initialize();
+
+    // O `PRAGMA journal_mode = WAL` do initialize() so tem efeito em arquivo —
+    // e e justamente por isso que o teste antigo (`:memory:` + toBeDefined())
+    // passaria mesmo se o pragma nunca tivesse rodado.
+    expect(journalMode(db)).toBe('wal');
+
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('falls back to an in-memory journal for :memory: databases', () => {
     db = new SQLiteDatabase(':memory:');
     db.initialize();
 
-    const result = db.db.pragma('journal_mode') as { journal_mode: string }[];
-    // In-memory databases may use 'memory' mode instead of WAL, but file-based will use WAL
-    expect(result[0]!.journal_mode).toBeDefined();
+    // WAL exige arquivo; o SQLite recusa a troca e mantem 'memory'.
+    expect(journalMode(db)).toBe('memory');
   });
 
   it('should create indices on conversations', () => {
