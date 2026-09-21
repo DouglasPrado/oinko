@@ -44,6 +44,8 @@ export { shouldRetrieveKnowledge, KNOWLEDGE_NEEDED_QUESTION } from './knowledge/
 export { rerankChunks, RELEVANCE_LEVELS } from './knowledge/rerank.js';
 export { decideSkill, NO_SKILL } from './skills/skill-decider.js';
 export { classifyToolError, TOOL_ERROR_KINDS } from './tools/error-classifier.js';
+export { screenUntrustedContent, UNTRUSTED_WRAPPER } from './tools/injection-guard.js';
+export type { ScreenResult } from './tools/injection-guard.js';
 export { routeModel, ROUTE_TIERS } from './llm/model-router.js';
 export type { ModelRouteOptions } from './llm/model-router.js';
 export type { ToolErrorKind } from './tools/error-classifier.js';

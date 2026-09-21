@@ -4,6 +4,7 @@ import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { ToolDefinition } from '../llm/message-types.js';
 import { retry } from '../utils/retry.js';
 import { classifyToolError } from './error-classifier.js';
+import { screenUntrustedContent } from './injection-guard.js';
 import type { Decider } from '../contracts/entities/decider.js';
 import type { Logger } from '../utils/logger.js';
 
@@ -174,6 +175,22 @@ export class ToolExecutor {
     // 8. Result mapping
     if (tool.mapResult) {
       result = tool.mapResult(result);
+    }
+
+    // Content from outside the conversation is screened before the model sees
+    // it: an instruction hidden in a web page would otherwise carry the same
+    // weight as the operator's own prompt.
+    if (this.decider && tool.untrustedOutput === true && !result.isError) {
+      const screened = await screenUntrustedContent(result.content, tool.name, this.decider, {
+        ...(this.logger !== undefined && { logger: this.logger }),
+      });
+      if (screened.suspected) {
+        result = {
+          ...result,
+          content: screened.content,
+          metadata: { ...result.metadata, suspectedInjection: true },
+        };
+      }
     }
 
     // 9. After hook

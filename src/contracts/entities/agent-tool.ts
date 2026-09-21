@@ -29,6 +29,16 @@ export interface AgentTool {
   /** Whether this tool only reads data (no side effects). */
   isReadOnly?: boolean | ((args: unknown) => boolean);
 
+  /**
+   * Whether the result carries content from outside this conversation — a
+   * web page, a fetched document, a remote server's reply.
+   *
+   * Such content reaches the model as if it were trustworthy narration, so
+   * text in it that reads like an instruction is a prompt injection. When a
+   * decider is configured, results from these tools are screened.
+   */
+  untrustedOutput?: boolean;
+
   /** Whether this tool performs irreversible operations (delete, send, overwrite). */
   isDestructive?: boolean | ((args: unknown) => boolean);
 
