@@ -670,6 +670,8 @@ export class Agent {
       tools?: AgentTool[];
       /** If true, runs in background and returns a Promise (fire-and-forget). Default: false (blocking). */
       background?: boolean;
+      /** Iteration budget for the child. Defaults to the parent's. */
+      maxIterations?: number;
     },
   ): Promise<string> {
     if (this.destroyed) throw new Error('Agent is destroyed');
@@ -682,7 +684,7 @@ export class Agent {
         systemPrompt: options?.systemPrompt ?? this.config.systemPrompt,
         memory: { enabled: false },
         knowledge: { enabled: false },
-        maxIterations: this.config.maxIterations,
+        maxIterations: options?.maxIterations ?? this.config.maxIterations,
         maxConsecutiveErrors: this.config.maxConsecutiveErrors,
         onToolError: this.config.onToolError,
         logLevel: this.config.logLevel,

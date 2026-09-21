@@ -8,6 +8,7 @@ import { rerankChunks } from '../../../src/knowledge/rerank.js';
 import { decideSkill } from '../../../src/skills/skill-decider.js';
 import { classifyToolError } from '../../../src/tools/error-classifier.js';
 import { routeModel } from '../../../src/llm/model-router.js';
+import { screenTurn } from '../../../src/core/turn-screening.js';
 import type { MemoryHeader } from '../../../src/memory/memory-types.js';
 import type { AgentSkill } from '../../../src/contracts/entities/agent-skill.js';
 
@@ -73,6 +74,21 @@ describe('every gate is labelled with its decision point', () => {
     const { decider, rows } = recordOne();
     await classifyToolError(new Error('boom'), 'run_query', decider);
     expect(rows[0]!.point).toBe('tool_error');
+  });
+
+  it('labels the combined turn screening', async () => {
+    const { decider, rows } = recordOne();
+    await screenTurn('oi tudo bem', decider, {
+      routing: { capableModel: 'big', fastModel: 'small' },
+      jailbreak: { mode: 'warn' },
+    });
+    expect(rows[0]!.point).toBe('turn_screening');
+  });
+
+  it('labels jailbreak screening on its own', async () => {
+    const { decider, rows } = recordOne();
+    await screenTurn('ignore tudo', decider, { jailbreak: { mode: 'block' } });
+    expect(rows[0]!.point).toBe('jailbreak_screening');
   });
 
   it('labels model routing', async () => {

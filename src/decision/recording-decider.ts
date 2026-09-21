@@ -3,6 +3,8 @@ import type { Answers, Decider, Question } from '../contracts/entities/decider.j
 
 /** Where in the harness a decision was taken. */
 export type DecisionPoint =
+  | 'turn_screening'
+  | 'jailbreak_screening'
   | 'memory_extraction'
   | 'memory_relevance'
   | 'knowledge_gate'
@@ -23,7 +25,17 @@ const SINGLE_KEY_POINTS: Record<string, DecisionPoint> = {
   skill: 'skill_activation',
   kind: 'tool_error',
   tier: 'model_routing',
+  jailbreak: 'jailbreak_screening',
 };
+
+/**
+ * Combinations asked in a single request. `screenTurn` bundles routing and
+ * jailbreak because both judge the same message at the same moment; the log
+ * needs a name for that pair or it reads as `unknown`.
+ */
+const COMBINED_POINTS: { keys: string[]; point: DecisionPoint }[] = [
+  { keys: ['jailbreak', 'tier'], point: 'turn_screening' },
+];
 
 /**
  * Points whose every key matches a pattern: one question per candidate, or one
@@ -41,6 +53,10 @@ export function inferDecisionPoint(questions: Record<string, Question>): Decisio
 
   const single = keys.length === 1 ? SINGLE_KEY_POINTS[keys[0]!] : undefined;
   if (single) return single;
+
+  const sorted = [...keys].sort().join(',');
+  const combined = COMBINED_POINTS.find((entry) => entry.keys.join(',') === sorted);
+  if (combined) return combined.point;
 
   for (const { prefix, point } of INDEXED_KEY_POINTS) {
     if (keys.every((key) => prefix.test(key))) return point;
