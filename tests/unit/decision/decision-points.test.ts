@@ -34,7 +34,7 @@ function recordOne(): { decider: Decider; rows: DecisionRecord[] } {
 describe('every gate is labelled with its decision point', () => {
   it('labels memory extraction', async () => {
     const { decider, rows } = recordOne();
-    await shouldExtractWithDecider('meu CNPJ e 123', 1, {}, decider);
+    await shouldExtractWithDecider('meu CNPJ e 123', 'anotado', 1, {}, decider);
     expect(rows[0]!.point).toBe('memory_extraction');
   });
 

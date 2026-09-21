@@ -50,7 +50,10 @@ function mockFetch(): { extractionCalled: () => boolean } {
 
 function createDecider(verdict: boolean, confidence = 0.9): Decider {
   return {
-    decide: vi.fn().mockResolvedValue({ durable: { value: verdict, confidence } }),
+    decide: vi.fn().mockResolvedValue({
+      durableFromUser: { value: verdict, confidence },
+      durableFromAssistant: { value: verdict, confidence },
+    }),
   };
 }
 

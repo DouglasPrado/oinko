@@ -513,6 +513,7 @@ export class Agent {
           // critical path — extraction was already fire-and-forget.
           const shouldRun = await shouldExtractWithDecider(
             userContent,
+            assistantText,
             nextTurns,
             gateConfig,
             decider,

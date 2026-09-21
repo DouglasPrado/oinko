@@ -19,15 +19,18 @@ export type DecisionPoint =
  * gates through here so the mapping cannot drift silently.
  */
 const SINGLE_KEY_POINTS: Record<string, DecisionPoint> = {
-  durable: 'memory_extraction',
   needsKnowledge: 'knowledge_gate',
   skill: 'skill_activation',
   kind: 'tool_error',
   tier: 'model_routing',
 };
 
-/** Points that ask one question per candidate, keyed positionally. */
+/**
+ * Points whose every key matches a pattern: one question per candidate, or one
+ * per side of a turn.
+ */
 const INDEXED_KEY_POINTS: { prefix: RegExp; point: DecisionPoint }[] = [
+  { prefix: /^durableFrom/, point: 'memory_extraction' },
   { prefix: /^m\d+$/, point: 'memory_relevance' },
   { prefix: /^c\d+$/, point: 'knowledge_rerank' },
 ];

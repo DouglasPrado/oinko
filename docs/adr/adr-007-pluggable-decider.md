@@ -57,7 +57,7 @@ O primeiro ponto a usar o decisor é o gate de extração de memória (`src/memo
 
 ### Positivas
 
-- A pergunta "este turno tem fato durável?" passa a rodar em 100% dos turnos, e o LLM extrator (o custo real) só dispara quando há o que extrair
+- A pergunta "este turno tem fato durável?" passa a rodar em 100% dos turnos — sobre a mensagem do usuário **e** sobre a resposta do agente, numa chamada só — e o LLM extrator (o custo real) só dispara quando há o que extrair
 - Comportamento fica determinístico: `Math.random()` sai do caminho quando há decisor, o que também melhora a testabilidade
 - A interface serve aos próximos pontos (relevância de memória, ativação de skill, roteamento de modelo, risco de tool call) sem novo desenho
 - Nenhuma dependência nova: o adapter é `fetch` nativo

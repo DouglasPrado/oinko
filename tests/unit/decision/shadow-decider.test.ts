@@ -4,7 +4,7 @@ import type { Decider, Question } from '../../../src/contracts/entities/decider.
 
 function createDecider(value: unknown, confidence = 0.9): Decider {
   return {
-    decide: vi.fn().mockResolvedValue({ durable: { value, confidence } }),
+    decide: vi.fn().mockResolvedValue({ durableFromUser: { value, confidence } }),
   };
 }
 
@@ -14,7 +14,7 @@ function collect(): { sink: (r: ShadowRecord) => void; rows: ShadowRecord[] } {
 }
 
 const QUESTIONS: Record<string, Question> = {
-  durable: { kind: 'bool', instructions: 'has a durable fact' },
+  durableFromUser: { kind: 'bool', instructions: 'user side has a durable fact' },
 };
 
 describe('ShadowDecider', () => {
@@ -24,7 +24,7 @@ describe('ShadowDecider', () => {
 
     const answers = await decider.decide('s', QUESTIONS);
 
-    expect(answers.durable.value).toBe(true);
+    expect(answers.durableFromUser.value).toBe(true);
   });
 
   it('consults both deciders', async () => {
@@ -54,8 +54,8 @@ describe('ShadowDecider', () => {
     );
 
     expect(rows[0]!.agreed).toBe(false);
-    expect(rows[0]!.primary.durable!.value).toBe(true);
-    expect(rows[0]!.shadow?.durable!.value).toBe(false);
+    expect(rows[0]!.primary.durableFromUser!.value).toBe(true);
+    expect(rows[0]!.shadow?.durableFromUser!.value).toBe(false);
   });
 
   it('records both latencies', async () => {
@@ -77,7 +77,7 @@ describe('ShadowDecider', () => {
       QUESTIONS,
     );
 
-    expect(answers.durable.value).toBe(true);
+    expect(answers.durableFromUser.value).toBe(true);
     expect(rows[0]!.shadowError).toContain('shadow down');
     expect(rows[0]!.agreed).toBeUndefined();
   });

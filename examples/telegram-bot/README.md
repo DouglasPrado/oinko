@@ -64,7 +64,7 @@ What changes in this bot, concretely:
 
 | Point | Without the key | With it |
 | --- | --- | --- |
-| Memory extraction | `Math.random() < 0.4` | Asked whether the turn holds a durable fact |
+| Memory extraction | `Math.random() < 0.4` | Asked whether either side of the turn holds a durable fact |
 | Memory relevance | A full LLM call picking filenames | One yes/no per candidate, in one request |
 | Tool retry | Retries any non-abort error | Only errors judged transient |
 | Model routing | Always `AGENT_MODEL` | Trivial turns go to `FAST_MODEL` |
