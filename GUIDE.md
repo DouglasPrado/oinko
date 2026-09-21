@@ -156,14 +156,14 @@ O SDK usa um `LLMClient` generico que funciona com qualquer API OpenAI-compatibl
 
 ### Variaveis de ambiente (examples)
 
-| Variavel             | Descricao                                                        | Obrigatorio |
-| -------------------- | ---------------------------------------------------------------- | ----------- |
-| `LLM_API_KEY`        | API key do provider de chat                                      | Sim         |
-| `LLM_BASE_URL`       | Base URL do provider (default: OpenRouter)                       | Nao         |
-| `AGENT_MODEL`        | Modelo para chat (default: `anthropic/claude-sonnet-5`) | Nao         |
-| `EMBEDDING_API_KEY`  | API key para embeddings (default: usa `LLM_API_KEY`)             | Nao         |
-| `EMBEDDING_BASE_URL` | Base URL para embeddings (default: usa `LLM_BASE_URL`)           | Nao         |
-| `EMBEDDING_MODEL`    | Modelo de embedding (default: `openai/text-embedding-3-small`)   | Nao         |
+| Variavel             | Descricao                                                      | Obrigatorio |
+| -------------------- | -------------------------------------------------------------- | ----------- |
+| `LLM_API_KEY`        | API key do provider de chat                                    | Sim         |
+| `LLM_BASE_URL`       | Base URL do provider (default: OpenRouter)                     | Nao         |
+| `AGENT_MODEL`        | Modelo para chat (default: `anthropic/claude-sonnet-5`)        | Nao         |
+| `EMBEDDING_API_KEY`  | API key para embeddings (default: usa `LLM_API_KEY`)           | Nao         |
+| `EMBEDDING_BASE_URL` | Base URL para embeddings (default: usa `LLM_BASE_URL`)         | Nao         |
+| `EMBEDDING_MODEL`    | Modelo de embedding (default: `openai/text-embedding-3-small`) | Nao         |
 
 ### Cenarios de configuracao
 
