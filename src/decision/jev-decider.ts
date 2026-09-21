@@ -63,6 +63,7 @@ interface WireAnswer {
   choice?: string;
   score?: number;
   confidence?: number;
+  probabilities?: Record<string, number>;
 }
 
 /**
@@ -88,14 +89,22 @@ function toDecision(name: string, raw: unknown): Decision<unknown> {
     if (typeof answer.choice !== 'string') {
       throw new JevError(`Jev returned a malformed choice answer for "${name}"`, 200);
     }
-    return { value: answer.choice, confidence: answer.confidence ?? 0 };
+    return {
+      value: answer.choice,
+      confidence: answer.confidence ?? 0,
+      ...(answer.probabilities !== undefined && { probabilities: answer.probabilities }),
+    };
   }
 
   if (answer.type === 'score' || typeof answer.score === 'number') {
     if (typeof answer.score !== 'number') {
       throw new JevError(`Jev returned a malformed score answer for "${name}"`, 200);
     }
-    return { value: answer.score, confidence: answer.confidence ?? 0 };
+    return {
+      value: answer.score,
+      confidence: answer.confidence ?? 0,
+      ...(answer.probabilities !== undefined && { probabilities: answer.probabilities }),
+    };
   }
 
   throw new JevError(`Jev returned an unknown answer type for "${name}"`, 200);

@@ -59,7 +59,10 @@ export interface DecisionRecord {
   /** Short digest — lets you group and dedupe without storing user content. */
   stateHash?: string;
   questions: Record<string, { kind: string; instructions: string }>;
-  answers: Record<string, { value: string | number | boolean; confidence: number }>;
+  answers: Record<
+    string,
+    { value: string | number | boolean; confidence: number; probabilities?: Record<string, number> }
+  >;
   durationMs: number;
   error?: string;
 }
@@ -125,7 +128,11 @@ export class RecordingDecider implements Decider {
       // per-question variant; the shape is still {value, confidence}.
       const entries = Object.entries(answers) as [
         string,
-        { value: string | number | boolean; confidence: number },
+        {
+          value: string | number | boolean;
+          confidence: number;
+          probabilities?: Record<string, number>;
+        },
       ][];
 
       this.emit({
@@ -133,7 +140,13 @@ export class RecordingDecider implements Decider {
         answers: Object.fromEntries(
           entries.map(([key, answer]) => [
             key,
-            { value: answer.value, confidence: answer.confidence },
+            {
+              value: answer.value,
+              confidence: answer.confidence,
+              // Kept so calibration can be checked against the real
+              // distribution, not just the reported confidence.
+              ...(answer.probabilities !== undefined && { probabilities: answer.probabilities }),
+            },
           ]),
         ),
         durationMs: Date.now() - startedAt,

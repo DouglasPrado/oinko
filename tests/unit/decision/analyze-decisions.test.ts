@@ -118,6 +118,37 @@ describe('savings', () => {
     expect(byPoint.model_routing).toBe(1);
   });
 
+  it('ignores a verdict the gate would have rejected for low confidence', () => {
+    const rows = [
+      // Acima do piso: o turno realmente foi para o modelo barato.
+      record({
+        id: '1',
+        point: 'model_routing',
+        answers: { tier: { value: 'fast', confidence: 0.96 } },
+      }),
+      // Abaixo do piso: o gate manteve o modelo capaz, entao nao houve economia.
+      record({
+        id: '2',
+        point: 'model_routing',
+        answers: { tier: { value: 'fast', confidence: 0.12 } },
+      }),
+    ];
+
+    expect(savings(rows, 0.85).find((s) => s.point === 'model_routing')!.avoided).toBe(1);
+  });
+
+  it('counts every verdict when no floor is given', () => {
+    const rows = [
+      record({
+        id: '1',
+        point: 'model_routing',
+        answers: { tier: { value: 'fast', confidence: 0.12 } },
+      }),
+    ];
+
+    expect(savings(rows).find((s) => s.point === 'model_routing')!.avoided).toBe(1);
+  });
+
   it('counts every relevance call as one LLM call replaced', () => {
     const rows = [
       record({

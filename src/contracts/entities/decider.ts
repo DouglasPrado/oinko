@@ -38,6 +38,14 @@ export type Question = BoolQuestion | ChoiceQuestion | ScoreQuestion;
 export interface Decision<T> {
   value: T;
   confidence: number;
+  /**
+   * Probability the engine assigned to each option, when it reports them.
+   *
+   * `confidence` and the chosen option's probability are not the same number,
+   * so keeping both is what lets you check whether a threshold on
+   * `confidence` means what you assume it means.
+   */
+  probabilities?: Record<string, number>;
 }
 
 /** Maps a question to the shape of its answer — a choice yields its own options. */

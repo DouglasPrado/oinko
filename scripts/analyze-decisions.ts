@@ -4,6 +4,7 @@
  *
  * Usage:
  *   node scripts/analyze-decisions.ts decisions.jsonl [--labels labels.jsonl]
+ *                                     [--min-confidence 0.85]
  *
  * The labels file is JSONL of `{ "id": "<record id>", "outcome": <value> }`,
  * where outcome is the verdict the decision *should* have had. Without it the
@@ -125,6 +126,7 @@ export function summarize(records: AnalysedRecord[]): PointSummary[] {
  */
 export function savings(
   records: AnalysedRecord[],
+  minConfidence = 0,
 ): { point: string; avoided: number; what: string }[] {
   const avoided = new Map<string, { count: number; what: string }>();
 
@@ -137,6 +139,8 @@ export function savings(
   for (const record of records) {
     const verdict = singleVerdict(record);
     if (!verdict) continue;
+    // A verdict the gate would have rejected did not avoid anything.
+    if (verdict.confidence < minConfidence) continue;
 
     switch (record.point) {
       case 'memory_extraction':
@@ -277,7 +281,11 @@ function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-export function formatReport(records: AnalysedRecord[], labels: Label[]): string {
+export function formatReport(
+  records: AnalysedRecord[],
+  labels: Label[],
+  minConfidence = 0,
+): string {
   const lines: string[] = [];
   const summaries = summarize(records);
 
@@ -294,9 +302,14 @@ export function formatReport(records: AnalysedRecord[], labels: Label[]): string
     );
   }
 
-  const saved = savings(records);
+  const saved = savings(records, minConfidence);
   if (saved.length > 0) {
-    lines.push('', 'Work avoided');
+    lines.push(
+      '',
+      minConfidence > 0
+        ? `Work avoided (only verdicts at or above confidence ${minConfidence})`
+        : 'Work avoided (every verdict — pass --min-confidence to match your gate)',
+    );
     for (const s of saved)
       lines.push(`  ${s.point.padEnd(20)} ${String(s.avoided).padStart(6)}  ${s.what}`);
   }
@@ -350,10 +363,13 @@ async function main(): Promise<void> {
   const labelsIndex = args.indexOf('--labels');
   const labelsFile = labelsIndex >= 0 ? args[labelsIndex + 1] : undefined;
 
+  const floorIndex = args.indexOf('--min-confidence');
+  const minConfidence = floorIndex >= 0 ? Number(args[floorIndex + 1] ?? 0) : 0;
+
   const records = parseJsonl<AnalysedRecord>(await readFile(file, 'utf8'));
   const labels = labelsFile ? parseJsonl<Label>(await readFile(labelsFile, 'utf8')) : [];
 
-  console.log(formatReport(records, labels));
+  console.log(formatReport(records, labels, minConfidence));
 }
 
 // Only runs as a CLI; importing the module for tests must not execute it.

@@ -34,11 +34,24 @@ const MODEL_CONTEXT_WINDOWS: { pattern: string; tokens: number }[] = [
   { pattern: 'claude-3-sonnet', tokens: 200_000 },
   { pattern: 'claude-3-haiku', tokens: 200_000 },
 
-  // OpenAI GPT-4
+  // OpenAI — 1M+ context (most specific first: 'gpt-5' also matches 'gpt-5.6')
+  { pattern: 'gpt-6', tokens: 1_050_000 },
+  { pattern: 'gpt-5.6', tokens: 1_050_000 },
+  { pattern: 'gpt-5.5', tokens: 1_050_000 },
+  { pattern: 'gpt-5.4-image', tokens: 272_000 },
+  { pattern: 'gpt-5.4', tokens: 1_050_000 },
+  { pattern: 'gpt-4.1', tokens: 1_047_576 },
+
+  // OpenAI — 400k context (gpt-5 through 5.3, and their mini/nano/pro)
+  { pattern: 'gpt-5.2-chat', tokens: 128_000 },
+  { pattern: 'gpt-5', tokens: 400_000 },
+
+  // OpenAI — older 128k line
   { pattern: 'gpt-4o', tokens: 128_000 },
   { pattern: 'gpt-4-turbo', tokens: 128_000 },
   { pattern: 'gpt-4-0125', tokens: 128_000 },
   { pattern: 'gpt-4-1106', tokens: 128_000 },
+  { pattern: 'gpt-oss', tokens: 131_072 },
 
   // OpenAI o1/o3
   { pattern: 'o1', tokens: 200_000 },
