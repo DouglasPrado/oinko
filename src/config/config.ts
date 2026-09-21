@@ -48,6 +48,8 @@ const KnowledgeConfigSchema = z.object({
   chunkOverlap: z.number().int().min(0).default(64),
   topK: z.number().int().positive().default(5),
   minScore: z.number().min(0).max(1).default(0.3),
+  /** Confidence required for a decider to skip retrieval on a turn. */
+  minConfidence: z.number().min(0).max(1).default(0.7),
 });
 
 /** Skills subsystem configuration */

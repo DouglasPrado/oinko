@@ -19,6 +19,7 @@ import { FileMemorySystem } from './memory/file-memory-system.js';
 import { validateThreadId } from './memory/memory-paths.js';
 import { extractMemories } from './memory/memory-extractor.js';
 import { shouldExtractWithDecider } from './memory/extraction-gate.js';
+import { shouldRetrieveKnowledge } from './knowledge/retrieval-gate.js';
 import { memoryFreshnessNote } from './memory/memory-age.js';
 import { KnowledgeManager } from './knowledge/knowledge-manager.js';
 import { EmbeddingService } from './knowledge/embedding-service.js';
@@ -845,7 +846,14 @@ export class Agent {
     // Knowledge injection
     if (this.knowledgeManager) {
       try {
-        const results = await this.knowledgeManager.search(userInput);
+        // Skip the embedding round trip when the turn cannot benefit from it.
+        const shouldRetrieve = await shouldRetrieveKnowledge(
+          userInput,
+          { minConfidence: this.config.knowledge?.minConfidence },
+          this.config.decider,
+          { logger: this.logger },
+        );
+        const results = shouldRetrieve ? await this.knowledgeManager.search(userInput) : [];
         if (results.length > 0) {
           const content = results.map((r) => r.content).join('\n\n');
           const tokens = estimateTokens(content);
