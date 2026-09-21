@@ -83,11 +83,11 @@ describe('memory-relevance', () => {
   it('should pass model option to client', async () => {
     const client = createMockClient(JSON.stringify({ selected_memories: [] }));
     await selectRelevantMemories('query', manifest, validFilenames, client, {
-      model: 'anthropic/claude-sonnet-4-20250514',
+      model: 'anthropic/claude-sonnet-5',
     });
 
     expect(client.chat).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'anthropic/claude-sonnet-4-20250514' }),
+      expect.objectContaining({ model: 'anthropic/claude-sonnet-5' }),
     );
   });
 

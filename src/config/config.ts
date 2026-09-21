@@ -71,7 +71,7 @@ const EmbeddingProviderConfigSchema = z.object({
 /** Full Agent configuration — validated with Zod */
 export const AgentConfigSchema = z.object({
   apiKey: z.string().min(1, 'apiKey is required'),
-  model: z.string().default('anthropic/claude-sonnet-4-20250514'),
+  model: z.string().default('anthropic/claude-sonnet-5'),
   baseUrl: z.string().url().default('https://openrouter.ai/api/v1'),
   /**
    * Intercepta as chamadas de chat ao LLM. Recebe uma Request e devolve a

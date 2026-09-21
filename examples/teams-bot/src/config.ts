@@ -25,7 +25,7 @@ export const config = {
   agent: {
     apiKey: required('LLM_API_KEY'),
     baseUrl: process.env.LLM_BASE_URL,
-    model: process.env.AGENT_MODEL ?? 'anthropic/claude-sonnet-4-20250514',
+    model: process.env.AGENT_MODEL ?? 'anthropic/claude-sonnet-5',
   },
   embedding: {
     apiKey: process.env.EMBEDDING_API_KEY,

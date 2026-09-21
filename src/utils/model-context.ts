@@ -7,9 +7,25 @@
 
 const DEFAULT_CONTEXT_WINDOW = 128_000;
 
-/** Known model patterns → context window tokens */
+/**
+ * Known model patterns → context window tokens.
+ *
+ * Matching is `includes()` in array order, so a more specific pattern must
+ * come first: 'claude-opus-4' also matches 'claude-opus-4.8', which has five
+ * times the window. Values checked against the OpenRouter model catalogue.
+ */
 const MODEL_CONTEXT_WINDOWS: { pattern: string; tokens: number }[] = [
-  // Anthropic Claude
+  // Anthropic Claude — 1M context line (keep above the 200k patterns)
+  { pattern: 'claude-opus-5', tokens: 1_000_000 },
+  { pattern: 'claude-sonnet-5', tokens: 1_000_000 },
+  { pattern: 'claude-fable-5', tokens: 1_000_000 },
+  { pattern: 'claude-opus-4.6', tokens: 1_000_000 },
+  { pattern: 'claude-opus-4.7', tokens: 1_000_000 },
+  { pattern: 'claude-opus-4.8', tokens: 1_000_000 },
+  { pattern: 'claude-sonnet-4.5', tokens: 1_000_000 },
+  { pattern: 'claude-sonnet-4.6', tokens: 1_000_000 },
+
+  // Anthropic Claude — 200k context
   { pattern: 'claude-opus-4', tokens: 200_000 },
   { pattern: 'claude-sonnet-4', tokens: 200_000 },
   { pattern: 'claude-haiku-4', tokens: 200_000 },
@@ -45,7 +61,7 @@ const MODEL_CONTEXT_WINDOWS: { pattern: string; tokens: number }[] = [
 /**
  * Get the context window size for a model.
  *
- * @param modelId — full model ID (e.g. "anthropic/claude-sonnet-4-20250514")
+ * @param modelId — full model ID (e.g. "anthropic/claude-sonnet-5")
  * @param override — optional explicit override (takes precedence)
  */
 export function getModelContextWindow(modelId: string, override?: number): number {

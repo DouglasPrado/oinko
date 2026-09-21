@@ -160,7 +160,7 @@ O SDK usa um `LLMClient` generico que funciona com qualquer API OpenAI-compatibl
 | -------------------- | ---------------------------------------------------------------- | ----------- |
 | `LLM_API_KEY`        | API key do provider de chat                                      | Sim         |
 | `LLM_BASE_URL`       | Base URL do provider (default: OpenRouter)                       | Nao         |
-| `AGENT_MODEL`        | Modelo para chat (default: `anthropic/claude-sonnet-4-20250514`) | Nao         |
+| `AGENT_MODEL`        | Modelo para chat (default: `anthropic/claude-sonnet-5`) | Nao         |
 | `EMBEDDING_API_KEY`  | API key para embeddings (default: usa `LLM_API_KEY`)             | Nao         |
 | `EMBEDDING_BASE_URL` | Base URL para embeddings (default: usa `LLM_BASE_URL`)           | Nao         |
 | `EMBEDDING_MODEL`    | Modelo de embedding (default: `openai/text-embedding-3-small`)   | Nao         |
@@ -171,7 +171,7 @@ O SDK usa um `LLMClient` generico que funciona com qualquer API OpenAI-compatibl
 // 1. OpenRouter para tudo (default)
 Agent.create({
   apiKey: process.env.LLM_API_KEY,
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: 'anthropic/claude-sonnet-5',
 });
 
 // 2. OpenAI direto para tudo
@@ -185,7 +185,7 @@ Agent.create({
 // 3. OpenRouter para chat + OpenAI para embeddings
 Agent.create({
   apiKey: process.env.LLM_API_KEY,
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: 'anthropic/claude-sonnet-5',
   embedding: {
     apiKey: process.env.EMBEDDING_API_KEY,
     baseUrl: 'https://api.openai.com/v1',
