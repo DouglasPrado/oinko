@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { runInTransaction } from './sqlite-transaction.js';
 
 /**
  * Centralized SQLite wrapper with auto-create tables, migrations, and WAL mode.
@@ -48,29 +49,9 @@ export class SQLiteDatabase {
     }
   }
 
-  /**
-   * Roda `fn` dentro de uma transacao, revertendo tudo se ela lancar.
-   *
-   * Substitui o `db.transaction()` do better-sqlite3, que o `node:sqlite` nao
-   * tem. O ROLLBACK vai dentro de try/catch proprio porque, se a falha original
-   * ja tiver abortado a transacao, o proprio ROLLBACK lanca — e engolir o erro
-   * de verdade para relatar o do rollback trocaria o diagnostico pelo sintoma.
-   */
+  /** Roda `fn` dentro de uma transacao, revertendo tudo se ela lancar. */
   transaction<T>(fn: () => T): T {
-    const db = this.db;
-    db.exec('BEGIN');
-    try {
-      const result = fn();
-      db.exec('COMMIT');
-      return result;
-    } catch (err) {
-      try {
-        db.exec('ROLLBACK');
-      } catch {
-        // transacao ja abortada pelo SQLite; o erro que importa e o `err`
-      }
-      throw err;
-    }
+    return runInTransaction(this.db, fn);
   }
 
   close(): void {
