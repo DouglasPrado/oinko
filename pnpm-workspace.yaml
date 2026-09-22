@@ -1,13 +1,16 @@
-# Workspace de dois pacotes: o SDK na raiz e a dashboard privada em apps/.
+# Monorepo Oinko: núcleo, runtime, canais, integrações e aplicativos.
 # O arquivo tambem precisa existir por outro motivo: o pnpm 11 nao le mais o campo
 # `pnpm` (nem `overrides`) de manifests de pacote. As pinagens de seguranca e a
 # liberacao de build scripts so valem se vierem daqui.
 #
 # O `overrides` do package.json continua la, duplicado de proposito: ele e o que
-# chega a quem instala o @gba/ai-harness com npm.
+# chega a quem instala o @oinko/core com npm.
 packages:
-  - '.'
   - 'apps/*'
+  - 'examples/telegram-bot'
+  - 'packages/*'
+  - 'packages/channels/*'
+  - 'packages/mcps/*'
 
 allowBuilds:
   esbuild: true
@@ -21,3 +24,13 @@ overrides:
   postcss: '>=8.5.10'
   ip-address: '>=10.1.1'
   fast-uri: '>=3.1.2'
+
+# jest-dom's Vitest entrypoint imports Vitest without declaring the peer.
+# Model the peer explicitly instead of depending on a root-hoisted copy.
+packageExtensions:
+  '@testing-library/jest-dom@6.10.0':
+    peerDependencies:
+      vitest: '*'
+    peerDependenciesMeta:
+      vitest:
+        optional: true

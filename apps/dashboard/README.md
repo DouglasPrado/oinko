@@ -1,6 +1,6 @@
 # Dashboard de telemetria
 
-WebUI somente-leitura sobre o banco de telemetria do `@gba/ai-harness`. Mostra, dentro de uma
+WebUI somente-leitura sobre o banco de telemetria do `@oinko/core`. Mostra, dentro de uma
 conversa, o que entrou e saiu de cada chamada de LLM, as chamadas de ferramenta, a entrada e a
 saida do MCP, as decisoes do decider, o custo real cobrado pelo provedor e o tempo de cada etapa.
 
@@ -16,10 +16,10 @@ pnpm dev     # http://127.0.0.1:3111
 
 Aponte `TELEMETRY_DB_PATH` no `.env.local` para o banco que o seu agente escreve.
 
-Para ver o bot do Telegram deste repo, que ja vem com a telemetria ligada:
+Para ver o agente de `apps/oink-lp` (CLI e Telegram), que já vem com a telemetria ligada:
 
 ```
-TELEMETRY_DB_PATH=../../examples/telegram-bot/data/telemetry.db
+TELEMETRY_DB_PATH=../oink-lp/data/oink-lp/telemetry.db
 ```
 
 ## Ligar a telemetria no agente
@@ -43,3 +43,5 @@ informou" — nunca estima e nunca mostra zero no lugar de desconhecido.
 
 Depois de rodar `shadcn add`, rode `pnpm format` na raiz: o `format:check` e o primeiro passo do
 CI e o CLI emite aspas duplas.
+
+A autorização Higgsfield usa `@oinko/mcp-higgsfield` e grava, por padrão, `../../.harness/credentials/higgsfield.json`. Configure `HIGGSFIELD_CREDENTIAL_PATH` para outra conta.

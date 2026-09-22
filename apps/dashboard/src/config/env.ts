@@ -13,7 +13,7 @@ const EnvSchema = z.object({
   HIGGSFIELD_CREDENTIAL_PATH: z
     .string()
     .min(1)
-    .default('../../examples/telegram-bot/.harness/credentials/higgsfield.json'),
+    .default('../../.harness/credentials/higgsfield.json'),
 });
 
 /**

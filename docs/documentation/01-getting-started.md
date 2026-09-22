@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-npm install @gba/ai-harness
+npm install @oinko/core
 ```
 
 ### Requirements
@@ -25,7 +25,7 @@ npm install @modelcontextprotocol/sdk
 ### Simple Chat
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -41,7 +41,7 @@ await agent.destroy();
 ### Streaming
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -64,7 +64,7 @@ await agent.destroy();
 ### With Tools
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 import { z } from 'zod';
 
 const agent = Agent.create({

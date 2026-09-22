@@ -19,7 +19,7 @@ There are three pluggable interfaces:
 ## MemoryStore
 
 ```typescript
-import type { MemoryStore, Memory, MemorySearchOptions } from '@gba/ai-harness';
+import type { MemoryStore, Memory, MemorySearchOptions } from '@oinko/core';
 
 class PostgresMemoryStore implements MemoryStore {
   save(memory: Memory): Memory {
@@ -71,7 +71,7 @@ const agent = Agent.create({
 ## VectorStore
 
 ```typescript
-import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from '@gba/ai-harness';
+import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from '@oinko/core';
 
 class PineconeVectorStore implements VectorStore {
   upsert(chunk: KnowledgeChunk): void {
@@ -115,7 +115,7 @@ const agent = Agent.create({
 ## ConversationStore
 
 ```typescript
-import type { ConversationStore, ChatMessage } from '@gba/ai-harness';
+import type { ConversationStore, ChatMessage } from '@oinko/core';
 
 class RedisConversationStore implements ConversationStore {
   appendMessage(message: ChatMessage, threadId: string): void {
@@ -156,7 +156,7 @@ const agent = Agent.create({
 You can also use the SQLite implementations directly (e.g., for testing or custom setups):
 
 ```typescript
-import { SQLiteDatabase, SQLiteMemoryStore, SQLiteVectorStore, SQLiteConversationStore } from '@gba/ai-harness';
+import { SQLiteDatabase, SQLiteMemoryStore, SQLiteVectorStore, SQLiteConversationStore } from '@oinko/core';
 
 const db = new SQLiteDatabase('./my-data.db');
 db.initialize();
@@ -182,7 +182,7 @@ Custom stores make testing easy — use mocks:
 
 ```typescript
 import { vi } from 'vitest';
-import type { MemoryStore } from '@gba/ai-harness';
+import type { MemoryStore } from '@oinko/core';
 
 const mockStore: MemoryStore = {
   save: vi.fn((m) => m),

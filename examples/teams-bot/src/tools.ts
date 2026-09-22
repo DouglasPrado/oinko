@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { Agent, AgentTool } from '@gba/ai-harness';
-import { createWebFetchTool } from '@gba/ai-harness';
+import type { Agent, AgentTool } from '@oinko/core';
+import { createWebFetchTool } from '@oinko/core';
 import { config, SHARED_KNOWLEDGE_SCOPE } from './config.js';
 
 /**

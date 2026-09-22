@@ -282,7 +282,7 @@ const agent = Agent.create({
 Troque o store de conversas por uma implementacao customizada:
 
 ```typescript
-import { Agent, type ConversationStore } from '@gba/ai-harness';
+import { Agent, type ConversationStore } from '@oinko/core';
 
 const customStore: ConversationStore = {
   appendMessage: (message, threadId) => { /* ... */ },
@@ -300,7 +300,7 @@ const agent = Agent.create({
 ## Exemplo Completo
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   // Core

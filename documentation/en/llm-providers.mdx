@@ -22,7 +22,7 @@ The SDK uses a generic `LLMClient` that works with any OpenAI-compatible API via
 
 <CodeGroup>
 ```typescript OpenRouter (Default)
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 // OpenRouter is the default — just provide an API key
 const agent = Agent.create({
@@ -33,7 +33,7 @@ const agent = Agent.create({
 ```
 
 ```typescript OpenAI Direct
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 // Point directly at OpenAI — no model prefix needed
 const agent = Agent.create({
@@ -44,7 +44,7 @@ const agent = Agent.create({
 ```
 
 ```typescript Hybrid (OpenRouter + OpenAI Embeddings)
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 // Use OpenRouter for chat, OpenAI directly for embeddings
 const agent = Agent.create({
@@ -151,7 +151,7 @@ The default `baseUrl` is `https://openrouter.ai/api/v1` for backward compatibili
 For advanced scenarios, you can import and use `LLMClient` directly:
 
 ```typescript
-import { LLMClient } from '@gba/ai-harness';
+import { LLMClient } from '@oinko/core';
 
 const client = new LLMClient({
   apiKey: process.env.LLM_API_KEY!,

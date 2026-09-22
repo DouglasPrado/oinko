@@ -64,7 +64,7 @@ await agent.connectMCP({
   headers: {
     'Authorization': 'Bearer eyJhbGciOiJSUzI1NiIs...',
     'X-Tenant-Id': 'acme-corp',
-    'X-Request-Source': '@gba/ai-harness',
+    'X-Request-Source': '@oinko/core',
   },
 });
 ```

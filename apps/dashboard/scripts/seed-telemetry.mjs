@@ -8,7 +8,7 @@
  *   node apps/dashboard/scripts/seed-telemetry.mjs
  */
 import { z } from 'zod';
-import { Agent, TelemetryDatabase } from '@gba/ai-harness';
+import { Agent, TelemetryDatabase } from '@oinko/core';
 
 const DB = '.harness/telemetry.db';
 

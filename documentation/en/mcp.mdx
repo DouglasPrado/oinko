@@ -24,7 +24,7 @@ Harness supports three transport types for connecting to MCP servers.
 <CodeGroup>
 
 ```typescript stdio
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -40,7 +40,7 @@ const agent = Agent.create({
 ```
 
 ```typescript SSE
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -58,7 +58,7 @@ const agent = Agent.create({
 ```
 
 ```typescript HTTP (Streamable)
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -86,7 +86,7 @@ const agent = Agent.create({
 Pass MCP server configurations in the `mcp` array when creating your agent:
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,

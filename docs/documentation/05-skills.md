@@ -7,7 +7,7 @@ Skills are modular behaviors that activate based on user input. When a skill mat
 ## Defining a Skill
 
 ```typescript
-import type { AgentSkill } from '@gba/ai-harness';
+import type { AgentSkill } from '@oinko/core';
 
 const codeReviewSkill: AgentSkill = {
   name: 'code-review',

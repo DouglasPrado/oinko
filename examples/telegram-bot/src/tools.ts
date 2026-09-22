@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { AgentTool } from '@gba/ai-harness';
+import type { AgentTool } from '@oinko/core';
 import { config } from './config.js';
 import { lastImage, rememberMediaId } from './pending-media.js';
 import { uploadImage } from './higgsfield-media.js';

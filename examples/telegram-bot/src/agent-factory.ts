@@ -1,10 +1,11 @@
+import { closeHiggsfieldMedia } from './higgsfield-media.js';
 import {
   Agent,
   JevDecider,
   RecordingDecider,
   JsonlSink,
   type Decider,
-} from "@gba/ai-harness";
+} from "@oinko/core";
 import { config } from "./config.js";
 import { createTools } from "./tools.js";
 import { CREDENTIAL_PATH, higgsfieldHeaders, readCredential } from "./higgsfield-auth.js";
@@ -198,6 +199,7 @@ async function connectHiggsfield(agent: Agent): Promise<void> {
 }
 
 export async function destroyAgent(): Promise<void> {
+  await closeHiggsfieldMedia();
   if (agent) {
     await agent.destroy();
     agent = null;

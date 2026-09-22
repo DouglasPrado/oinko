@@ -125,7 +125,7 @@ https://your-domain.com/api/messages
 
 examples/teams-bot/
 ├── .env.example # Template de credenciais
-├── package.json # botbuilder + express + @gba/ai-harness
+├── package.json # botbuilder + express + @oinko/core
 ├── tsconfig.json # ES2022, ESM
 ├── README.md # Setup completo com ngrok
 └── src/

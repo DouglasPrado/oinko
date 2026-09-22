@@ -1,4 +1,4 @@
-import type { SqlQueryDef } from '@gba/ai-harness';
+import type { SqlQueryDef } from '@oinko/core';
 
 /**
  * SQL query definitions for the Teams bot.

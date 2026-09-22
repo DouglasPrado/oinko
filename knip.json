@@ -1,10 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
-    ".": {
-      "entry": ["scripts/*.ts"],
-      "project": ["src/**/*.ts", "tests/**/*.ts"]
-    },
     "apps/dashboard": {
       "entry": [
         "src/app/**/{page,layout,route,error,global-error,not-found,loading}.{ts,tsx}",
@@ -15,6 +11,11 @@
         "config": ["playwright.config.ts"],
         "entry": ["tests/e2e/**/*.spec.ts"]
       }
+    },
+    "packages/oinko": {
+      "entry": ["scripts/*.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"]
     }
-  }
+  },
+  "ignore": ["examples/teams-bot/**"]
 }

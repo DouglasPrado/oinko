@@ -1,5 +1,5 @@
 import type { Context } from "grammy";
-import type { ContentPart } from "@gba/ai-harness";
+import type { ContentPart } from "@oinko/core";
 import { getAgent } from "./agent-factory.js";
 import { extractMedia, type MediaLink } from "./media-links.js";
 import { config } from "./config.js";

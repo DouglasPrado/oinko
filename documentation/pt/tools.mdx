@@ -13,7 +13,7 @@ Cada tool precisa de: `name`, `description`, `parameters` (schema Zod) e `execut
 
 ```typescript
 import { z } from 'zod';
-import type { AgentTool } from '@gba/ai-harness';
+import type { AgentTool } from '@oinko/core';
 
 const searchTool: AgentTool = {
   name: 'web_search',
@@ -45,7 +45,7 @@ const searchTool: AgentTool = {
 ## Usando Tools com o Agente
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -296,7 +296,7 @@ const advancedTool: AgentTool = {
 O SDK inclui ferramentas prontas para uso:
 
 ```typescript
-import { builtinTools } from '@gba/ai-harness';
+import { builtinTools } from '@oinko/core';
 
 // Adicionar todas as tools builtin (exceto askUser)
 for (const tool of builtinTools.all()) {
@@ -334,7 +334,7 @@ agent.addTool(builtinTools.webFetch());
 A tool `askUser` requer um callback para capturar a resposta do usuario:
 
 ```typescript
-import { createAskUserTool } from '@gba/ai-harness';
+import { createAskUserTool } from '@oinko/core';
 
 const askUser = createAskUserTool({
   onAsk: async (question: string) => {
@@ -358,7 +358,7 @@ agent.addTool(askUser);
 Crie tools de consulta SQL automaticamente a partir de definicoes:
 
 ```typescript
-import { createSqlTools } from '@gba/ai-harness';
+import { createSqlTools } from '@oinko/core';
 
 const sqlTools = createSqlTools({
   runner: {

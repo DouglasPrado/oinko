@@ -7,22 +7,15 @@
       "ES2022"
     ],
     "outDir": "dist",
-    "rootDir": "../..",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "baseUrl": ".",
-    "paths": {
-      "@gba/ai-harness": [
-        "../../src/index.ts"
-      ]
-    }
+    "isolatedModules": true
   },
   "include": [
-    "src/**/*.ts",
-    "../../src/**/*.ts"
+    "src/**/*.ts"
   ]
 }

@@ -30,7 +30,7 @@ Memorias **nao devem** salvar informacoes derivaveis do codigo (padroes, arquite
 ### Salvando Memorias
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -141,7 +141,7 @@ O subsistema de knowledge permite ingerir documentos, gerar embeddings e buscar 
 ### Ingestao de Documentos
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,

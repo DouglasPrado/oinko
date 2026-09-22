@@ -10,7 +10,7 @@ Skills are modular behavior units that modify how your agent responds. They inje
 Every skill requires `name`, `description`, and `instructions`. Optional fields control matching, execution, and activation.
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,

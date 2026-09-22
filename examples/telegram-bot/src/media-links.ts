@@ -1,4 +1,4 @@
-export type MediaKind = "photo" | "video";
+type MediaKind = "photo" | "video";
 
 export interface MediaLink {
   url: string;

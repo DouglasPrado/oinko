@@ -1,5 +1,5 @@
 import type { Context } from 'grammy';
-import type { ContentPart } from '@gba/ai-harness';
+import type { ContentPart } from '@oinko/core';
 import { config } from './config.js';
 import type { PendingImage } from './pending-media.js';
 
@@ -93,7 +93,7 @@ export function pickPhotoSize(sizes: readonly PhotoSize[]): PhotoSize | undefine
 }
 
 /** O nome do arquivo derivado do mime, para o upload que quiser um. */
-export function imageFilename(mimeType: string): string {
+function imageFilename(mimeType: string): string {
   const extensao = mimeType.split('/')[1]?.split(';')[0] ?? 'jpg';
   return `imagem.${extensao === 'jpeg' ? 'jpg' : extensao}`;
 }

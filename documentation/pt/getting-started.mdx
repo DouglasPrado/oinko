@@ -6,14 +6,14 @@ description: "Instale o AI Harness SDK e crie seu primeiro agente de IA em minut
 # Inicio Rapido
 
 > [!IMPORTANT]
-> **Renomeado de `agentx-sdk` / `@gba/agentx` para `@gba/ai-harness`.** O pacote vive
+> **Renomeado de `agentx-sdk` / `@gba/agentx` para `@oinko/core`.** O pacote vive
 > no monorepo [gba.dev](https://github.com/DouglasPrado/gba.dev), em
 > `packages/ai-harness`. A API publica nao mudou — `Agent`, seus metodos e todos os
 > tipos exportados mantem os mesmos nomes. Atualize a dependencia e os imports:
 >
 > ```diff
 > - import { Agent } from 'agentx-sdk';
-> + import { Agent } from '@gba/ai-harness';
+> + import { Agent } from '@oinko/core';
 > ```
 >
 > **Breaking:** o diretorio de dados mudou de `.agentx` para `.harness`.
@@ -38,7 +38,7 @@ Este guia mostra como instalar o AI Harness SDK, configurar um agente e fazer su
 ## Instalacao
 
 ```bash
-npm install @gba/ai-harness
+npm install @oinko/core
 ```
 
 <Note>
@@ -50,7 +50,7 @@ O SDK tem apenas 1 dependencia direta: `zod`. O SQLite vem do `node:sqlite`, emb
 O exemplo mais basico — envie uma mensagem e receba a resposta completa:
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -69,7 +69,7 @@ await agent.destroy();
 O `stream()` e a API primaria do SDK. Ele retorna um `AsyncIterableIterator<AgentEvent>` que emite eventos em tempo real:
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -95,7 +95,7 @@ await agent.destroy();
 Defina ferramentas que o agente pode usar. Os parametros sao validados com Zod:
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 import { z } from 'zod';
 
 const agent = Agent.create({
@@ -127,7 +127,7 @@ await agent.destroy();
 Use `threadId` para manter contexto entre mensagens. O historico e persistido automaticamente:
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -215,7 +215,7 @@ Sempre chame `agent.destroy()` quando terminar de usar o agente. Isso garante qu
 Um agente com tools, streaming e threads:
 
 ```typescript
-import { Agent, builtinTools } from '@gba/ai-harness';
+import { Agent, builtinTools } from '@oinko/core';
 import { z } from 'zod';
 
 const agent = Agent.create({

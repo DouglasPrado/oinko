@@ -1,4 +1,4 @@
-# AI Harness SDK
+# Oinko Monorepo
 
 ## Fonte de Verdade
 
@@ -10,7 +10,7 @@ Todo codigo DEVE implementar fielmente o que esta documentado nos blueprints.
 
 1. Leia docs relevantes antes de codar
 2. Use linguagem ubiqua de `docs/shared/glossary.md`
-3. Leia `src/contracts/` antes de implementar
+3. Leia `packages/oinko/src/contracts/` antes de implementar
 4. Test-first (RED → GREEN → REFACTOR)
 5. Use `docs/shared/MAPPING.md` para rastreabilidade
 
@@ -157,7 +157,7 @@ Public API  →  Core/Application  →  Domain  ←  Infrastructure
 
 ## Sempre Ler Antes de Codar
 
-- `src/contracts/` — tipos compartilhados e interfaces
+- `packages/oinko/src/contracts/` — tipos compartilhados e interfaces
 - `docs/shared/glossary.md` — linguagem ubiqua
 - `package.json` — dependencias instaladas
 
@@ -200,7 +200,7 @@ Para docs grandes (50k+ tokens), NAO carregue o doc inteiro:
 
 ## Publicacao no npm
 
-- Pacote: `@gba/ai-harness` (**AI Harness SDK by GBA**), na raiz DESTE repo
+- Pacote: `@oinko/core` (**Oinko**), em `packages/oinko`; a raiz e privada e apenas organiza o workspace
 - Registry privado `https://npm.dify.com.br/`, via `publishConfig` do
   package.json. A credencial vive no npmrc do USUARIO (`npm adduser`) — o
   `.npmrc` versionado so aponta o registry do escopo `@gba`
@@ -230,3 +230,12 @@ pnpm validate:publish
   raiz do gba.dev. Nao ha CI aqui ainda
 - o vinculo com o `@gba/ai-gateway` foi cortado. O `fetch` injetavel continua
   existindo, mas agora e generico: qualquer `(Request) => Promise<Response>`
+
+## Estrutura do monorepo
+
+- `packages/oinko`: núcleo, testes e scripts do SDK. Caminhos de fonte dos blueprints são relativos a este pacote.
+- `packages/agent-runtime`: lifecycle e conversas.
+- `packages/channels/*`: adaptadores sem dependência de apps.
+- `packages/mcps/*`: integrações específicas; MCP genérico permanece no núcleo.
+- `apps/*`: configurações de produto e dashboard.
+- Execute os checks agregados da raiz; nunca publique a raiz.

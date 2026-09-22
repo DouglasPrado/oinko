@@ -88,7 +88,7 @@ of a chat does not belong in a metrics file.
 
 ### Working against the local SDK
 
-This example depends on the repo itself (`"@gba/ai-harness": "file:../../"`).
+This example depends on the repo itself (`"@oinko/core": "file:../../"`).
 pnpm does not symlink that — it copies the package into its store using
 hardlinks. So:
 

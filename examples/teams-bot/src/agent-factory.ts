@@ -1,4 +1,4 @@
-import { Agent, createSqlTools } from '@gba/ai-harness';
+import { Agent, createSqlTools } from '@oinko/core';
 import { config } from './config.js';
 import { createTools } from './tools.js';
 import { queries } from './queries.js';

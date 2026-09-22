@@ -49,7 +49,7 @@ export async function GET(request: Request): Promise<Response> {
       redirectUri: `${origin}/api/auth/higgsfield/callback`,
     });
 
-    saveCredential({ client_id: clientId, ...tokens, obtained_at: Date.now() });
+    await saveCredential({ client_id: clientId, ...tokens, obtained_at: Date.now() });
     clear();
     return back(origin, 'ok');
   } catch {

@@ -12,7 +12,7 @@
 import 'dotenv/config';
 import { readFileSync, existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 import { SHARED_KNOWLEDGE_SCOPE } from '../src/config.js';
 import { config } from '../src/config.js';
 

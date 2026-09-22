@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "pnpm --filter @gba/ai-harness build",
+    "predev": "pnpm -w build:packages",
     "dev": "next dev -p 3111",
-    "prebuild": "pnpm --filter @gba/ai-harness build",
+    "prebuild": "pnpm -w build:packages",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3111",
     "lint": "eslint .",
@@ -23,11 +23,11 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "@oinko/mcp-higgsfield": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@gba/ai-harness": "workspace:*",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@testing-library/jest-dom": "^6.6.3",
@@ -45,6 +45,7 @@
     "tailwindcss": "4.3.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@oinko/core": "workspace:*"
   }
 }

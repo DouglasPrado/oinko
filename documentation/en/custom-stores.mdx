@@ -42,7 +42,7 @@ interface VectorStore {
 
 ```typescript
 import { Pinecone } from "@pinecone-database/pinecone";
-import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from "@gba/ai-harness";
+import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from "@oinko/core";
 
 export class PineconeVectorStore implements VectorStore {
   private index;
@@ -118,7 +118,7 @@ interface ConversationStore {
 
 ```typescript
 import Redis from "ioredis";
-import type { ConversationStore, ChatMessage } from "@gba/ai-harness";
+import type { ConversationStore, ChatMessage } from "@oinko/core";
 
 export class RedisConversationStore implements ConversationStore {
   private redis: Redis;
@@ -171,7 +171,7 @@ export class RedisConversationStore implements ConversationStore {
 Pass your custom store implementations to `Agent.create()`:
 
 ```typescript
-import { Agent } from "@gba/ai-harness";
+import { Agent } from "@oinko/core";
 import { PineconeVectorStore } from "./stores/pinecone-vector-store";
 import { RedisConversationStore } from "./stores/redis-conversation-store";
 
@@ -204,7 +204,7 @@ import {
   SQLiteDatabase,
   SQLiteVectorStore,
   SQLiteConversationStore,
-} from "@gba/ai-harness";
+} from "@oinko/core";
 
 // Option 1: Let Agent.create() handle everything (default)
 const agent = Agent.create({
@@ -235,8 +235,8 @@ Use in-memory mocks for fast, isolated unit tests.
 
 ```typescript
 import { describe, it, expect, vi } from "vitest";
-import { Agent } from "@gba/ai-harness";
-import type { VectorStore, ConversationStore, ChatMessage, KnowledgeChunk, RetrievedKnowledge } from "@gba/ai-harness";
+import { Agent } from "@oinko/core";
+import type { VectorStore, ConversationStore, ChatMessage, KnowledgeChunk, RetrievedKnowledge } from "@oinko/core";
 
 // In-memory mock VectorStore
 class MockVectorStore implements VectorStore {
