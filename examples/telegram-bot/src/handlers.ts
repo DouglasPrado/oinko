@@ -1,6 +1,8 @@
 import type { Context } from "grammy";
+import type { ContentPart } from "@gba/ai-harness";
 import { getAgent } from "./agent-factory.js";
 import { config } from "./config.js";
+import { buildAgentInput } from "./media.js";
 
 const TELEGRAM_MAX_LENGTH = 4096;
 const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
@@ -17,7 +19,7 @@ export async function handleStart(ctx: Context): Promise<void> {
       `/reset — Clear conversation history\n` +
       `/usage — Show token usage\n` +
       `/memory — Save a memory\n\n` +
-      `Just send me a message to chat!`,
+      `Send me a message, a photo or a voice note — I read all three.`,
     { parse_mode: "Markdown" },
   );
 }
@@ -92,12 +94,52 @@ export async function handleMemory(ctx: Context): Promise<void> {
 /**
  * Main message handler — streaming chat with progressive updates
  */
+/** O que dizer quando a mensagem traz algo que o bot nao consegue ler. */
+const UNSUPPORTED_REPLY: Record<string, string> = {
+  'image-too-large': 'Essa imagem e grande demais para eu processar. Tente uma menor.',
+  'audio-too-large': 'Esse audio e longo demais para eu processar. Tente um mais curto.',
+  'not-an-image': 'Consigo ler texto, imagem e audio. Esse arquivo eu nao abro.',
+  'download-failed': 'Nao consegui baixar esse arquivo do Telegram. Tente de novo.',
+  'no-file-path': 'Nao consegui baixar esse arquivo do Telegram. Tente de novo.',
+  'transcription-failed': 'Nao consegui entender esse audio. Tente gravar de novo.',
+};
+
 export async function handleMessage(ctx: Context): Promise<void> {
-  const text = ctx.message?.text;
-  if (!text) return;
+  const built = await buildAgentInput(ctx);
+  if (built.kind === 'empty') return;
+  if (built.kind === 'unsupported') {
+    await ctx.reply(UNSUPPORTED_REPLY[built.reason] ?? UNSUPPORTED_REPLY['not-an-image']!);
+    return;
+  }
 
   const chatId = ctx.chat!.id.toString();
   const agent = await getAgent();
+
+  let input: string | ContentPart[];
+  if (built.kind === 'audio') {
+    // Transcrever leva alguns segundos e nao emite nada pelo stream: sem o
+    // indicador, o bot parece ter ignorado a mensagem.
+    await ctx.replyWithChatAction('typing').catch(() => {});
+    let texto: string;
+    try {
+      texto = await agent.transcribe(built.audio, built.filename);
+    } catch (error) {
+      console.error('Transcription error:', error);
+      await ctx.reply(UNSUPPORTED_REPLY['transcription-failed']!);
+      return;
+    }
+
+    if (!texto.trim()) {
+      await ctx.reply(UNSUPPORTED_REPLY['transcription-failed']!);
+      return;
+    }
+
+    // A legenda do audio, quando existe, e um pedido sobre ele — junta-se a
+    // transcricao em vez de substitui-la.
+    input = built.caption ? `${built.caption}\n\n${texto}` : texto;
+  } else {
+    input = built.input;
+  }
 
   // Show "typing" indicator
   await ctx.replyWithChatAction("typing");
@@ -108,7 +150,7 @@ export async function handleMessage(ctx: Context): Promise<void> {
     let lastUpdate = 0;
     let isSearching = false;
 
-    for await (const event of agent.stream(text, { threadId: chatId })) {
+    for await (const event of agent.stream(input, { threadId: chatId })) {
       switch (event.type) {
         case "tool_call_start": {
           isSearching = true;

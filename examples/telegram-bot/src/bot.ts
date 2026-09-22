@@ -15,8 +15,13 @@ bot.command('reset', handleReset);
 bot.command('usage', handleUsage);
 bot.command('memory', handleMemory);
 
-// Main message handler
-bot.on('message:text', handleMessage);
+// Main message handler — texto, foto e imagem enviada como arquivo.
+// `message:document` cobre quem manda a imagem sem compressao; o handler
+// recusa documento que nao seja imagem, em vez de tentar ler qualquer arquivo.
+bot.on(
+  ['message:text', 'message:photo', 'message:voice', 'message:audio', 'message:document'],
+  handleMessage,
+);
 
 // Error handler
 bot.catch((err) => {
