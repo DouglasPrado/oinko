@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { DatabaseSync } from 'node:sqlite';
 import { Agent } from '../../../src/agent.js';
 import type { TelemetryRecord, TelemetrySink } from '../../../src/contracts/entities/telemetry.js';
 
@@ -157,5 +158,60 @@ describe('Agent telemetry', () => {
     await agent.destroy();
 
     expect(texts.join('')).toBe('hello');
+  });
+});
+
+describe('Agent telemetry end to end', () => {
+  it('lands a full turn in SQLite, queryable the way the dashboard will read it', async () => {
+    mockProvider(WITH_COST);
+
+    const agent = Agent.create({
+      apiKey: 'sk-test-key-0123456789abcdef',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      telemetry: { dbPath: ':memory:', app: 'test-bot' },
+    });
+
+    for await (const _ of agent.stream('Hi there')) {
+      /* drain */
+    }
+
+    // Reaches into the agent's own database, which is what proves the wiring
+    // rather than the sink in isolation.
+    const database = (agent as unknown as { telemetryDatabase: { db: DatabaseSync } })
+      .telemetryDatabase;
+
+    const execution = database.db
+      .prepare('SELECT trace_id, app, status, total_tokens, duration_ms FROM executions')
+      .get() as
+      | { trace_id: string; app: string; status: string; total_tokens: number; duration_ms: number }
+      | undefined;
+
+    expect(execution?.app).toBe('test-bot');
+    expect(execution?.status).toBe('ok');
+    expect(execution?.total_tokens).toBe(196);
+    expect(execution?.duration_ms).toBeGreaterThanOrEqual(0);
+
+    const call = database.db
+      .prepare(
+        'SELECT cost_usd, cost_status, generation_id, model FROM llm_calls WHERE trace_id = ?',
+      )
+      .get(execution?.trace_id ?? '') as
+      { cost_usd: number; cost_status: string; generation_id: string; model: string } | undefined;
+
+    expect(call?.cost_usd).toBeCloseTo(0.00042, 9);
+    expect(call?.cost_status).toBe('confirmed');
+    expect(call?.generation_id).toBe('gen-abc');
+
+    const prompt = database.db
+      .prepare(
+        `SELECT p.body FROM executions e JOIN payloads p ON p.id = e.user_input_payload_id
+         WHERE e.trace_id = ?`,
+      )
+      .get(execution?.trace_id ?? '') as { body: string } | undefined;
+
+    expect(prompt?.body).toBe('Hi there');
+
+    await agent.destroy();
   });
 });
