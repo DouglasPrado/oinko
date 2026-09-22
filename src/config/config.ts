@@ -2,6 +2,29 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
 import type { Decider } from '../contracts/entities/decider.js';
+import type { TelemetrySink } from '../contracts/entities/telemetry.js';
+
+/**
+ * Telemetria de execucao.
+ *
+ * Sem este bloco nada e gravado e o comportamento e identico ao de antes: cada
+ * ponto de instrumentacao e um `?.` sobre um sink ausente.
+ */
+const TelemetryConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** Destino proprio. Sem isso, um sink SQLite e criado em `dbPath`. */
+  sink: z.custom<TelemetrySink>().optional(),
+  dbPath: z.string().optional(),
+  /** Dias antes da purga. */
+  retentionDays: z.number().int().positive().default(30),
+  /** Quanto do conteudo chega ao banco. */
+  capturePayloads: z.enum(['none', 'hashed', 'full']).default('full'),
+  maxPayloadChars: z.number().int().positive().default(32_768),
+  /** Rotulo do app host, para separar bots no mesmo banco. */
+  app: z.string().optional(),
+});
+
+export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
 
 /** MCP server connection configuration */
 const MCPConnectionConfigSchema = z.object({
@@ -99,6 +122,7 @@ export const AgentConfigSchema = z.object({
   knowledge: KnowledgeConfigSchema.optional(),
   skills: SkillsConfigSchema.optional(),
   costPolicy: CostPolicySchema.optional(),
+  telemetry: TelemetryConfigSchema.optional(),
 
   // Pluggable stores
   conversation: z
@@ -196,6 +220,14 @@ export const AgentConfigSchema = z.object({
 
   // Embedding provider (separate API key/URL for embeddings, e.g. direct OpenAI)
   embedding: EmbeddingProviderConfigSchema.optional(),
+
+  // Transcription model (audio -> texto)
+  transcriptionModel: z.string().default('whisper-1'),
+
+  // Transcription provider — o default do SDK e o OpenRouter, que nao serve
+  // /audio/transcriptions, entao quem usa audio normalmente aponta para outro
+  // provedor, como ja acontece com embeddings.
+  transcription: EmbeddingProviderConfigSchema.optional(),
 
   // Database path
   dbPath: z.string().default(() => join(process.cwd(), '.harness', 'data.db')),

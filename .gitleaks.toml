@@ -1,0 +1,20 @@
+# Config do gitleaks.
+#
+# Estende a config padrao em vez de substitui-la: nenhuma regra e desligada,
+# so sao dispensadas fixtures cuja natureza e parecer segredo.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixtures de teste que precisam ter forma de segredo"
+
+# O `redact.test.ts` existe para provar que o redator apaga segredo. Para isso
+# ele tem que conter strings com forma de segredo — um scanner acusar esse
+# arquivo e inerente ao que ele testa, nao um descuido.
+paths = ['''tests/unit/telemetry/redact\.test\.ts''']
+
+# Chave obviamente falsa usada como fixture em testes de agente. O prefixo
+# `sk-test-` nao corresponde a nenhum formato de credencial real; deixar o
+# padrao explicito aqui e melhor que dispensar `tests/**` inteiro, o que
+# esconderia uma chave de verdade colada num teste por engano.
+regexes = ['''sk-test-key-[0-9a-f]{16}''']

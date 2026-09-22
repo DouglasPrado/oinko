@@ -1,8 +1,21 @@
 import type { TokenUsage } from './token-usage.js';
 import type { ToolCall, AgentToolResult } from './tool-call.js';
 
+/**
+ * Marca de correlacao presente em todo evento emitido por `Agent.stream()`.
+ *
+ * Aplicada por interseccao sobre a uniao inteira em vez de campo a campo:
+ * `(A | B) & C` distribui para `(A & C) | (B & C)`, entao o narrowing por
+ * `event.type` continua funcionando e nenhum literal de evento existente
+ * precisa mudar. Torna-lo obrigatorio seria breaking — qualquer produtor de
+ * eventos (fakes de LoopDeps, hosts sintetizando eventos) pararia de compilar
+ * —, entao o campo e opcional no tipo e sempre preenchido em runtime. Vira
+ * obrigatorio na v3.
+ */
+type Traced<T> = T & { traceId?: string };
+
 /** All possible agent events emitted during streaming */
-export type AgentEvent =
+export type AgentEvent = Traced<
   | AgentStartEvent
   | TextDeltaEvent
   | TextDoneEvent
@@ -20,7 +33,8 @@ export type AgentEvent =
   | CompactionEvent
   | RecoveryEvent
   | ModelFallbackEvent
-  | AgentEndEvent;
+  | AgentEndEvent
+>;
 
 export interface AgentStartEvent {
   type: 'agent_start';

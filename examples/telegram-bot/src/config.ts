@@ -25,6 +25,16 @@ export const config = {
     baseUrl: process.env.EMBEDDING_BASE_URL,
     model: process.env.EMBEDDING_MODEL,
   },
+  /**
+   * Transcricao de nota de voz. O OpenRouter nao serve
+   * /audio/transcriptions, entao quem usa audio por la aponta para outro
+   * provedor — mesma separacao que ja existe para embeddings.
+   */
+  transcription: {
+    apiKey: process.env.TRANSCRIPTION_API_KEY,
+    baseUrl: process.env.TRANSCRIPTION_BASE_URL,
+    model: process.env.TRANSCRIPTION_MODEL,
+  },
   tavily: {
     apiKey: process.env.TAVILY_API_KEY,
   },

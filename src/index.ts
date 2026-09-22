@@ -121,7 +121,7 @@ export { getModelContextWindow } from './utils/model-context.js';
 
 // LLM Client
 export { LLMClient } from './llm/llm-client.js';
-export type { LLMClientConfig } from './llm/llm-client.js';
+export type { LLMClientConfig, TranscribeParams, TranscribeResult } from './llm/llm-client.js';
 
 // LLM Message Types
 export type {
@@ -178,3 +178,17 @@ export { getDefaultMemoryDir } from './memory/memory-paths.js';
 // Loop dependency injection (consumers extending or testing the loop)
 export { createProductionDeps } from './core/loop-deps.js';
 export type { LoopDeps } from './core/loop-deps.js';
+
+// Telemetry
+export { TelemetryDatabase } from './telemetry/telemetry-database.js';
+export { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
+export { PayloadStore } from './telemetry/payload-store.js';
+export { guardSink } from './telemetry/safe-sink.js';
+export { redactSecrets } from './telemetry/redact.js';
+export type {
+  SqliteTelemetrySinkOptions,
+  CapturePayloads,
+} from './telemetry/sqlite-telemetry-sink.js';
+export type { TelemetryMigration } from './telemetry/migrations.js';
+export type { TelemetryConfig } from './config/config.js';
+export type { LLMCallTelemetry } from './core/react-loop.js';

@@ -140,6 +140,78 @@ type ContentPart =
   | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
 ```
 
+A imagem pode ser uma URL publica ou um data URL inline
+(`data:image/png;base64,...`). Ela e persistida junto com a mensagem, entao
+continua no contexto nos turnos seguintes da mesma thread — quem enviou a
+imagem no turno 1 pode perguntar sobre ela no turno 5.
+
+```typescript
+await agent.chat(
+  [
+    { type: 'text', text: 'De que cor e este quadrado?' },
+    { type: 'image_url', image_url: { url: dataUrl, detail: 'low' } },
+  ],
+  { threadId: 'visao' },
+);
+```
+
+**Modelo sem visao.** Quase todo modelo atual le imagem — sondado com um PNG
+de verdade, a linha gpt-4 em diante, a o-series e o Gemini acertam a cor de um
+quadrado. As excecoes conhecidas estao marcadas com `noVision` no registro
+(gpt-oss, deepseek, mistral) e recebem a imagem **achatada para texto**, na
+forma `[image: <url>]`: o modelo nao ve, mas sabe que uma imagem foi enviada e
+onde ela esta. O agente registra um `warn` quando isso acontece, entao a
+degradacao nunca e silenciosa. Modelo que o registro nao conhece e tratado
+como capaz de ver.
+
+**Custo.** Uma imagem entra no orcamento de contexto pelo preco que o provedor
+cobra por ela (85 tokens em `detail: 'low'`), nao pelo tamanho da URL. Contar
+um data URL como texto estimava uma imagem de 500KB em ~170k tokens, e a
+mensagem era descartada do contexto antes de chegar ao modelo.
+
+**Resultado de tool.** Imagem devolvida por tool MCP continua virando
+`[Image: <mime>, ~<n>KB]`: o papel `tool` so aceita texto no endpoint que este
+cliente fala.
+
+### Audio
+
+Audio nao entra na conversa como parte de conteudo. Sondando a API, um bloco
+`input_audio` dentro de `/chat/completions` e recusado — *"Content blocks are
+expected to be either text or image_url type"* —, entao o caminho e transcrever
+e conversar sobre o texto.
+
+```typescript
+const texto = await agent.transcribe(bytes, 'voz.ogg', { language: 'pt' });
+await agent.chat(texto, { threadId });
+```
+
+| Parametro | Papel |
+| --- | --- |
+| `audio` | `Uint8Array` com os bytes do arquivo |
+| `filename` | **decide o decoder**: o provedor escolhe pela extensao |
+| `language` | dica ISO-639-1, opcional — sem ela o provedor detecta |
+| `model` | sobrescreve o configurado, por chamada |
+
+O `filename` nao e decoracao. Formatos aceitos: `flac`, `m4a`, `mp3`, `mp4`,
+`mpeg`, `mpga`, `oga`, `ogg`, `wav`, `webm`. Note que **`.opus` nao esta na
+lista**: Opus e um codec dentro de um conteiner OGG, e os mesmos bytes que sao
+recusados como `.opus` transcrevem como `.ogg` — o caso de toda nota de voz do
+Telegram.
+
+**Provedor.** `/audio/transcriptions` nao existe no OpenRouter, que e o default
+do SDK. Quem usa audio aponta a transcricao para um provedor que sirva o
+endpoint, com a mesma separacao que ja existe para embeddings:
+
+```typescript
+Agent.create({
+  apiKey: chaveDoChat,
+  transcription: { apiKey: chaveDeAudio, baseUrl: 'https://api.openai.com/v1' },
+});
+```
+
+O default e `whisper-1`, o nome mais amplamente implementado. A linha
+`gpt-4o-transcribe` e mais fiel quando o endpoint a oferece.
+
 ### ToolCall
 
 ```typescript

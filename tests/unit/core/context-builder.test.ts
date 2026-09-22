@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildContext, type ContextInjection } from '../../../src/core/context-builder.js';
 import type { ChatMessage } from '../../../src/contracts/entities/chat-message.js';
+import type { ContentPart } from '../../../src/contracts/entities/content-part.js';
 
 function msg(role: ChatMessage['role'], content: string, pinned = false): ChatMessage {
   return { role, content, pinned, createdAt: Date.now() };
@@ -295,5 +296,98 @@ describe('buildContext', () => {
     expect(llmPinned).toBeDefined();
     expect((llmPinned as unknown as Record<string, unknown>)._pinned).toBe(true);
     expect((llmUnpinned as unknown as Record<string, unknown>)._pinned).toBeUndefined();
+  });
+});
+
+/**
+ * The multimodal path used to end here: every image part was rewritten as the
+ * literal text `[image: <url>]` before the request was built, so a vision
+ * model received a sentence describing a URL and never the image itself.
+ */
+describe('buildContext with images', () => {
+  const IMAGE_URL = 'https://x.test/cat.png';
+
+  function multimodal(): ChatMessage[] {
+    const content: ContentPart[] = [
+      { type: 'text', text: 'What is in this image?' },
+      { type: 'image_url', image_url: { url: IMAGE_URL, detail: 'high' } },
+    ];
+    return [{ role: 'user', content, createdAt: Date.now() }];
+  }
+
+  function build(model?: string) {
+    return buildContext({
+      systemPrompt: 'You are helpful.',
+      injections: [],
+      history: multimodal(),
+      maxTokens: 100_000,
+      reserveTokens: 1_000,
+      maxPinnedMessages: 20,
+      ...(model !== undefined && { model }),
+    });
+  }
+
+  it('hands the image to a model that can see it', () => {
+    const user = build('gpt-4o').messages.at(-1)!;
+
+    expect(Array.isArray(user.content)).toBe(true);
+    const parts = user.content as { type: string; image_url?: { url: string; detail?: string } }[];
+    expect(parts).toHaveLength(2);
+    expect(parts[1]!.type).toBe('image_url');
+    expect(parts[1]!.image_url?.url).toBe(IMAGE_URL);
+    expect(parts[1]!.image_url?.detail).toBe('high');
+  });
+
+  it('keeps the image when no model is named', () => {
+    expect(Array.isArray(build().messages.at(-1)!.content)).toBe(true);
+  });
+
+  /**
+   * A text-only model is given the flattened form rather than a hard failure:
+   * it cannot see the picture, but it can still act on the fact that one was
+   * sent. The count is reported so the caller can say so out loud.
+   */
+  it('flattens the image for a model that cannot see, and reports it', () => {
+    const result = build('deepseek/deepseek-chat');
+    const user = result.messages.at(-1)!;
+
+    expect(typeof user.content).toBe('string');
+    expect(user.content).toContain('What is in this image?');
+    expect(user.content).toContain(`[image: ${IMAGE_URL}]`);
+    expect(result.flattenedImageCount).toBe(1);
+  });
+
+  it('reports nothing flattened when the model can see', () => {
+    expect(build('gpt-4o').flattenedImageCount).toBe(0);
+    expect(build('gpt-4o').messages.at(-1)!.content).not.toContain('[image:');
+  });
+
+  /**
+   * An inlined PNG is a data URL hundreds of thousands of characters long.
+   * Counted as text it blew the budget by itself and the message was dropped,
+   * which is how an image could vanish with no error anywhere.
+   */
+  it('does not let an inlined image eat the whole budget', () => {
+    const content: ContentPart[] = [
+      { type: 'text', text: 'Look' },
+      {
+        type: 'image_url',
+        image_url: { url: `data:image/png;base64,${'A'.repeat(400_000)}`, detail: 'low' },
+      },
+    ];
+
+    const result = buildContext({
+      systemPrompt: 'You are helpful.',
+      injections: [],
+      history: [{ role: 'user', content, createdAt: Date.now() }],
+      maxTokens: 8_000,
+      reserveTokens: 500,
+      maxPinnedMessages: 20,
+      model: 'gpt-4o',
+    });
+
+    expect(result.messages).toHaveLength(2);
+    expect(Array.isArray(result.messages.at(-1)!.content)).toBe(true);
+    expect(result.totalTokens).toBeLessThan(1_000);
   });
 });

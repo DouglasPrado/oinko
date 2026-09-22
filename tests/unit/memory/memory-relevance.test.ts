@@ -112,34 +112,34 @@ describe('memory-relevance', () => {
 describe('memory-relevance request body', () => {
   const CAPTURED_REPLY = JSON.stringify({ selected_memories: ['user_role.md'] });
 
-/**
- * A real LLMClient with the transport faked, not a mocked `chat()`. The
- * mocked client cannot see the request body, which is exactly where the bug
- * lived: this module sends `temperature: 0`, and for a reasoning model the
- * provider answers 400 to the whole request rather than ignoring the field.
- */
-function captureRequest(model: string): {
-  client: LLMClient;
-  body: () => Record<string, unknown>;
-} {
-  let captured: Record<string, unknown> = {};
-  const client = new RealLLMClient({
-    apiKey: 'k',
-    model,
-    baseUrl: 'https://example.test/v1',
-    fetch: async (request: Request) => {
-      captured = JSON.parse(await request.text()) as Record<string, unknown>;
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content: CAPTURED_REPLY }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-        }),
-        { status: 200 },
-      );
-    },
-  });
-  return { client, body: () => captured };
-}
+  /**
+   * A real LLMClient with the transport faked, not a mocked `chat()`. The
+   * mocked client cannot see the request body, which is exactly where the bug
+   * lived: this module sends `temperature: 0`, and for a reasoning model the
+   * provider answers 400 to the whole request rather than ignoring the field.
+   */
+  function captureRequest(model: string): {
+    client: LLMClient;
+    body: () => Record<string, unknown>;
+  } {
+    let captured: Record<string, unknown> = {};
+    const client = new RealLLMClient({
+      apiKey: 'k',
+      model,
+      baseUrl: 'https://example.test/v1',
+      fetch: async (request: Request) => {
+        captured = JSON.parse(await request.text()) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: CAPTURED_REPLY }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    return { client, body: () => captured };
+  }
 
   const manifest = '- [user] user_role.md (2026-01-15T10:00:00.000Z): Senior Go developer';
   const valid = new Set(['user_role.md']);

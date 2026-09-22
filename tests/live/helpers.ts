@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { deflateSync } from 'node:zlib';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Agent, JevDecider, RecordingDecider, type DecisionRecord } from '../../src/index.js';
@@ -132,4 +133,84 @@ export function plain(text: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+/**
+ * Um PNG de cor solida, gerado na hora.
+ *
+ * Sem arquivo binario no repositorio e sem dependencia: o teste precisa de uma
+ * imagem que o modelo consiga descrever sem ambiguidade, e "de que cor e este
+ * quadrado" e a pergunta com a resposta menos discutivel que existe.
+ */
+export function solidPng(size: number, rgb: [number, number, number]): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+
+  const crc32 = (buf: Buffer): number => {
+    let crc = 0xffffffff;
+    for (const byte of buf) crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const typed = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typed));
+    return Buffer.concat([len, typed, crc]);
+  };
+
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; // profundidade de bits
+  ihdr[9] = 2; // truecolour RGB
+
+  const row = Buffer.concat([
+    Buffer.from([0]), // filtro: nenhum
+    Buffer.concat(Array.from({ length: size }, () => Buffer.from(rgb))),
+  ]);
+  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** A imagem no formato que o provedor aceita inline. */
+export function imageDataUrl(png: Buffer): string {
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+/**
+ * Sintetiza fala para os testes de audio.
+ *
+ * Gerar o audio na hora evita binario versionado e deixa a frase visivel no
+ * teste: a asserçao fala do conteudo que voltou da transcricao, nao de um
+ * arquivo opaco que ninguem consegue conferir lendo o codigo.
+ */
+export async function speak(text: string, format: 'mp3' | 'opus' = 'mp3'): Promise<Uint8Array> {
+  const base = BASE_URL ?? 'https://api.openai.com/v1';
+  const response = await fetch(`${base}/audio/speech`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${LLM_KEY!}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'tts-1',
+      voice: 'alloy',
+      input: text,
+      response_format: format,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`TTS falhou (${response.status}): ${(await response.text()).slice(0, 200)}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
 }

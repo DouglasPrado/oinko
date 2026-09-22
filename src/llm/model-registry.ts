@@ -42,6 +42,13 @@ export interface ModelFamily {
    * on this endpoint for these models — /v1/responses is what gives both.
    */
   toolsRequireEffortNone?: boolean;
+  /**
+   * This family takes text only. Probed through OpenRouter, which answers
+   * 404 "No endpoints found that support image input" — the flag is the
+   * exception, not the rule: everything else probed, including every reasoning
+   * line and the o-series, read an image correctly.
+   */
+  noVision?: boolean;
 }
 
 /** Conservative window for a model nobody registered. */
@@ -147,7 +154,7 @@ export const MODEL_REGISTRY: ModelFamily[] = [
   { name: 'gpt-4-turbo', match: family('gpt-4-turbo'), contextWindow: 128_000 },
   { name: 'gpt-4-0125', match: family('gpt-4-0125'), contextWindow: 128_000 },
   { name: 'gpt-4-1106', match: family('gpt-4-1106'), contextWindow: 128_000 },
-  { name: 'gpt-oss', match: /(^|\/)gpt-oss/i, contextWindow: 131_072 },
+  { name: 'gpt-oss', match: /(^|\/)gpt-oss/i, contextWindow: 131_072, noVision: true },
 
   // --- Google ---
   {
@@ -161,20 +168,46 @@ export const MODEL_REGISTRY: ModelFamily[] = [
   { name: 'gemini-1.5-flash', match: family('gemini-1.5-flash'), contextWindow: 1_000_000 },
 
   // --- DeepSeek ---
-  { name: 'deepseek-chat', match: /(^|\/)deepseek-chat/i, contextWindow: 163_840 },
+  { name: 'deepseek-chat', match: /(^|\/)deepseek-chat/i, contextWindow: 163_840, noVision: true },
   {
     name: 'deepseek-r1-distill-llama-70b',
     match: family('deepseek-r1-distill-llama-70b'),
+    noVision: true,
     contextWindow: 8_192,
   },
-  { name: 'deepseek-r1-0528', match: family('deepseek-r1-0528'), contextWindow: 163_840 },
-  { name: 'deepseek-r1', match: /(^|\/)deepseek-r1($|[-.:])/i, contextWindow: 64_000 },
+  {
+    name: 'deepseek-r1-0528',
+    match: family('deepseek-r1-0528'),
+    contextWindow: 163_840,
+    noVision: true,
+  },
+  {
+    name: 'deepseek-r1',
+    match: /(^|\/)deepseek-r1($|[-.:])/i,
+    contextWindow: 64_000,
+    noVision: true,
+  },
 
   // --- Mistral ---
-  { name: 'mistral-large-2407', match: family('mistral-large-2407'), contextWindow: 131_072 },
-  { name: 'mistral-large', match: /(^|\/)mistral-large/i, contextWindow: 128_000 },
-  { name: 'mistral-medium-3-5', match: family('mistral-medium-3-5'), contextWindow: 262_144 },
-  { name: 'mistral-medium', match: /(^|\/)mistral-medium/i, contextWindow: 131_072 },
+  {
+    name: 'mistral-large-2407',
+    match: family('mistral-large-2407'),
+    contextWindow: 131_072,
+    noVision: true,
+  },
+  { name: 'mistral-large', match: /(^|\/)mistral-large/i, contextWindow: 128_000, noVision: true },
+  {
+    name: 'mistral-medium-3-5',
+    match: family('mistral-medium-3-5'),
+    contextWindow: 262_144,
+    noVision: true,
+  },
+  {
+    name: 'mistral-medium',
+    match: /(^|\/)mistral-medium/i,
+    contextWindow: 131_072,
+    noVision: true,
+  },
 ];
 
 /** The first family whose matcher accepts this model id, if any. */
@@ -220,4 +253,14 @@ export function checkModelSuitsEndpoint(model: string, baseUrl: string): string 
     `Model "${model}" carries the provider prefix "${prefix}", which is OpenRouter's naming, ` +
     `but the endpoint is ${host}. Use "${bare}", or point baseUrl at OpenRouter.`
   );
+}
+
+/**
+ * True when this model reads images. Vision is near-universal now, so the
+ * answer is yes unless the family is known not to: assuming the opposite would
+ * silently blind every model the registry has yet to learn about, and the
+ * registry ages on its own clock.
+ */
+export function supportsVision(model: string): boolean {
+  return findModelFamily(model)?.noVision !== true;
 }

@@ -1,6 +1,6 @@
 import type { LLMMessage } from '../../llm/message-types.js';
 import type { LLMClient } from '../../llm/llm-client.js';
-import { estimateTokens } from '../../utils/token-counter.js';
+import { estimateContentTokens } from '../../utils/token-counter.js';
 
 interface AutocompactOptions {
   maxContextTokens: number;
@@ -14,10 +14,7 @@ interface AutocompactResult {
 }
 
 function estimateMessagesTokens(messages: readonly LLMMessage[]): number {
-  return messages.reduce((sum, m) => {
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    return sum + estimateTokens(content);
-  }, 0);
+  return messages.reduce((sum, m) => sum + estimateContentTokens(m.content), 0);
 }
 
 /**

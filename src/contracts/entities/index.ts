@@ -38,3 +38,19 @@ export type {
   ModelFallbackEvent,
   AgentEndEvent,
 } from './agent-event.js';
+export type {
+  TelemetrySink,
+  TelemetrySinkStats,
+  TelemetryRecord,
+  TelemetryExecutionStart,
+  TelemetryExecutionEnd,
+  TelemetryLLMCall,
+  TelemetryToolCall,
+  TelemetryMCPCall,
+  TelemetryDecision,
+  TelemetryAgentEvent,
+  TelemetryInjection,
+  LLMUsageDetail,
+  CostStatus,
+  CostSource,
+} from './telemetry.js';

@@ -25,6 +25,10 @@ import { memoryFreshnessNote } from './memory/memory-age.js';
 import { KnowledgeManager } from './knowledge/knowledge-manager.js';
 import { EmbeddingService } from './knowledge/embedding-service.js';
 import { SQLiteDatabase } from './storage/sqlite-database.js';
+import { TelemetryDatabase } from './telemetry/telemetry-database.js';
+import { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
+import { guardSink } from './telemetry/safe-sink.js';
+import type { TelemetrySink } from './contracts/entities/telemetry.js';
 import { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 import { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
 import { ConversationManager } from './core/conversation-manager.js';
@@ -38,6 +42,7 @@ import { getModelContextWindow } from './utils/model-context.js';
 import { screenTurn } from './core/turn-screening.js';
 import { buildToolUsagePrompt, buildEnvironmentPrompt } from './core/prompt-builders.js';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 export interface ChatOptions {
   threadId?: string;
@@ -59,9 +64,13 @@ export class Agent {
   private readonly fileMemorySystem?: FileMemorySystem;
   private readonly knowledgeManager?: KnowledgeManager;
   private readonly embeddingService?: EmbeddingService;
+  private readonly transcriptionClient: LLMClient;
+  private readonly transcriptionModel: string;
   private readonly mcpAdapter: MCPAdapter;
   private database?: SQLiteDatabase;
   private costAccumulator: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  private telemetry?: TelemetrySink;
+  private telemetryDatabase?: TelemetryDatabase;
   /** Per-thread usage — a thread must not be able to read another's spend. */
   private readonly usageByThread = new Map<string, TokenUsage>();
   /** Per-thread turn count for memory extraction scheduling. */
@@ -113,6 +122,21 @@ export class Agent {
         ? new LLMClient({ apiKey: embApiKey, model: embModel, baseUrl: embBaseUrl })
         : this.client;
     this.embeddingService = new EmbeddingService(embeddingClient, { model: embModel });
+
+    // Transcription client — mesma regra dos embeddings: so um cliente proprio
+    // quando o provedor difere, senao reaproveita a conexao do chat.
+    const trApiKey = config.transcription?.apiKey ?? config.apiKey;
+    const trBaseUrl = config.transcription?.baseUrl ?? config.baseUrl;
+    this.transcriptionModel = config.transcription?.model ?? config.transcriptionModel;
+    this.transcriptionClient =
+      trApiKey !== config.apiKey || trBaseUrl !== config.baseUrl
+        ? new LLMClient({
+            apiKey: trApiKey,
+            model: this.transcriptionModel,
+            ...(trBaseUrl !== undefined && { baseUrl: trBaseUrl }),
+            transcriptionModel: this.transcriptionModel,
+          })
+        : this.client;
 
     // Memory subsystem (file-based)
     if (config.memory?.enabled !== false) {
@@ -264,10 +288,11 @@ export class Agent {
         type: 'warning',
         message: 'Turn refused: the message appears to target the agent instructions',
         code: 'jailbreak_blocked',
+        traceId: ctx.traceId,
       };
       const refusal = this.config.jailbreak.blockedMessage;
-      yield { type: 'text_delta', content: refusal };
-      yield { type: 'text_done', content: refusal };
+      yield { type: 'text_delta', content: refusal, traceId: ctx.traceId };
+      yield { type: 'text_done', content: refusal, traceId: ctx.traceId };
       yield {
         type: 'agent_end',
         traceId: ctx.traceId,
@@ -365,7 +390,19 @@ export class Agent {
       maxTokens: this.config.maxContextTokens,
       reserveTokens: this.config.reserveTokens,
       maxPinnedMessages: this.config.maxPinnedMessages,
+      // O modelo do turno, nao o pedido: o roteamento pode ter trocado por um
+      // mais barato, e e ele quem vai receber (ou nao conseguir ler) a imagem.
+      model,
     });
+
+    // Never silent: an image that reaches a text-only model arrives as a line
+    // of text, and the caller deserves to know why the answer ignores it.
+    if (contextResult.flattenedImageCount > 0) {
+      this.logger.warn('Images flattened to text — this model does not read them', {
+        images: contextResult.flattenedImageCount,
+        model,
+      });
+    }
 
     if (contextResult.droppedPinnedCount > 0) {
       this.logger.warn('Pinned messages dropped due to context budget', {
@@ -381,11 +418,44 @@ export class Agent {
     // Emit start
     yield { type: 'agent_start', traceId: ctx.traceId, threadId, model };
 
+    const telemetry = this.ensureTelemetry();
+    telemetry?.write({
+      kind: 'execution_start',
+      traceId: ctx.traceId,
+      threadId,
+      ...(this.config.telemetry?.app !== undefined && { app: this.config.telemetry.app }),
+      model,
+      providerKind: /(^|\.)openrouter\.ai$/.test(new URL(this.config.baseUrl).hostname)
+        ? 'openrouter'
+        : 'other',
+      // O system prompt e sempre texto; as partes multimodais vivem nas
+      // mensagens de usuario, e serializa-las aqui so poluiria o registro.
+      systemPrompt: systemPromptOf(contextResult.messages),
+      toolsSchema: JSON.stringify(this.toolExecutor.getToolDefinitions()),
+      toolDefCount: this.toolExecutor.getToolDefinitions().length,
+      userInput: typeof input === 'string' ? input : JSON.stringify(input),
+      // Inclui o que o orcamento descartou: e o que responde por que um bloco
+      // nao entrou no prompt.
+      injections: injections.map((injection) => ({
+        source: injection.source,
+        priority: injection.priority,
+        tokens: injection.tokens,
+        applied: true,
+        content: injection.content,
+      })),
+      contextTokens: contextResult.totalTokens,
+      startedAt: ctx.startedAt,
+    });
+
     // Emit skill_activated events for matched skills
     for (const inj of injections.filter(
       (i) => i.source.startsWith('skill:') && i.source !== 'skill:listing',
     )) {
-      yield { type: 'skill_activated', skillName: inj.source.replace('skill:', '') };
+      yield {
+        type: 'skill_activated',
+        skillName: inj.source.replace('skill:', ''),
+        traceId: ctx.traceId,
+      };
     }
 
     // Intercept events from the generator for persistence tracking
@@ -419,6 +489,30 @@ export class Agent {
       // Token budget
       tokenBudget: this.config.tokenBudget,
       // Tool intelligence: conditional skill activation from file operations
+      onLLMCall: (call) => {
+        telemetry?.write({
+          kind: 'llm_call',
+          id: `${ctx.traceId}:${call.seq}`,
+          traceId: ctx.traceId,
+          seq: call.seq,
+          model: call.model,
+          responseText: call.responseText,
+          finishReason: call.finishReason,
+          ...(call.usage !== undefined && { usage: call.usage }),
+          ...(call.usageDetail !== undefined && { usageDetail: call.usageDetail }),
+          // Confirmado so quando o provedor informou o valor. Sem isso fica
+          // indisponivel — nunca estimado.
+          costStatus: call.usageDetail?.costUsd === undefined ? 'unavailable' : 'confirmed',
+          ...(call.usageDetail?.costUsd !== undefined && { costSource: 'stream_usage' as const }),
+          ...(call.ttftMs !== undefined && { ttftMs: call.ttftMs }),
+          ...(call.durationMs !== undefined && { durationMs: call.durationMs }),
+          ...(call.queuedMs !== undefined && { queuedMs: call.queuedMs }),
+          ...(call.attempts !== undefined && { attempts: call.attempts }),
+          streamed: true,
+          startedAt: call.startedAt,
+          endedAt: call.endedAt,
+        });
+      },
       onFilePathsTouched: this.skillManager
         ? (paths) => this.skillManager!.activateForPaths(paths)
         : undefined,
@@ -445,9 +539,34 @@ export class Agent {
             toolCallId: event.toolCallId,
             content: event.result.content,
           });
+
+          // O evento de fim nao traz o nome da tool nem os argumentos; ambos
+          // vieram no start, que o interceptador ja guardou.
+          const started = pendingToolCalls.find((call) => call.id === event.toolCallId);
+          const endedAt = Date.now();
+          const metadata = event.result.metadata;
+          telemetry?.write({
+            kind: 'tool_call',
+            id: event.toolCallId,
+            traceId: ctx.traceId,
+            name: started?.name ?? 'unknown',
+            origin: toolOrigin(started?.name),
+            ...(started?.arguments !== undefined && { args: started.arguments }),
+            result: event.result.content,
+            isError: event.result.isError === true,
+            truncated: metadata?.truncated === true,
+            suspectedInjection: metadata?.suspectedInjection === true,
+            ...(metadata !== undefined && { metadata }),
+            durationMs: event.duration,
+            startedAt: endedAt - event.duration,
+            endedAt,
+          });
         }
 
-        yield event;
+        // Carimba o trace em tudo que vem do loop. O tipo declara traceId
+        // opcional para nao quebrar produtores existentes; em runtime nenhum
+        // evento sai daqui sem ele.
+        yield { ...event, traceId: ctx.traceId };
         result = await loopGen.next();
       }
       terminal = result.value;
@@ -467,6 +586,7 @@ export class Agent {
         type: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
         recoverable: false,
+        traceId: ctx.traceId,
       };
       yield {
         type: 'agent_end',
@@ -556,6 +676,26 @@ export class Agent {
       duration: Date.now() - ctx.startedAt,
     };
 
+    telemetry?.write({
+      kind: 'execution_end',
+      traceId: ctx.traceId,
+      status:
+        terminal.reason === 'error' ? 'error' : terminal.reason === 'abort' ? 'aborted' : 'ok',
+      endReason: terminal.reason,
+      assistantText,
+      usage: terminal.usage,
+      ...(terminal.error !== undefined && {
+        error: {
+          name: terminal.error.name,
+          message: terminal.error.message,
+          ...(terminal.error.stack !== undefined && { stack: terminal.error.stack }),
+        },
+      }),
+      endedAt: Date.now(),
+      durationMs: Date.now() - ctx.startedAt,
+    });
+    void telemetry?.flush();
+
     // Turn-end hooks pipeline (memory extraction + custom hooks)
     const turnEndContext = {
       assistantText,
@@ -632,6 +772,37 @@ export class Agent {
       if (event.type === 'error' && !event.recoverable) throw event.error;
     }
     return result;
+  }
+
+  /**
+   * Transcreve audio para texto.
+   *
+   * O audio nao entra na conversa por conta propria: o retorno e texto, e cabe
+   * a quem chamou decidir se aquilo vira um turno. Sondando a API, e o unico
+   * caminho que existe — um bloco `input_audio` em /chat/completions e
+   * recusado com "Content blocks are expected to be either text or image_url
+   * type", entao nao ha como o modelo ouvir direto por este endpoint.
+   *
+   * O `filename` importa: o provedor escolhe o decoder pela extensao, entao um
+   * `.ogg` chamado de `.mp3` volta como formato invalido.
+   */
+  async transcribe(
+    audio: Uint8Array,
+    filename: string,
+    options?: { model?: string; language?: string; signal?: AbortSignal },
+  ): Promise<string> {
+    if (this.destroyed) throw new Error('Agent is destroyed');
+
+    const { text } = await this.transcriptionClient.transcribe({
+      audio,
+      filename,
+      model: options?.model ?? this.transcriptionModel,
+      ...(options?.language !== undefined && { language: options.language }),
+      ...(options?.signal !== undefined && { signal: options.signal }),
+    });
+
+    this.logger.debug('Audio transcribed', { filename, chars: text.length });
+    return text;
   }
 
   addTool(tool: AgentTool): void {
@@ -914,6 +1085,8 @@ export class Agent {
     this.surfacedMemoriesByThread.clear();
     this.turnsSinceExtractionByThread.clear();
     await this.mcpAdapter.disconnectAll();
+    await this.telemetry?.close();
+    this.telemetryDatabase?.close();
     this.database?.close();
     this.logger.info('Agent destroyed');
   }
@@ -926,6 +1099,55 @@ export class Agent {
   private getDefaultVectorStore() {
     this.ensureDatabase();
     return new SQLiteVectorStore(this.database!);
+  }
+
+  /**
+   * Cria o destino da telemetria na primeira execucao.
+   *
+   * Sem `telemetry` na config nao ha sink, nenhum arquivo e criado e cada
+   * ponto de instrumentacao vira um `?.` — custo zero para quem nao usa.
+   */
+  private ensureTelemetry(): TelemetrySink | undefined {
+    const config = this.config.telemetry;
+    if (!config || config.enabled === false) return undefined;
+    if (this.telemetry) return this.telemetry;
+
+    const guard = (sink: TelemetrySink): TelemetrySink =>
+      guardSink(sink, (err) => {
+        this.logger.warn('Telemetry sink failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+    if (config.sink) {
+      this.telemetry = guard(config.sink);
+      return this.telemetry;
+    }
+
+    let dbPath = config.dbPath ?? join(process.cwd(), '.harness', 'telemetry.db');
+    if (dbPath === '~' || dbPath.startsWith('~/')) dbPath = homedir() + dbPath.slice(1);
+
+    try {
+      this.telemetryDatabase = new TelemetryDatabase(dbPath);
+      this.telemetryDatabase.initialize();
+      this.telemetry = guard(
+        new SqliteTelemetrySink(this.telemetryDatabase, {
+          capturePayloads: config.capturePayloads,
+          maxPayloadChars: config.maxPayloadChars,
+          // A propria chave do agente pode chegar a um payload por um header ou
+          // por um prompt que a cite.
+          secrets: [this.config.apiKey],
+        }),
+      );
+    } catch (err) {
+      // Telemetria indisponivel nao impede o agente de trabalhar.
+      this.logger.warn('Telemetry disabled: could not open the telemetry database', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      this.telemetry = undefined;
+    }
+
+    return this.telemetry;
   }
 
   private ensureDatabase(): void {
@@ -1143,4 +1365,20 @@ export class Agent {
 
     return { injections, skillToolNames };
   }
+}
+
+/** Classifica a procedencia de uma tool pelo nome com que foi registrada. */
+function toolOrigin(name: string | undefined): 'builtin' | 'skill' | 'mcp' | 'custom' {
+  if (name === undefined) return 'custom';
+  if (name.startsWith('mcp__')) return 'mcp';
+  if (name === SKILL_TOOL_NAME) return 'skill';
+  return 'builtin';
+}
+
+/** Texto do system prompt efetivamente enviado, se houver. */
+function systemPromptOf(
+  messages: readonly { role: string; content: unknown }[],
+): string | undefined {
+  const system = messages.find((message) => message.role === 'system');
+  return typeof system?.content === 'string' ? system.content : undefined;
 }

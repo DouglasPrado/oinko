@@ -3,6 +3,7 @@ import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agen
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { ToolDefinition } from '../llm/message-types.js';
 import { retry } from '../utils/retry.js';
+import { truncateMiddle } from '../utils/truncate.js';
 import { classifyToolError } from './error-classifier.js';
 import { screenUntrustedContent } from './injection-guard.js';
 import type { Decider } from '../contracts/entities/decider.js';
@@ -28,8 +29,6 @@ export interface ExecuteOptions {
 }
 
 const DEFAULT_MAX_RESULT_CHARS = 10_000;
-const TRUNCATE_HEAD_RATIO = 0.7;
-const TRUNCATE_TAIL_RATIO = 0.2;
 
 /**
  * Registers tools, validates args via Zod, converts to JSON Schema,
@@ -167,7 +166,7 @@ export class ToolExecutor {
     if (!result.isError && result.content.length > maxChars) {
       result = {
         ...result,
-        content: truncateResult(result.content, maxChars),
+        content: truncateMiddle(result.content, maxChars),
         metadata: { ...result.metadata, truncated: true, originalLength: result.content.length },
       };
     }
@@ -336,17 +335,4 @@ export class ToolExecutor {
       isRetryable,
     });
   }
-}
-
-/**
- * Truncate tool result content preserving head and tail.
- * Same strategy as microcompact (70% head, 20% tail).
- */
-function truncateResult(content: string, maxChars: number): string {
-  const headSize = Math.floor(maxChars * TRUNCATE_HEAD_RATIO);
-  const tailSize = Math.floor(maxChars * TRUNCATE_TAIL_RATIO);
-  const head = content.slice(0, headSize);
-  const tail = content.slice(-tailSize);
-  const omitted = content.length - headSize - tailSize;
-  return `${head}\n\n[truncated ${omitted} characters]\n\n${tail}`;
 }
