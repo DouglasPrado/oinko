@@ -1,4 +1,5 @@
-import { Plug, CircleCheck, CircleAlert } from 'lucide-react';
+import Image from 'next/image';
+import { CircleCheck, CircleAlert } from 'lucide-react';
 import type { CredentialStatus } from '@/server/higgsfield/credential-store';
 
 const MESSAGE: Record<string, { text: string; tone: string }> = {
@@ -21,7 +22,21 @@ export function ConnectionCard({ status, result }: { status: CredentialStatus; r
   return (
     <section aria-labelledby="hf-heading" className="border-b border-rule px-5 py-4">
       <h2 id="hf-heading" className="flex items-center gap-2 text-sm font-medium">
-        <Plug className="size-4 text-judge" aria-hidden />
+        {/*
+          A marca do servico no lugar de um icone generico: numa pagina que
+          lista integracoes, o que identifica cada linha e de quem ela e. O
+          arquivo e copia local do /icon.png do proprio site — pedir a imagem
+          ao higgsfield.ai a cada carga contaria a eles quando a dashboard
+          abre, e quebraria a pagina se o site saisse do ar.
+        */}
+        <Image
+          src="/higgsfield.png"
+          alt=""
+          width={16}
+          height={16}
+          className="size-4 rounded-[3px]"
+          aria-hidden
+        />
         Higgsfield
       </h2>
 
