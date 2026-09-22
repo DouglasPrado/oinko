@@ -36,6 +36,22 @@ const MCPConnectionConfigSchema = z.object({
   allowedStdioCommands: z.array(z.string()).optional(),
   url: z.string().url().optional(),
   headers: z.record(z.string(), z.string()).optional(),
+  /**
+   * Cabecalhos resolvidos a cada requisicao, para credencial que expira.
+   *
+   * Um Bearer fixo em `headers` morre quando o token vence e o servidor passa
+   * a responder 401 no meio de um turno. Com isto, quem renova entrega o valor
+   * fresco na hora da chamada.
+   */
+  getHeaders: z.custom<() => Promise<Record<string, string>>>().optional(),
+  /**
+   * So estas ferramentas sao registradas. Ausente ou vazio, todas entram.
+   *
+   * Um servidor grande publica dezenas de ferramentas, e o schema de todas
+   * viaja em cada chamada de LLM — no Higgsfield sao 101 ferramentas e cerca de
+   * 44 mil tokens. Recortar e o que torna um servidor assim utilizavel.
+   */
+  tools: z.array(z.string()).optional(),
   timeout: z.number().positive().default(30_000),
   maxRetries: z.number().int().min(0).default(3),
   healthCheckInterval: z.number().positive().default(60_000),

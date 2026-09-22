@@ -229,7 +229,7 @@ export class MCPAdapter {
     const { tools: mcpTools } = await client.listTools();
 
     // Convert MCP tools to AgentTools
-    const agentTools = mcpTools.map((mcpTool) =>
+    const agentTools = this.selectTools(mcpTools, config.tools).map((mcpTool) =>
       this.convertTool(config.name, mcpTool, client, config),
     );
 
@@ -412,6 +412,22 @@ export class MCPAdapter {
         return content;
       })
       .join('\n');
+  }
+
+  /**
+   * Recorta o que o servidor publica.
+   *
+   * Lista vazia conta como ausencia de filtro: quase sempre e engano de
+   * configuracao, e deixar o agente sem ferramenta alguma em silencio seria
+   * pior que ignorar o campo.
+   */
+  private selectTools<T extends { name: string }>(
+    tools: readonly T[],
+    allow?: readonly string[],
+  ): T[] {
+    if (!allow || allow.length === 0) return [...tools];
+    const wanted = new Set(allow);
+    return tools.filter((tool) => wanted.has(tool.name));
   }
 
   private convertTool(
@@ -704,10 +720,32 @@ async function closeTransportQuietly(transport: unknown): Promise<void> {
   }
 }
 
+/**
+ * Envolve o `fetch` para resolver os cabecalhos a cada requisicao.
+ *
+ * O transporte fixa `requestInit` uma vez, na conexao. Uma credencial de vida
+ * curta — o token do Higgsfield dura 24 horas — venceria no meio de uma sessao
+ * longa e o servidor passaria a responder 401 sem que nada reconectasse. Aqui
+ * quem renova entrega o valor fresco na hora da chamada.
+ *
+ * O que vem de `getHeaders` tem precedencia sobre o que ja estava no init: e
+ * justamente o cabecalho que mudou.
+ */
+export function withFreshHeaders(
+  getHeaders: () => Promise<Record<string, string>>,
+): (url: string | URL, init?: RequestInit) => Promise<Response> {
+  return async (url, init) => {
+    const fresh = await getHeaders();
+    return fetch(url, { ...init, headers: { ...init?.headers, ...fresh } });
+  };
+}
+
 async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
   const requestInit: RequestInit | undefined = config.headers
     ? { headers: config.headers }
     : undefined;
+
+  const fetchImpl = config.getHeaders ? withFreshHeaders(config.getHeaders) : undefined;
 
   if (config.transport === 'stdio') {
     if (!config.command) {
@@ -734,12 +772,18 @@ async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
 
     if (config.transport === 'sse') {
       const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
-      return new SSEClientTransport(new URL(config.url), { requestInit });
+      return new SSEClientTransport(new URL(config.url), {
+        requestInit,
+        ...(fetchImpl !== undefined && { fetch: fetchImpl }),
+      });
     }
 
     const { StreamableHTTPClientTransport } =
       await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
-    return new StreamableHTTPClientTransport(new URL(config.url), { requestInit });
+    return new StreamableHTTPClientTransport(new URL(config.url), {
+      requestInit,
+      ...(fetchImpl !== undefined && { fetch: fetchImpl }),
+    });
   }
 
   throw new Error(`Unsupported MCP transport: ${config.transport}`);
