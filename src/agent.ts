@@ -935,12 +935,44 @@ export class Agent {
       .finally(() => clearTimeout(timeout));
   }
 
+  /**
+   * Decides whether this turn needs the knowledge base and, if so, searches it.
+   *
+   * The two steps are sequential by design — the gate exists precisely to
+   * avoid paying for the embedding — but the pair as a whole runs alongside
+   * the skills block instead of after it.
+   */
+  private async prefetchKnowledge(
+    userInput: string,
+    threadId: string,
+  ): Promise<RetrievedKnowledge[]> {
+    if (!this.knowledgeManager) return [];
+
+    const shouldRetrieve = await shouldRetrieveKnowledge(
+      userInput,
+      { minConfidence: this.config.knowledge?.minConfidence },
+      this.config.decider,
+      { logger: this.logger },
+    );
+
+    return shouldRetrieve ? this.knowledgeManager.search(userInput, threadId) : [];
+  }
+
   private async buildInjectionsWithSkills(
     userInput: string,
     threadId: string,
     memoryPrefetch?: Promise<MemoryFile[]>,
   ): Promise<{ injections: ContextInjection[]; skillToolNames: string[] }> {
     const injections: ContextInjection[] = [];
+
+    // Knowledge starts here, and is awaited further down. It and the skills
+    // block each cost a network round trip (a decision, an embedding) and
+    // neither depends on the other — awaited in place, one simply waited for
+    // the other to finish before starting. Memory is already prefetched by the
+    // caller for the same reason.
+    const knowledgePrefetch = this.knowledgeManager
+      ? this.prefetchKnowledge(userInput, threadId)
+      : undefined;
 
     // Skills injection
     const skillToolNames: string[] = [];
@@ -995,19 +1027,11 @@ export class Agent {
       }
     }
 
-    // Knowledge injection
-    if (this.knowledgeManager) {
+    // Knowledge injection — awaits what was already in flight since before
+    // the skills block, so the two do not queue behind each other.
+    if (knowledgePrefetch) {
       try {
-        // Skip the embedding round trip when the turn cannot benefit from it.
-        const shouldRetrieve = await shouldRetrieveKnowledge(
-          userInput,
-          { minConfidence: this.config.knowledge?.minConfidence },
-          this.config.decider,
-          { logger: this.logger },
-        );
-        const results = shouldRetrieve
-          ? await this.knowledgeManager.search(userInput, threadId)
-          : [];
+        const results = await knowledgePrefetch;
         if (results.length > 0) {
           const content = results.map((r) => r.content).join('\n\n');
           const tokens = estimateTokens(content);
