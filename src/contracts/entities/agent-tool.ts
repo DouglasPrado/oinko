@@ -4,6 +4,20 @@ import type { AgentToolResult } from './tool-call.js';
 /** Progress callback — tools call this to report incremental updates */
 export type ToolProgressCallback = (data: Record<string, unknown>) => void;
 
+/**
+ * Onde esta chamada acontece.
+ *
+ * Passado como quarto parametro opcional: uma implementacao que declare tres
+ * parametros continua atribuivel, entao nenhuma tool existente precisa mudar.
+ * Existe para que uma tool que fale com um sistema externo — MCP, hoje — possa
+ * registrar a troca sob a execucao que a motivou.
+ */
+export interface ToolExecuteContext {
+  traceId?: string;
+  threadId?: string;
+  toolCallId?: string;
+}
+
 /** A tool that the Agent can invoke during the ReactLoop */
 export interface AgentTool {
   name: string;
@@ -13,6 +27,7 @@ export interface AgentTool {
     args: unknown,
     signal: AbortSignal,
     onProgress?: ToolProgressCallback,
+    context?: ToolExecuteContext,
   ) => Promise<string | AgentToolResult>;
 
   /** Semantic validation — return error string to reject, null to allow. Called before execute. */

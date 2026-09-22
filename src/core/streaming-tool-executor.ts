@@ -46,7 +46,14 @@ export class StreamingToolExecutor {
   /** Accumulated progress events from all tools (drained by getProgressEvents) */
   private pendingProgress: ToolProgressInfo[] = [];
 
-  constructor(executor: ToolExecutor, signal?: AbortSignal, logger?: Logger, recentMessages = 0) {
+  constructor(
+    executor: ToolExecutor,
+    signal?: AbortSignal,
+    logger?: Logger,
+    recentMessages = 0,
+    /** Execucao corrente, repassada a cada tool para correlacionar telemetria. */
+    private readonly traceId?: string,
+  ) {
     this.executor = executor;
     this.signal = signal;
     this.recentMessages = recentMessages;
@@ -213,6 +220,7 @@ export class StreamingToolExecutor {
     try {
       const result = await this.executor.execute(tracked.name, parsedArgs, {
         signal: this.signal,
+        ...(this.traceId !== undefined && { traceId: this.traceId }),
         toolCallId: tracked.id,
         recentMessages: this.recentMessages,
         onProgress,

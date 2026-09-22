@@ -1,7 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import { z, ZodError } from 'zod';
 import type { ZodIssue, ZodSchema } from 'zod';
-import type { AgentTool } from '../contracts/entities/agent-tool.js';
+import type {
+  AgentTool,
+  ToolExecuteContext,
+  ToolProgressCallback,
+} from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
+import type { TelemetrySink } from '../contracts/entities/telemetry.js';
 import type { MCPConnectionConfig } from '../config/config.js';
 import type { ToolExecutor } from './tool-executor.js';
 import { jsonSchemaToZod } from './json-schema-to-zod.js';
@@ -191,7 +197,17 @@ export class MCPAdapter {
   /** MCP prompts discovered from servers */
   private readonly mcpPrompts = new Map<string, MCPPromptInfo>();
 
-  constructor(executor: ToolExecutor) {
+  constructor(
+    executor: ToolExecutor,
+    /**
+     * Destino da telemetria, resolvido a cada chamada.
+     *
+     * Funcao, e nao o sink direto, porque o adaptador e construido junto com o
+     * agente, antes de a telemetria existir — ela so e aberta no primeiro
+     * turno. Sem provedor, nada de MCP e registrado.
+     */
+    private readonly telemetry?: () => TelemetrySink | undefined,
+  ) {
     this.executor = executor;
   }
 
@@ -432,7 +448,40 @@ export class MCPAdapter {
       // Whatever a remote server returns is content this conversation did not
       // produce, so it gets screened like any other outside text.
       untrustedOutput: true,
-      execute: async (args: unknown, signal: AbortSignal): Promise<string | AgentToolResult> => {
+      execute: async (
+        args: unknown,
+        signal: AbortSignal,
+        _onProgress?: ToolProgressCallback,
+        context?: ToolExecuteContext,
+      ): Promise<string | AgentToolResult> => {
+        const startedAt = Date.now();
+        // Registrada no fim, em qualquer saida — inclusive erro e timeout.
+        const record = (outcome: {
+          response?: string;
+          contentTypes?: string;
+          isError?: boolean;
+          timedOut?: boolean;
+          errorMessage?: string;
+        }): void => {
+          this.telemetry?.()?.write({
+            kind: 'mcp_call',
+            id: randomUUID(),
+            ...(context?.traceId !== undefined && { traceId: context.traceId }),
+            ...(context?.toolCallId !== undefined && { toolCallId: context.toolCallId }),
+            serverName,
+            remoteToolName: mcpTool.name,
+            namespacedToolName: namespacedName,
+            request: JSON.stringify(args),
+            ...(outcome.response !== undefined && { response: outcome.response }),
+            ...(outcome.contentTypes !== undefined && { contentTypes: outcome.contentTypes }),
+            isError: outcome.isError === true,
+            timedOut: outcome.timedOut === true,
+            ...(outcome.errorMessage !== undefined && { errorMessage: outcome.errorMessage }),
+            durationMs: Date.now() - startedAt,
+            startedAt,
+          });
+        };
+
         try {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeout);
@@ -457,8 +506,18 @@ export class MCPAdapter {
             // Validate the response shape — untrusted MCP servers may return malformed content.
             const parsedContent = MCPToolContentSchema.safeParse(result.content);
             if (!parsedContent.success) {
+              record({
+                response: JSON.stringify(result.content),
+                isError: true,
+                errorMessage: 'invalid content shape',
+              });
               return { content: 'MCP tool returned invalid content shape', isError: true };
             }
+
+            // Gravado antes do achatamento abaixo: e la que uma imagem vira
+            // "[Image: …]" e o payload real deixa de existir.
+            const rawResponse = JSON.stringify(parsedContent.data);
+            const contentTypes = [...new Set(parsedContent.data.map((c) => c.type))].join(',');
 
             // Handle mixed content types (text, image, resource)
             const parts = parsedContent.data.map((c) => {
@@ -475,14 +534,23 @@ export class MCPAdapter {
             const textContent = parts.join('\n');
 
             if (result.isError) {
+              record({ response: rawResponse, contentTypes, isError: true });
               return { content: textContent || 'MCP tool returned an error', isError: true };
             }
 
+            record({ response: rawResponse, contentTypes });
             return textContent || 'Tool completed with no text output';
           } finally {
             clearTimeout(timer);
           }
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          record({
+            isError: true,
+            timedOut: /timed out after \d+ms/.test(message),
+            errorMessage: message,
+          });
+
           if (isolateErrors) {
             return {
               content: `MCP tool error: ${error instanceof Error ? error.message : String(error)}`,

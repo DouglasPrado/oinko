@@ -101,7 +101,7 @@ export class Agent {
     });
 
     this.toolExecutor = new ToolExecutor({ decider: config.decider, logger: this.logger });
-    this.mcpAdapter = new MCPAdapter(this.toolExecutor);
+    this.mcpAdapter = new MCPAdapter(this.toolExecutor, () => this.telemetry);
 
     // Conversation store — defaults to SQLite when database is available (persists across restarts)
     if (config.conversation?.store) {
@@ -487,6 +487,7 @@ export class Agent {
       model,
       maxIterations: this.config.maxIterations,
       ...(decider !== undefined && { decider }),
+      traceId: ctx.traceId,
       progressCheckInterval: this.config.progressCheckInterval,
       logger: this.logger,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,

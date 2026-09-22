@@ -1,5 +1,9 @@
 import { z, ZodError } from 'zod';
-import type { AgentTool, ToolProgressCallback } from '../contracts/entities/agent-tool.js';
+import type {
+  AgentTool,
+  ToolProgressCallback,
+  ToolExecuteContext,
+} from '../contracts/entities/agent-tool.js';
 import type { AgentToolResult } from '../contracts/entities/tool-call.js';
 import type { ToolDefinition } from '../llm/message-types.js';
 import { retry } from '../utils/retry.js';
@@ -22,6 +26,8 @@ export interface ToolHooks {
 
 export interface ExecuteOptions {
   signal?: AbortSignal;
+  /** Execucao que motivou a chamada, repassada a tool. */
+  traceId?: string;
   toolCallId?: string;
   threadId?: string;
   recentMessages?: number;
@@ -153,7 +159,11 @@ export class ToolExecutor {
     // 6. Execute (with retry if retryable)
     let result: AgentToolResult;
     try {
-      result = await this.executeWithRetry(tool, validatedArgs, execSignal, onProgress);
+      result = await this.executeWithRetry(tool, validatedArgs, execSignal, onProgress, {
+        ...(opts.traceId !== undefined && { traceId: opts.traceId }),
+        ...(opts.threadId !== undefined && { threadId: opts.threadId }),
+        ...(opts.toolCallId !== undefined && { toolCallId: opts.toolCallId }),
+      });
     } catch (error) {
       result = {
         content: `Tool error: ${error instanceof Error ? error.message : String(error)}`,
@@ -297,9 +307,10 @@ export class ToolExecutor {
     args: unknown,
     signal: AbortSignal,
     onProgress?: ToolProgressCallback,
+    context?: ToolExecuteContext,
   ): Promise<AgentToolResult> {
     const execFn = async () => {
-      const raw = await tool.execute(args, signal, onProgress);
+      const raw = await tool.execute(args, signal, onProgress, context);
       return typeof raw === 'string' ? { content: raw } : raw;
     };
 

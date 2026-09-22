@@ -41,7 +41,14 @@ describe('ToolExecutor', () => {
     const result = await executor.execute('test_tool', { input: 'test' });
     expect(result.content).toBe('hello');
     expect(result.isError).toBeFalsy();
-    expect(executeFn).toHaveBeenCalledWith({ input: 'test' }, expect.any(AbortSignal), undefined);
+    // O quarto argumento e o contexto da execucao; vazio quando nada foi
+    // informado, e e o que permite a uma tool de MCP correlacionar a troca.
+    expect(executeFn).toHaveBeenCalledWith(
+      { input: 'test' },
+      expect.any(AbortSignal),
+      undefined,
+      {},
+    );
   });
 
   it('should reject invalid args via Zod', async () => {
