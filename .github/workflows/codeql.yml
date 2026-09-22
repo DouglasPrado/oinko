@@ -1,0 +1,49 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Segunda 06:00 UTC — pega CVEs novas em codigo ja mergeado
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    # Code scanning em repo privado exige GitHub Advanced Security. Sem isso o
+    # upload do SARIF falha com 403 mesmo a analise tendo rodado. Roda so quando
+    # o repo for publico ou o GHAS estiver ativo; ate la nao bloqueia PR.
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      (github.event.repository.private == false ||
+       vars.ENABLE_CODEQL == 'true')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@0daab03d71ff584ef619d027a3fd9146679c5d84 # v3
+        with:
+          category: '/language:${{ matrix.language }}'

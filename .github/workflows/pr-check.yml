@@ -1,0 +1,109 @@
+name: PR Check
+
+# Gate unico do repo. Adaptado do pr-check.yml do monorepo gba.dev, de onde
+# este pacote saiu: la o Turbo escolhia o escopo por diff (`--filter=...
+# [origin/main]`) porque havia varios pacotes. Aqui ha um so, entao as tasks
+# rodam direto — o filtro nao teria o que filtrar.
+#
+# Tambem ficaram de fora os passos de MCP server e Prisma: sao do monorepo.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+
+concurrency:
+  group: pr-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # O pnpm só expande variável em credencial vinda do npmrc do USUÁRIO —
+      # nunca do .npmrc do projeto, que é versionado. Por isso a linha é
+      # escrita aqui, e não commitada.
+      #
+      # O destino é `$NPM_CONFIG_USERCONFIG`, e não `~/.npmrc` direto: quando o
+      # `setup-node` recebe `registry-url`, ele escreve o npmrc num arquivo
+      # próprio no RUNNER_TEMP e aponta essa variável para lá. A partir daí o
+      # pnpm lê AQUELE arquivo como npmrc do usuário e ignora o `~/.npmrc` — o
+      # token do registry privado ia para um arquivo que ninguém lia, e o
+      # install morria com 401 "no authorization header was set".
+      #
+      # O `printf` com `\n` na frente, e não `echo`, porque o npmrc que o
+      # `setup-node` escreve NÃO termina em nova linha: com `echo >>` a linha
+      # grudava na anterior e o pnpm pedia cada pacote numa URL colada, tomando
+      # 404. Os dois defeitos custaram dias de publish quebrado no monorepo.
+      - name: Autentica no registry privado
+        run: printf '\n//npm.dify.com.br/:_authToken=%s\n' "$GBA_REGISTRY_TOKEN" >> "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+        env:
+          GBA_REGISTRY_TOKEN: ${{ secrets.GBA_REGISTRY_TOKEN }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # O merge-base do commitlint compara com origin/main. Sem isto um fetch
+      # raso trunca a historia e o merge-base nao acha ancestral comum.
+      - name: Fetch base branch
+        run: git fetch origin main
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test with coverage
+        run: pnpm test:coverage
+
+      - name: Detect duplication
+        run: pnpm lint:dup
+
+      - name: Detect dead code
+        run: pnpm lint:deadcode
+
+      - name: Check bundle size
+        run: pnpm size
+
+      - name: Validate API docs
+        run: pnpm docs:api:check
+
+      - name: Validate publish artifacts
+        run: pnpm validate:publish
+
+      - name: Audit dependencies
+        run: pnpm audit --prod --audit-level=high
+
+      # Valida so os commits proprios da PR. Usa merge-base: o base.sha da PR
+      # pode nao ser ancestral do HEAD quando a main avancou, e
+      # `<primeiro-commit>~1` estoura se esse commit for a raiz do repositorio.
+      - name: Validate commits
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          BASE=$(git merge-base origin/main "$HEAD_SHA")
+          echo "validando $BASE..$HEAD_SHA"
+          pnpm commitlint --from "$BASE" --to "$HEAD_SHA"

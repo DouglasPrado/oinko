@@ -18,5 +18,6 @@
     "notExported": false,
     "invalidLink": true,
     "notDocumented": false
-  }
+  },
+  "sourceLinkTemplate": "https://github.com/DouglasPrado/oinko/blob/{gitRevision}/{path}#L{line}"
 }
