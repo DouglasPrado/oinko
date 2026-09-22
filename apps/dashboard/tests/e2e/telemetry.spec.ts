@@ -63,7 +63,7 @@ test.describe('inspecao de telemetria', () => {
   test('diz que o custo e desconhecido em vez de mostrar zero', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('link', { name: 'interno-0007' }).click();
-    await page.getByRole('link').filter({ hasText: 'local/llama-4' }).first().click();
+    await page.getByRole('link').filter({ hasText: 'gpt-4o-mini' }).first().click();
 
     // A metrica do topo e a linha da chamada dizem a mesma coisa, de proposito.
     await expect(page.getByText('provedor nao informou', { exact: true })).toBeVisible();

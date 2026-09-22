@@ -106,13 +106,14 @@ function fakeDecider() {
   };
 }
 
-async function run({ threadId, input, responses, model, app }) {
+async function run({ threadId, input, responses, model, app, baseUrl }) {
   script = responses;
   call = 0;
 
   const agent = Agent.create({
     apiKey: 'sk-seed-key-0123456789abcdef',
     model,
+    ...(baseUrl !== undefined && { baseUrl }),
     memory: { enabled: false },
     knowledge: { enabled: false },
     telemetry: { dbPath: DB, app },
@@ -211,12 +212,13 @@ await run({
   ],
 });
 
-// Provedor que nao informa custo: a interface precisa dizer "indisponivel"
-// em vez de mostrar zero.
+// Provedor sem API de custo: nao ha o que confirmar depois, entao a interface
+// precisa dizer "indisponivel" — e nunca zero.
 await run({
   threadId: 'interno-0007',
   app: 'cli',
-  model: 'local/llama-4',
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-4o-mini',
   input: 'Resuma o relatorio trimestral',
   responses: [
     [
