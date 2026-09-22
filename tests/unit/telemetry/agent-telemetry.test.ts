@@ -215,3 +215,42 @@ describe('Agent telemetry end to end', () => {
     await agent.destroy();
   });
 });
+
+describe('decisoes do decider', () => {
+  it('records the decider calls of a turn under the same trace', async () => {
+    mockProvider(WITH_COST);
+    const { sink, records } = collectingSink();
+
+    const agent = Agent.create({
+      apiKey: 'sk-test-key-0123456789abcdef',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      telemetry: { sink },
+      // Decider trivial: responde nao a tudo que o turno perguntar.
+      decider: {
+        decide: (_state, questions) =>
+          Promise.resolve(
+            Object.fromEntries(
+              Object.keys(questions).map((key) => [key, { value: false, confidence: 0.8 }]),
+            ) as never,
+          ),
+      },
+      jailbreak: { mode: 'warn' },
+    });
+
+    for await (const _ of agent.stream('oi')) {
+      /* drain */
+    }
+    await agent.destroy();
+
+    const decisions = records.filter((record) => record.kind === 'decision');
+    expect(decisions.length).toBeGreaterThan(0);
+
+    const start = records.find((record) => record.kind === 'execution_start');
+    // Mesmo trace da execucao: e o que permite perguntar "quais decisoes este
+    // turno tomou?" com um JOIN em vez de adivinhacao por horario.
+    for (const decision of decisions) {
+      expect(decision.kind === 'decision' && decision.traceId).toBe(start?.traceId);
+    }
+  });
+});

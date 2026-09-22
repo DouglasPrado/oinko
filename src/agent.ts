@@ -29,6 +29,7 @@ import { TelemetryDatabase } from './telemetry/telemetry-database.js';
 import { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
 import { guardSink } from './telemetry/safe-sink.js';
 import { purgeTelemetry } from './telemetry/purge.js';
+import { traceDecisions } from './telemetry/decision-bridge.js';
 import type { TelemetrySink } from './contracts/entities/telemetry.js';
 import { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 import { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
@@ -42,6 +43,7 @@ import { estimateTokens } from './utils/token-counter.js';
 import { getModelContextWindow } from './utils/model-context.js';
 import { screenTurn } from './core/turn-screening.js';
 import { buildToolUsagePrompt, buildEnvironmentPrompt } from './core/prompt-builders.js';
+import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -254,9 +256,24 @@ export class Agent {
     // which model should take it, and whether it is trying to get out from
     // under the agent's instructions. An explicit options.model is the
     // caller's decision and is never second-guessed.
+    const telemetry = this.ensureTelemetry();
+
+    // O trace nasce antes do contexto porque a triagem do turno ja e uma
+    // decisao que vale registrar, e ela roda antes — o modelo efetivo so e
+    // conhecido depois dela. O contexto adota este id mais abaixo.
+    const traceId = randomUUID();
+
+    // Carimbado por execucao, nao por agente: threads diferentes correm em
+    // paralelo, e um campo compartilhado atribuiria a decisao de uma conversa
+    // ao trace de outra.
+    const decider =
+      telemetry !== undefined && this.config.decider !== undefined
+        ? traceDecisions(this.config.decider, telemetry, { traceId, threadId })
+        : this.config.decider;
+
     const routeThisTurn = options?.model === undefined && this.config.routing !== undefined;
-    const screening = this.config.decider
-      ? await screenTurn(userContent, this.config.decider, {
+    const screening = decider
+      ? await screenTurn(userContent, decider, {
           ...(routeThisTurn &&
             this.config.routing !== undefined && {
               routing: {
@@ -272,7 +289,7 @@ export class Agent {
       : { jailbreakSuspected: false };
 
     const model = screening.model ?? requestedModel;
-    const ctx = createExecutionContext(threadId, model);
+    const ctx = { ...createExecutionContext(threadId, model), traceId };
 
     // In 'warn' mode the turn proceeds, but the model is told what was seen —
     // it is in a better position than the library to judge the whole exchange.
@@ -420,7 +437,6 @@ export class Agent {
     // Emit start
     yield { type: 'agent_start', traceId: ctx.traceId, threadId, model };
 
-    const telemetry = this.ensureTelemetry();
     telemetry?.write({
       kind: 'execution_start',
       traceId: ctx.traceId,
@@ -470,7 +486,7 @@ export class Agent {
       toolExecutor: this.toolExecutor,
       model,
       maxIterations: this.config.maxIterations,
-      ...(this.config.decider !== undefined && { decider: this.config.decider }),
+      ...(decider !== undefined && { decider }),
       progressCheckInterval: this.config.progressCheckInterval,
       logger: this.logger,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,
@@ -719,7 +735,7 @@ export class Agent {
       const logger = this.logger;
       const conversations = this.conversations;
       const forkFn = this.fork.bind(this);
-      const decider = this.config.decider;
+      const extractionDecider = decider;
       const gateConfig = {
         samplingRate: this.config.memory?.samplingRate,
         extractionInterval: this.config.memory?.extractionInterval,
@@ -735,7 +751,7 @@ export class Agent {
             assistantText,
             nextTurns,
             gateConfig,
-            decider,
+            extractionDecider,
             { logger },
           );
           if (!shouldRun) return;
