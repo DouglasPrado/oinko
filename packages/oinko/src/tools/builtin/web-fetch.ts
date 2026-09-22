@@ -63,17 +63,14 @@ const WebFetchParams = z.object({
   max_chars: z.number().optional().describe('Max characters to return. Default: 50000.'),
 });
 
-/** Strip HTML tags and collapse whitespace. */
+/** Extract plain text for the model. This is not an HTML sanitization boundary. */
 function stripHtml(html: string): string {
+  const entities: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"' };
   return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
+    .replace(/&(nbsp|amp|lt|gt|quot);/g, (_match, entity: string) => entities[entity]!)
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -58,6 +58,21 @@ describe('builtin/web-fetch', () => {
     expect(content.length).toBeLessThan(200);
   });
 
+  it('extracts text with spaced closing tags and decodes entities only once', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        '<p>&amp;lt;code&amp;gt; &lt;code&gt;</p><script>hidden()</script ><style>hidden-style</style >',
+        {
+          headers: { 'Content-Type': 'text/html' },
+        },
+      ),
+    );
+    const tool = createWebFetchTool({
+      dnsResolver: { resolve4: async () => [], resolve6: async () => [] },
+    });
+    expect(await tool.execute({ url: 'https://example.com' }, signal)).toBe('&lt;code&gt; <code>');
+  });
+
   it('should return error on fetch failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
 

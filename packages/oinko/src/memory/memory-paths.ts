@@ -8,6 +8,7 @@
  */
 
 import { homedir } from 'node:os';
+import { trimEndChars } from '../utils/trim-end-chars.js';
 import { isAbsolute, join, normalize, sep } from 'node:path';
 import { lstat, mkdir, realpath } from 'node:fs/promises';
 
@@ -31,7 +32,7 @@ export function resolveMemoryDir(memoryDir?: string): string {
   // Env var: no tilde expansion (must be absolute)
   if (!memoryDir && process.env.AGENT_MEMORY_DIR) {
     const envPath = process.env.AGENT_MEMORY_DIR;
-    const normalized = normalize(envPath).replace(/[/\\]+$/, '');
+    const normalized = trimEndChars(normalize(envPath), '/\\');
     if (isAbsolute(normalized) && normalized.length >= 3) {
       return (normalized + sep).normalize('NFC');
     }
@@ -60,7 +61,7 @@ function expandAndNormalize(raw: string): string {
     }
   }
 
-  const normalized = normalize(candidate).replace(/[/\\]+$/, '');
+  const normalized = trimEndChars(normalize(candidate), '/\\');
   return (normalized + sep).normalize('NFC');
 }
 
@@ -100,10 +101,7 @@ export function validateMemoryPath(path: string, memoryDir: string): string | un
   if (normalized.startsWith('\\\\') || normalized.startsWith('//')) return undefined;
 
   // Must be within memory directory (containment check)
-  const normalizedDir =
-    normalize(memoryDir)
-      .replace(/[/\\]+$/, '')
-      .normalize('NFC') + sep;
+  const normalizedDir = trimEndChars(normalize(memoryDir), '/\\').normalize('NFC') + sep;
   if (!normalized.startsWith(normalizedDir)) return undefined;
 
   return normalized;
@@ -139,7 +137,7 @@ export async function validateMemoryPathResolved(
   // If realpath throws here (e.g. dangling symlink, ELOOP), reject.
   try {
     const real = await realpath(cheap);
-    const realDir = await realpath(normalize(memoryDir).replace(/[/\\]+$/, ''));
+    const realDir = await realpath(trimEndChars(normalize(memoryDir), '/\\'));
     const realDirWithSep = real === realDir ? realDir : realDir + sep;
     if (real !== realDir && !real.startsWith(realDirWithSep)) return undefined;
     return real;
@@ -204,9 +202,6 @@ export async function ensureMemoryDir(memoryDir: string): Promise<void> {
  */
 export function isMemoryPath(absolutePath: string, memoryDir: string): boolean {
   const normalizedPath = normalize(absolutePath).normalize('NFC');
-  const normalizedDir =
-    normalize(memoryDir)
-      .replace(/[/\\]+$/, '')
-      .normalize('NFC') + sep;
+  const normalizedDir = trimEndChars(normalize(memoryDir), '/\\').normalize('NFC') + sep;
   return normalizedPath.startsWith(normalizedDir);
 }

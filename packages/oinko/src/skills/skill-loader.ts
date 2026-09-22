@@ -43,7 +43,7 @@ export interface SkillFrontmatter {
  * Only handles simple key: value and key: [array] — no nested objects.
  */
 export function parseSkillFrontmatter(content: string): SkillFrontmatter {
-  const match = /^---\s*\n([\s\S]*?)\n---/.exec(content);
+  const match = /^---[\t ]*\r?\n([\s\S]*?)\n---/.exec(content);
   if (!match) return {};
 
   const yaml = match[1]!;
@@ -105,7 +105,7 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
  * Extract body content (after frontmatter).
  */
 export function extractBody(content: string): string {
-  const match = /^---\s*\n[\s\S]*?\n---\s*\n?([\s\S]*)/.exec(content);
+  const match = /^---[\t ]*\r?\n[\s\S]*?\n---\s*\n?([\s\S]*)/.exec(content);
   return match?.[1]?.trim() ?? content.trim();
 }
 

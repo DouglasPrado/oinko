@@ -1,3 +1,4 @@
+import { trimEndChars } from '../utils/trim-end-chars.js';
 import type { Answers, Decider, Decision, Question } from '../contracts/entities/decider.js';
 import { retry } from '../utils/retry.js';
 
@@ -126,7 +127,7 @@ export class JevDecider implements Decider {
   private readonly fetchImpl: (request: Request) => Promise<Response>;
 
   constructor(private readonly options: JevDeciderOptions) {
-    const baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    const baseUrl = trimEndChars(options.baseUrl ?? DEFAULT_BASE_URL, '/');
     this.endpoint = `${baseUrl}/systemone`;
     this.model = options.model ?? DEFAULT_MODEL;
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT;

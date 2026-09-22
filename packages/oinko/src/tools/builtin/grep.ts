@@ -1,9 +1,10 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { matchGlob } from '../../skills/skill-glob.js';
 import { resolveSearchDir } from './path-guard.js';
+import { readTextFile } from '../../utils/read-text-file.js';
 
 const DEFAULT_MAX_RESULTS = 50;
 
@@ -106,10 +107,7 @@ export function createGrepTool(workingDir?: string): AgentTool {
         if (signal.aborted) break;
 
         try {
-          const s = await stat(file);
-          if (s.size > 1_000_000) continue; // skip files > 1MB
-
-          const content = await readFile(file, 'utf-8');
+          const content = await readTextFile(file, 1_000_000);
           const lines = content.split('\n');
 
           for (let i = 0; i < lines.length; i++) {

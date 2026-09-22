@@ -11,6 +11,12 @@ import {
 
 describe('skill-loader', () => {
   describe('parseSkillFrontmatter', () => {
+    it('handles a long unterminated whitespace header', () => {
+      const content = '---\n' + '\n '.repeat(100_000);
+      expect(parseSkillFrontmatter(content)).toEqual({});
+      expect(extractBody(content)).toBe('---');
+    });
+
     it('should parse basic frontmatter', () => {
       const content = `---
 name: code-review

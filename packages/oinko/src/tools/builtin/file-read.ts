@@ -1,7 +1,7 @@
-import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 import type { AgentTool } from '../../contracts/entities/agent-tool.js';
 import { assertSafePath } from './path-guard.js';
+import { readTextFile } from '../../utils/read-text-file.js';
 
 const MAX_FILE_SIZE = 1_000_000; // 1MB
 const DEFAULT_LIMIT = 2000;
@@ -32,15 +32,7 @@ export function createFileReadTool(workingDir?: string): AgentTool {
       }
 
       try {
-        const fileStat = await stat(file_path);
-        if (fileStat.size > MAX_FILE_SIZE) {
-          return {
-            content: `File too large (${fileStat.size} bytes). Use offset/limit to read portions.`,
-            isError: true,
-          };
-        }
-
-        const content = await readFile(file_path, 'utf-8');
+        const content = await readTextFile(file_path, MAX_FILE_SIZE);
         const allLines = content.split('\n');
 
         const startLine = Math.max(1, offset ?? 1);
