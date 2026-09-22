@@ -1,6 +1,7 @@
 import type { Context } from "grammy";
 import type { ContentPart } from "@gba/ai-harness";
 import { getAgent } from "./agent-factory.js";
+import { extractMedia, type MediaLink } from "./media-links.js";
 import { config } from "./config.js";
 import { buildAgentInput } from "./media.js";
 
@@ -227,8 +228,10 @@ export async function handleMessage(ctx: Context): Promise<void> {
     }
 
     // Final message (remove cursor, ensure delivery)
-    if (fullText) {
-      const chunks = splitMessage(fullText, TELEGRAM_MAX_LENGTH);
+    const { text: prose, media } = extractMedia(fullText);
+
+    if (prose) {
+      const chunks = splitMessage(prose, TELEGRAM_MAX_LENGTH);
 
       if (sentMessage) {
         // Update first message
@@ -242,9 +245,14 @@ export async function handleMessage(ctx: Context): Promise<void> {
           await ctx.reply(chunk);
         }
       }
-    } else if (!sentMessage) {
-      await ctx.reply("I couldn't generate a response. Please try again.");
+    } else if (sentMessage && media.length > 0) {
+      // A resposta era so a imagem: o texto parcial com o cursor fica no lugar.
+      await safeEdit(ctx, chatId, sentMessage.message_id, "Pronto.");
+    } else if (!sentMessage && media.length === 0) {
+      await ctx.reply("Nao consegui gerar uma resposta. Tente de novo.");
     }
+
+    await sendMedia(ctx, media);
   } catch (error) {
     console.error("Handler error:", error);
     await ctx
@@ -254,6 +262,28 @@ export async function handleMessage(ctx: Context): Promise<void> {
 }
 
 // --- Helpers ---
+
+/**
+ * Manda o que o agente gerou como anexo, nao como endereco.
+ *
+ * O Telegram baixa a URL por conta propria. Quando recusa — arquivo grande
+ * demais, formato que ele nao aceita, endereco expirado — o link volta como
+ * texto: melhor receber o endereco do que nao receber nada.
+ */
+async function sendMedia(ctx: Context, media: MediaLink[]): Promise<void> {
+  for (const item of media) {
+    try {
+      if (item.kind === "photo") await ctx.replyWithPhoto(item.url);
+      else await ctx.replyWithVideo(item.url);
+    } catch (error) {
+      console.error(
+        `Telegram recusou a midia (${item.kind}):`,
+        error instanceof Error ? error.message : error,
+      );
+      await ctx.reply(item.url).catch(() => {});
+    }
+  }
+}
 
 async function safeEdit(
   ctx: Context,
