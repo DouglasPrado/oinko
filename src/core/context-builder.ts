@@ -1,7 +1,8 @@
-import type { LLMMessage } from '../llm/message-types.js';
+import type { LLMMessage, LLMContentPart } from '../llm/message-types.js';
 import type { ChatMessage } from '../contracts/entities/chat-message.js';
 import type { ContentPart } from '../contracts/entities/content-part.js';
-import { estimateTokens } from '../utils/token-counter.js';
+import { estimateTokens, estimateContentTokens } from '../utils/token-counter.js';
+import { supportsVision } from '../llm/model-registry.js';
 
 export interface ContextInjection {
   source: string;
@@ -16,6 +17,12 @@ export interface ContextBuildResult {
   injections: ContextInjection[];
   /** Count of pinned messages that did not fit in the budget and were omitted. */
   droppedPinnedCount: number;
+  /**
+   * Count of images rewritten as text because the model cannot see. Reported
+   * rather than logged here so this stays a pure function — the caller owns
+   * the warning, as it already does for dropped pinned messages.
+   */
+  flattenedImageCount: number;
 }
 
 /**
@@ -28,9 +35,13 @@ export function buildContext(options: {
   maxTokens: number;
   reserveTokens: number;
   maxPinnedMessages: number;
+  /** Decides whether images survive as images. Omitted, they do. */
+  model?: string;
 }): ContextBuildResult {
-  const { systemPrompt, injections, history, maxTokens, reserveTokens, maxPinnedMessages } =
+  const { systemPrompt, injections, history, maxTokens, reserveTokens, maxPinnedMessages, model } =
     options;
+  const keepImages = model === undefined || supportsVision(model);
+  let flattenedImageCount = 0;
   const budget = maxTokens - reserveTokens;
   let used = 0;
   const messages: LLMMessage[] = [];
@@ -58,6 +69,13 @@ export function buildContext(options: {
     messages.push({ role: 'system', content: systemContent });
   }
 
+  const toLLM = (msg: ChatMessage): LLMMessage => {
+    if (typeof msg.content !== 'string' && !keepImages) {
+      flattenedImageCount += msg.content.filter((p) => p.type === 'image_url').length;
+    }
+    return chatMessageToLLM(msg, keepImages);
+  };
+
   // 3. History — pinned messages always included, then recent messages
   const pinned = history.filter((m) => m.pinned).slice(0, maxPinnedMessages);
   const unpinned = history.filter((m) => !m.pinned);
@@ -66,11 +84,9 @@ export function buildContext(options: {
   // a warning instead of silently losing critical context.
   let droppedPinnedCount = 0;
   for (const msg of pinned) {
-    const tokens = estimateTokens(
-      typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-    );
+    const tokens = estimateContentTokens(msg.content);
     if (used + tokens <= budget) {
-      messages.push(chatMessageToLLM(msg));
+      messages.push(toLLM(msg));
       used += tokens;
     } else {
       droppedPinnedCount++;
@@ -81,11 +97,9 @@ export function buildContext(options: {
   const unpinnedReversed = [...unpinned].reverse();
   const unpinnedToInclude: LLMMessage[] = [];
   for (const msg of unpinnedReversed) {
-    const tokens = estimateTokens(
-      typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-    );
+    const tokens = estimateContentTokens(msg.content);
     if (used + tokens <= budget) {
-      unpinnedToInclude.unshift(chatMessageToLLM(msg));
+      unpinnedToInclude.unshift(toLLM(msg));
       used += tokens;
     } else {
       break;
@@ -96,7 +110,13 @@ export function buildContext(options: {
   // 4. Merge consecutive same-role messages (API constraint: no consecutive user/user)
   const merged = mergeConsecutiveMessages(messages);
 
-  return { messages: merged, totalTokens: used, injections: appliedInjections, droppedPinnedCount };
+  return {
+    messages: merged,
+    totalTokens: used,
+    injections: appliedInjections,
+    droppedPinnedCount,
+    flattenedImageCount,
+  };
 }
 
 /**
@@ -130,10 +150,15 @@ function mergeConsecutiveMessages(messages: LLMMessage[]): LLMMessage[] {
   return result;
 }
 
-function chatMessageToLLM(msg: ChatMessage): LLMMessage {
+function chatMessageToLLM(msg: ChatMessage, keepImages: boolean): LLMMessage {
   const result: LLMMessage = {
     role: msg.role,
-    content: typeof msg.content === 'string' ? msg.content : contentPartsToLLM(msg.content),
+    content:
+      typeof msg.content === 'string'
+        ? msg.content
+        : keepImages
+          ? msg.content.map(contentPartToLLM)
+          : contentPartsToLLM(msg.content),
   };
 
   if (msg.toolCalls) {
@@ -156,6 +181,19 @@ function chatMessageToLLM(msg: ChatMessage): LLMMessage {
   return result;
 }
 
+/** The wire shape, which differs from the contract only in optionality. */
+function contentPartToLLM(part: ContentPart): LLMContentPart {
+  return part.type === 'text'
+    ? { type: 'text', text: part.text }
+    : { type: 'image_url', image_url: part.image_url };
+}
+
+/**
+ * Text rendering of multimodal content, for a model that cannot see.
+ *
+ * The URL is kept rather than dropped: a text model still gets to know an
+ * image was sent, and where it is, which is more than a silent removal gives.
+ */
 function contentPartsToLLM(parts: ContentPart[]): string {
   return parts
     .map((p) => {

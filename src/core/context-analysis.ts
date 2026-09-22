@@ -6,7 +6,7 @@
  */
 
 import type { LLMMessage } from '../llm/message-types.js';
-import { estimateTokens } from '../utils/token-counter.js';
+import { estimateContentTokens } from '../utils/token-counter.js';
 
 export interface ContextAnalysis {
   totalTokens: number;
@@ -31,8 +31,7 @@ export function analyzeContext(messages: readonly LLMMessage[]): ContextAnalysis
   let toolResultChars = 0;
 
   for (const msg of messages) {
-    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-    const tokens = estimateTokens(content);
+    const tokens = estimateContentTokens(msg.content);
     totalTokens += tokens;
 
     const role = msg.role;
@@ -42,7 +41,12 @@ export function analyzeContext(messages: readonly LLMMessage[]): ContextAnalysis
 
     if (msg.role === 'tool') {
       toolResultCount++;
-      toolResultChars += content.length;
+      // Um resultado de tool e sempre texto no papel `tool`; o fallback cobre
+      // a forma sem medir base64 de imagem como se fosse prosa.
+      toolResultChars +=
+        typeof msg.content === 'string'
+          ? msg.content.length
+          : msg.content.reduce((n, p) => n + (p.text?.length ?? 0), 0);
     }
   }
 

@@ -2,6 +2,7 @@ import type { LLMClient } from '../llm/llm-client.js';
 import type { ToolExecutor } from '../tools/tool-executor.js';
 import type { LLMMessage } from '../llm/message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
+import type { LLMUsageDetail } from '../contracts/entities/telemetry.js';
 import type { AgentEvent, RecoveryReason } from '../contracts/entities/agent-event.js';
 import type { OnToolError } from '../contracts/enums/index.js';
 import type { Terminal, LoopState } from './loop-types.js';
@@ -69,6 +70,28 @@ export interface ReactLoopConfig {
   /** Called after tool execution with file paths extracted from tool results.
    *  Returns newly activated skill names (e.g., for conditional skill activation). */
   onFilePathsTouched?: (paths: string[]) => string[];
+  /**
+   * Chamado ao fim de cada chamada de LLM, com o custo real e os tempos que so
+   * existem aqui. Nunca lanca para o loop: erro de instrumentacao nao pode
+   * derrubar um turno.
+   */
+  onLLMCall?: (call: LLMCallTelemetry) => void;
+}
+
+/** O que uma chamada de LLM deixa para a telemetria. */
+export interface LLMCallTelemetry {
+  seq: number;
+  model: string;
+  finishReason: string;
+  usage?: TokenUsage;
+  usageDetail?: LLMUsageDetail;
+  ttftMs?: number;
+  durationMs?: number;
+  queuedMs?: number;
+  attempts?: number;
+  startedAt: number;
+  endedAt: number;
+  responseText: string;
 }
 
 /**
@@ -232,6 +255,7 @@ export async function* executeReactLoop(
     let fullText = '';
     let finishReason = '';
     let turnOutputTokens = 0;
+    const callStartedAt = Date.now();
     const toolCalls: { id: string; name: string; arguments: string }[] = [];
     const earlyToolResults: LLMMessage[] = []; // Tool results completed during streaming
 
@@ -279,6 +303,26 @@ export async function* executeReactLoop(
               usage.outputTokens += chunk.usage.outputTokens;
               usage.totalTokens += chunk.usage.totalTokens;
               turnOutputTokens = chunk.usage.outputTokens;
+            }
+            if (config.onLLMCall) {
+              try {
+                config.onLLMCall({
+                  seq: turnCount - 1,
+                  model: currentModel,
+                  finishReason: chunk.finishReason,
+                  usage: chunk.usage,
+                  usageDetail: chunk.usageDetail,
+                  ttftMs: chunk.ttftMs,
+                  durationMs: chunk.durationMs,
+                  queuedMs: chunk.queuedMs,
+                  attempts: chunk.attempts,
+                  startedAt: callStartedAt,
+                  endedAt: Date.now(),
+                  responseText: fullText,
+                });
+              } catch {
+                // Instrumentacao nunca derruba o turno.
+              }
             }
             break;
         }

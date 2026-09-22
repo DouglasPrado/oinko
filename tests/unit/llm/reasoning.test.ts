@@ -88,8 +88,9 @@ describe('buildReasoningArgs', () => {
   });
 
   it('echoes back an explicit caller effort instead of the automatic one', () => {
-    expect(buildReasoningArgs('gpt-5.6', { hasTools: true, reasoningEffort: 'xhigh' })
-      .reasoningEffort).toBe('xhigh');
+    expect(
+      buildReasoningArgs('gpt-5.6', { hasTools: true, reasoningEffort: 'xhigh' }).reasoningEffort,
+    ).toBe('xhigh');
   });
 });
 

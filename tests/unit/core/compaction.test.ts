@@ -174,34 +174,34 @@ describe('autocompact', () => {
 describe('autocompact request body', () => {
   const CAPTURED_REPLY = 'Summary of the conversation so far.';
 
-/**
- * A real LLMClient with the transport faked, not a mocked `chat()`. The
- * mocked client cannot see the request body, which is exactly where the bug
- * lived: this module sends `temperature: 0`, and for a reasoning model the
- * provider answers 400 to the whole request rather than ignoring the field.
- */
-function captureRequest(model: string): {
-  client: LLMClient;
-  body: () => Record<string, unknown>;
-} {
-  let captured: Record<string, unknown> = {};
-  const client = new RealLLMClient({
-    apiKey: 'k',
-    model,
-    baseUrl: 'https://example.test/v1',
-    fetch: async (request: Request) => {
-      captured = JSON.parse(await request.text()) as Record<string, unknown>;
-      return new Response(
-        JSON.stringify({
-          choices: [{ message: { content: CAPTURED_REPLY }, finish_reason: 'stop' }],
-          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-        }),
-        { status: 200 },
-      );
-    },
-  });
-  return { client, body: () => captured };
-}
+  /**
+   * A real LLMClient with the transport faked, not a mocked `chat()`. The
+   * mocked client cannot see the request body, which is exactly where the bug
+   * lived: this module sends `temperature: 0`, and for a reasoning model the
+   * provider answers 400 to the whole request rather than ignoring the field.
+   */
+  function captureRequest(model: string): {
+    client: LLMClient;
+    body: () => Record<string, unknown>;
+  } {
+    let captured: Record<string, unknown> = {};
+    const client = new RealLLMClient({
+      apiKey: 'k',
+      model,
+      baseUrl: 'https://example.test/v1',
+      fetch: async (request: Request) => {
+        captured = JSON.parse(await request.text()) as Record<string, unknown>;
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: CAPTURED_REPLY }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+          { status: 200 },
+        );
+      },
+    });
+    return { client, body: () => captured };
+  }
 
   const bulky: LLMMessage[] = [
     { role: 'system', content: 'You are helpful.' },
@@ -230,5 +230,44 @@ function captureRequest(model: string): {
     await autocompact(bulky, client, OPTIONS);
 
     expect(body().temperature).toBe(0);
+  });
+});
+
+/**
+ * An inlined image is a data URL hundreds of thousands of characters long.
+ * Serialized and counted as text it reads as a six-figure token bill, which is
+ * not an approximation of the real price (85 tokens at low detail) but a
+ * different number entirely — and every decision downstream inherits it.
+ */
+describe('autocompact with images', () => {
+  const dataUrl = `data:image/png;base64,${'A'.repeat(400_000)}`;
+
+  const summarizer = (): LLMClient =>
+    ({ chat: vi.fn().mockResolvedValue({ content: 'Summary.' }) }) as unknown as LLMClient;
+
+  function withImage(): LLMMessage[] {
+    return [
+      { role: 'system', content: 'You are helpful.' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Look at this' },
+          { type: 'image_url', image_url: { url: dataUrl, detail: 'low' } },
+        ],
+      },
+      { role: 'assistant', content: 'I see a square.' },
+      { role: 'user', content: 'And now?' },
+      { role: 'assistant', content: 'Still a square.' },
+    ];
+  }
+
+  it('does not compact a short conversation just because it carries an image', async () => {
+    const result = await autocompact(withImage(), summarizer(), {
+      maxContextTokens: 100_000,
+      compactionThreshold: 0.8,
+      tailProtection: 2,
+    });
+
+    expect(result).toBeNull();
   });
 });

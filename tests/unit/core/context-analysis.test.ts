@@ -46,3 +46,31 @@ describe('analyzeContext', () => {
     expect(analysis.messageCount).toBe(0);
   });
 });
+
+/**
+ * An inlined image is a data URL hundreds of thousands of characters long.
+ * Serialized and counted as text it reads as a six-figure token bill, which is
+ * not an approximation of the real price (85 tokens at low detail) but a
+ * different number entirely — and every decision downstream inherits it.
+ */
+describe('analyzeContext with images', () => {
+  it('prices an inlined image by the image, not by its data URL', () => {
+    const messages: LLMMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Look at this' },
+          {
+            type: 'image_url',
+            image_url: { url: `data:image/png;base64,${'A'.repeat(400_000)}`, detail: 'low' },
+          },
+        ],
+      },
+    ];
+
+    const analysis = analyzeContext(messages);
+
+    expect(analysis.totalTokens).toBeLessThan(200);
+    expect(analysis.byRole.user).toBe(analysis.totalTokens);
+  });
+});
