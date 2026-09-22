@@ -221,6 +221,14 @@ export const AgentConfigSchema = z.object({
   // Embedding provider (separate API key/URL for embeddings, e.g. direct OpenAI)
   embedding: EmbeddingProviderConfigSchema.optional(),
 
+  // Transcription model (audio -> texto)
+  transcriptionModel: z.string().default('whisper-1'),
+
+  // Transcription provider — o default do SDK e o OpenRouter, que nao serve
+  // /audio/transcriptions, entao quem usa audio normalmente aponta para outro
+  // provedor, como ja acontece com embeddings.
+  transcription: EmbeddingProviderConfigSchema.optional(),
+
   // Database path
   dbPath: z.string().default(() => join(process.cwd(), '.harness', 'data.db')),
 });

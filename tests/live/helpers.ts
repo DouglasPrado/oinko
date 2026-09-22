@@ -188,3 +188,29 @@ export function solidPng(size: number, rgb: [number, number, number]): Buffer {
 export function imageDataUrl(png: Buffer): string {
   return `data:image/png;base64,${png.toString('base64')}`;
 }
+
+/**
+ * Sintetiza fala para os testes de audio.
+ *
+ * Gerar o audio na hora evita binario versionado e deixa a frase visivel no
+ * teste: a asserçao fala do conteudo que voltou da transcricao, nao de um
+ * arquivo opaco que ninguem consegue conferir lendo o codigo.
+ */
+export async function speak(text: string, format: 'mp3' | 'opus' = 'mp3'): Promise<Uint8Array> {
+  const base = BASE_URL ?? 'https://api.openai.com/v1';
+  const response = await fetch(`${base}/audio/speech`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${LLM_KEY!}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'tts-1',
+      voice: 'alloy',
+      input: text,
+      response_format: format,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`TTS falhou (${response.status}): ${(await response.text()).slice(0, 200)}`);
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}

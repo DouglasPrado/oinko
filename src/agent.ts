@@ -64,6 +64,8 @@ export class Agent {
   private readonly fileMemorySystem?: FileMemorySystem;
   private readonly knowledgeManager?: KnowledgeManager;
   private readonly embeddingService?: EmbeddingService;
+  private readonly transcriptionClient: LLMClient;
+  private readonly transcriptionModel: string;
   private readonly mcpAdapter: MCPAdapter;
   private database?: SQLiteDatabase;
   private costAccumulator: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -120,6 +122,21 @@ export class Agent {
         ? new LLMClient({ apiKey: embApiKey, model: embModel, baseUrl: embBaseUrl })
         : this.client;
     this.embeddingService = new EmbeddingService(embeddingClient, { model: embModel });
+
+    // Transcription client — mesma regra dos embeddings: so um cliente proprio
+    // quando o provedor difere, senao reaproveita a conexao do chat.
+    const trApiKey = config.transcription?.apiKey ?? config.apiKey;
+    const trBaseUrl = config.transcription?.baseUrl ?? config.baseUrl;
+    this.transcriptionModel = config.transcription?.model ?? config.transcriptionModel;
+    this.transcriptionClient =
+      trApiKey !== config.apiKey || trBaseUrl !== config.baseUrl
+        ? new LLMClient({
+            apiKey: trApiKey,
+            model: this.transcriptionModel,
+            ...(trBaseUrl !== undefined && { baseUrl: trBaseUrl }),
+            transcriptionModel: this.transcriptionModel,
+          })
+        : this.client;
 
     // Memory subsystem (file-based)
     if (config.memory?.enabled !== false) {
@@ -755,6 +772,37 @@ export class Agent {
       if (event.type === 'error' && !event.recoverable) throw event.error;
     }
     return result;
+  }
+
+  /**
+   * Transcreve audio para texto.
+   *
+   * O audio nao entra na conversa por conta propria: o retorno e texto, e cabe
+   * a quem chamou decidir se aquilo vira um turno. Sondando a API, e o unico
+   * caminho que existe — um bloco `input_audio` em /chat/completions e
+   * recusado com "Content blocks are expected to be either text or image_url
+   * type", entao nao ha como o modelo ouvir direto por este endpoint.
+   *
+   * O `filename` importa: o provedor escolhe o decoder pela extensao, entao um
+   * `.ogg` chamado de `.mp3` volta como formato invalido.
+   */
+  async transcribe(
+    audio: Uint8Array,
+    filename: string,
+    options?: { model?: string; language?: string; signal?: AbortSignal },
+  ): Promise<string> {
+    if (this.destroyed) throw new Error('Agent is destroyed');
+
+    const { text } = await this.transcriptionClient.transcribe({
+      audio,
+      filename,
+      model: options?.model ?? this.transcriptionModel,
+      ...(options?.language !== undefined && { language: options.language }),
+      ...(options?.signal !== undefined && { signal: options.signal }),
+    });
+
+    this.logger.debug('Audio transcribed', { filename, chars: text.length });
+    return text;
   }
 
   addTool(tool: AgentTool): void {

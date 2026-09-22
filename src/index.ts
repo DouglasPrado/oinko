@@ -121,7 +121,7 @@ export { getModelContextWindow } from './utils/model-context.js';
 
 // LLM Client
 export { LLMClient } from './llm/llm-client.js';
-export type { LLMClientConfig } from './llm/llm-client.js';
+export type { LLMClientConfig, TranscribeParams, TranscribeResult } from './llm/llm-client.js';
 
 // LLM Message Types
 export type {

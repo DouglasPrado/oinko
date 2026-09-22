@@ -36,6 +36,31 @@ export interface LLMClientConfig {
    * direto pelo fetch global, porque gateways tipicamente nao roteiam essa rota.
    */
   fetch?: FetchLike;
+  /**
+   * Modelo de transcricao. Default `whisper-1`, o nome mais amplamente aceito
+   * entre provedores compativeis com a OpenAI. Sondando a API, a linha
+   * `gpt-4o-transcribe` devolve texto mais fiel — vale trocar quando o
+   * endpoint a oferece.
+   */
+  transcriptionModel?: string;
+}
+
+/** Audio de entrada para `transcribe()`. */
+export interface TranscribeParams {
+  audio: Uint8Array;
+  /**
+   * Nome com extensao. O provedor decide o decoder pela extensao, entao um
+   * `.ogg` chamado de `.mp3` e recusado como formato invalido.
+   */
+  filename: string;
+  model?: string;
+  /** Dica de idioma (ISO-639-1). Sem ela o provedor detecta sozinho. */
+  language?: string;
+  signal?: AbortSignal;
+}
+
+export interface TranscribeResult {
+  text: string;
 }
 
 function isRetryableStatus(status: number): boolean {
@@ -74,6 +99,7 @@ export class LLMClient {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: FetchLike | undefined;
+  private readonly transcriptionModel: string;
 
   constructor(config: LLMClientConfig) {
     this.apiKey = config.apiKey;
@@ -89,6 +115,62 @@ export class LLMClient {
     this.baseUrl = rawBase;
     this.timeoutMs = config.timeoutMs ?? LLMClient.DEFAULT_TIMEOUT_MS;
     this.fetchImpl = config.fetch;
+    this.transcriptionModel = config.transcriptionModel ?? 'whisper-1';
+  }
+
+  /**
+   * Transcreve audio via POST /audio/transcriptions.
+   *
+   * Nao passa pelo `fetchAPI` das outras chamadas porque o corpo e multipart,
+   * nao JSON: o `file` precisa viajar como parte binaria com nome proprio. E o
+   * unico caminho para audio neste endpoint — sondando a API, um bloco
+   * `input_audio` dentro de /chat/completions e recusado com "Content blocks
+   * are expected to be either text or image_url type".
+   */
+  async transcribe(params: TranscribeParams): Promise<TranscribeResult> {
+    const form = new FormData();
+    // Buffer.from normaliza o Uint8Array: o tipo generico aceita
+    // SharedArrayBuffer, que o Blob nao recebe.
+    form.append('file', new Blob([Buffer.from(params.audio)]), params.filename);
+    form.append('model', params.model ?? this.transcriptionModel);
+    if (params.language !== undefined) form.append('language', params.language);
+
+    const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
+    if (params.signal) signals.push(params.signal);
+
+    const request = new Request(`${this.baseUrl}/audio/transcriptions`, {
+      method: 'POST',
+      // Sem Content-Type na mao: quem monta o FormData escolhe o boundary, e
+      // fixar o header aqui produziria um corpo que o servidor nao separa.
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      body: form,
+      signal: AbortSignal.any(signals),
+    });
+
+    const response = await retry(() => this.sendTranscription(request), {
+      maxRetries: 3,
+      initialDelay: 1000,
+      isRetryable: (e) => e instanceof RetryableError,
+    });
+
+    const json = (await response.json()) as { text?: unknown };
+    if (typeof json.text !== 'string') {
+      throw new Error(
+        `Transcription API returned no text. Response: ${JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
+    return { text: json.text };
+  }
+
+  private async sendTranscription(request: Request): Promise<Response> {
+    const response = await fetch(request.clone());
+    if (response.ok) return response;
+
+    const body = sanitizeErrorBody(await response.text());
+    if (isRetryableStatus(response.status)) {
+      throw new RetryableError(`Transcription failed (${response.status}): ${body}`);
+    }
+    throw new Error(`Transcription failed (${response.status}): ${body}`);
   }
 
   /**
