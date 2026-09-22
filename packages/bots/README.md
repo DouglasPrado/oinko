@@ -8,6 +8,8 @@ Depois de compilar o workspace e iniciar a dashboard, abra `/login`, defina a se
 
 Salvar preserva o processo atual. Use **Reiniciar** para aplicar as alterações. **Parar** encerra somente aquele bot; fechar a dashboard ou a CLI não encerra os demais.
 
+O Telegram exige IDs de usuário autorizados por padrão. Para atender qualquer pessoa em conversa privada, ative **Permitir qualquer usuário em conversas privadas**. Desative a opção e informe os IDs para restringir novamente; números de telefone não são IDs do Telegram. Grupos continuam desabilitados.
+
 ## Terminal
 
 Na raiz do monorepo:

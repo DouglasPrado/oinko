@@ -63,7 +63,7 @@ const initial: BotDefinition = {
   model: '',
   systemPrompt: '',
   cli: true,
-  telegram: { enabled: false, allowedUserIds: [] },
+  telegram: { enabled: false, allowedUserIds: [], allowAllPrivateChats: false },
   higgsfield: false,
   telemetry: { enabled: true, capture: 'full', retentionDays: 30 },
   mcps: [],
@@ -293,15 +293,33 @@ function BotEditor({
                   }
                 />
               </Field>
-              <Field label="Usuários autorizados" help="IDs numéricos separados por vírgulas.">
+              <label className="flex items-center gap-3 text-sm md:col-span-2">
                 <input
-                  required
-                  className={inputStyle}
-                  value={allowedIds}
-                  onChange={(event) => setAllowedIds(event.target.value)}
-                  placeholder="123456789, 987654321"
+                  type="checkbox"
+                  checked={definition.telegram.allowAllPrivateChats}
+                  onChange={(event) =>
+                    change('telegram', {
+                      ...definition.telegram,
+                      allowAllPrivateChats: event.target.checked,
+                    })
+                  }
                 />
-              </Field>
+                Permitir qualquer usuário em conversas privadas
+              </label>
+              {!definition.telegram.allowAllPrivateChats && (
+                <Field
+                  label="Usuários autorizados"
+                  help="IDs de usuário do Telegram separados por vírgulas. Não use telefone nem @usuário."
+                >
+                  <input
+                    required
+                    className={inputStyle}
+                    value={allowedIds}
+                    onChange={(event) => setAllowedIds(event.target.value)}
+                    placeholder="123456789, 987654321"
+                  />
+                </Field>
+              )}
             </div>
           )}
         </section>

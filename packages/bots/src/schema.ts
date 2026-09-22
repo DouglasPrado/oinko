@@ -16,9 +16,10 @@ export const BotDefinitionSchema = z
     telegram: z
       .object({
         enabled: z.boolean(),
+        allowAllPrivateChats: z.boolean().default(false),
         allowedUserIds: z.array(z.string().regex(/^[1-9]\d*$/)).max(100),
       })
-      .default({ enabled: false, allowedUserIds: [] }),
+      .default({ enabled: false, allowedUserIds: [], allowAllPrivateChats: false }),
     higgsfield: z.boolean().default(false),
     higgsfieldUrl: HttpUrl.optional(),
     higgsfieldTools: z.array(z.string().min(1)).optional(),
@@ -43,7 +44,11 @@ export const BotDefinitionSchema = z
     transcriptionBaseUrl: HttpUrl.optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.telegram.enabled && !value.telegram.allowedUserIds.length)
+    if (
+      value.telegram.enabled &&
+      !value.telegram.allowAllPrivateChats &&
+      !value.telegram.allowedUserIds.length
+    )
       ctx.addIssue({
         code: 'custom',
         path: ['telegram', 'allowedUserIds'],

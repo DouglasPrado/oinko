@@ -21,6 +21,7 @@ export interface TelegramOptions {
   token: string;
   onReady?: () => void;
   allowedUserIds: readonly string[];
+  allowAllPrivateChats?: boolean;
 }
 
 export { buildAgentInput, MAX_IMAGE_BYTES, MAX_AUDIO_BYTES } from './media.js';
@@ -38,7 +39,7 @@ export function createTelegramBot(
       signal.aborted ||
       ctx.chat?.type !== 'private' ||
       !ctx.from ||
-      !allowed.has(String(ctx.from.id))
+      (config.allowAllPrivateChats !== true && !allowed.has(String(ctx.from.id)))
     )
       return;
     await next();
@@ -135,18 +136,23 @@ export async function runTelegram(
 }
 
 export const telegramChannel: ChannelProvider = async (options, context) => {
-  const { token, allowedUserIds } = options;
+  const { token, allowedUserIds, allowAllPrivateChats } = options;
   if (
     typeof token !== 'string' ||
     !token.trim() ||
     !Array.isArray(allowedUserIds) ||
-    !allowedUserIds.length ||
+    (!allowedUserIds.length && allowAllPrivateChats !== true) ||
     allowedUserIds.some((id) => typeof id !== 'string' || !/^[1-9]\d*$/.test(id))
   ) {
     throw new Error('Configure token e allowedUserIds do Telegram.');
   }
   await runTelegram(
-    { token, allowedUserIds, onReady: context.ready },
+    {
+      token,
+      allowedUserIds,
+      allowAllPrivateChats: allowAllPrivateChats === true,
+      onReady: context.ready,
+    },
     context.runtime,
     context.signal,
   );

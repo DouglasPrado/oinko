@@ -23,6 +23,26 @@ const definition = {
   mcps: [],
 };
 
+it('requires explicit opt-in to allow Telegram private chats without an allowlist', () => {
+  const store = new BotStore(root());
+  try {
+    expect(() =>
+      store.save({ ...definition, telegram: { enabled: true, allowedUserIds: [] } }, {}, 0),
+    ).toThrow();
+    const saved = store.save(
+      {
+        ...definition,
+        telegram: { enabled: true, allowedUserIds: [], allowAllPrivateChats: true },
+      },
+      {},
+      0,
+    );
+    expect(saved.telegram.allowAllPrivateChats).toBe(true);
+  } finally {
+    store.close();
+  }
+});
+
 it('refuses to replace a missing encryption key when a registry already exists', () => {
   const dir = root();
   const store = new BotStore(dir);

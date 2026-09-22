@@ -1,5 +1,40 @@
 import { test, expect, PASSWORD } from './auth';
 
+test('saves open Telegram access and can restore the user restriction', async ({ page }) => {
+  await page.goto('/bots');
+  await page.getByRole('button', { name: 'Novo bot' }).click();
+  await page.getByLabel('Nome', { exact: true }).fill('Acesso Telegram');
+  await page.getByLabel('Instruções', { exact: true }).fill('Ajude a pessoa.');
+  await page.getByLabel('Modelo de IA', { exact: true }).fill('test-model');
+  await page.getByRole('checkbox', { name: 'Telegram', exact: true }).check();
+  await page
+    .getByRole('checkbox', { name: 'Permitir qualquer usuário em conversas privadas' })
+    .check();
+  await expect(page.getByLabel('Usuários autorizados', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Salvar bot' }).click();
+  const card = page.getByRole('article', { name: 'Acesso Telegram' });
+  await expect(card).toBeVisible();
+  let bots = await (await page.request.get('/api/bots')).json();
+  expect(
+    bots.find((bot: { id: string }) => bot.id === 'acesso-telegram').telegram.allowAllPrivateChats,
+  ).toBe(true);
+  await card.getByRole('button', { name: 'Configurar' }).click();
+  await expect(
+    page.getByRole('checkbox', { name: 'Permitir qualquer usuário em conversas privadas' }),
+  ).toBeChecked();
+  await page
+    .getByRole('checkbox', { name: 'Permitir qualquer usuário em conversas privadas' })
+    .uncheck();
+  await page.getByLabel('Usuários autorizados', { exact: true }).fill('42');
+  await page.getByRole('button', { name: 'Salvar bot' }).click();
+  await expect(card).toBeVisible();
+  bots = await (await page.request.get('/api/bots')).json();
+  expect(bots.find((bot: { id: string }) => bot.id === 'acesso-telegram').telegram).toMatchObject({
+    allowAllPrivateChats: false,
+    allowedUserIds: ['42'],
+  });
+});
+
 test('logs out and signs in again through the password form', async ({ page }) => {
   await page.goto('/bots');
   await page.getByRole('button', { name: 'Sair', exact: true }).click();

@@ -24,7 +24,11 @@ export async function runBot(store: BotStore, id: string, onClose: () => void) {
       id: 'telegram',
       type: 'telegram',
       enabled: true,
-      options: { token: secrets.telegramToken, allowedUserIds: bot.telegram.allowedUserIds },
+      options: {
+        token: secrets.telegramToken,
+        allowedUserIds: bot.telegram.allowedUserIds,
+        allowAllPrivateChats: bot.telegram.allowAllPrivateChats,
+      },
     });
   if (bot.higgsfield)
     connections.mcps.push({
