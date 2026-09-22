@@ -72,6 +72,40 @@ function fakeFetch() {
   return Promise.resolve(sse(next));
 }
 
+/**
+ * Decisor falso: responde o que o roteiro mandar, com confianca plausivel.
+ *
+ * Existe para a interface ter decisoes reais para renderizar sem depender de
+ * uma chave da TypeSafe nem de chamada de rede.
+ */
+function fakeDecider() {
+  return {
+    decide: (_state, questions) =>
+      Promise.resolve(
+        Object.fromEntries(
+          Object.entries(questions).map(([key, question]) => {
+            if (question.kind === 'bool') {
+              const value = key === 'jailbreak' ? false : Math.random() > 0.5;
+              return [key, { value, confidence: 0.72 + Math.random() * 0.26 }];
+            }
+            if (question.kind === 'choice') {
+              const options = Object.keys(question.criteria ?? { fast: '', capable: '' });
+              return [
+                key,
+                {
+                  value: options[Math.floor(Math.random() * options.length)],
+                  confidence: 0.81,
+                  probabilities: Object.fromEntries(options.map((o) => [o, 1 / options.length])),
+                },
+              ];
+            }
+            return [key, { value: 2, confidence: 0.9 }];
+          }),
+        ),
+      ),
+  };
+}
+
 async function run({ threadId, input, responses, model, app }) {
   script = responses;
   call = 0;
@@ -82,6 +116,8 @@ async function run({ threadId, input, responses, model, app }) {
     memory: { enabled: false },
     knowledge: { enabled: false },
     telemetry: { dbPath: DB, app },
+    decider: fakeDecider(),
+    jailbreak: { mode: 'warn' },
     fetch: fakeFetch,
   });
 

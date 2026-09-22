@@ -1,6 +1,7 @@
 import { Brain, Cpu, Plug, Wrench } from 'lucide-react';
 import type { TimelineItem } from '../schemas/timeline.schema';
 import { PayloadViewer } from './payload-viewer';
+import { DecisionAnswers } from './decision-answers';
 import { formatDuration, formatOffset } from '@/lib/utils/format-duration';
 import { formatUsd } from '@/lib/utils/format-usd';
 import { formatTokens } from '@/lib/utils/format-tokens';
@@ -144,14 +145,7 @@ export function Timeline({ items, startedAt }: { items: TimelineItem[]; startedA
             title={`Decisao · ${item.point}`}
             meta={<span className="tabular text-time">{formatDuration(item.durationMs)}</span>}
           >
-            <dl className="mt-2 pl-0 text-xs sm:pl-20">
-              {Object.entries(item.answers).map(([key, value]) => (
-                <div key={key} className="flex gap-2">
-                  <dt className="text-ink-muted">{key}</dt>
-                  <dd className="font-mono">{JSON.stringify(value)}</dd>
-                </div>
-              ))}
-            </dl>
+            <DecisionAnswers answers={item.answers} />
           </Row>
         );
       })}
