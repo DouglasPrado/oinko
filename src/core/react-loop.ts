@@ -78,6 +78,8 @@ export interface ReactLoopConfig {
   onLLMCall?: (call: LLMCallTelemetry) => void;
   /** Execucao corrente. Repassada as tools para correlacionar telemetria. */
   traceId?: string;
+  /** Conversa corrente. Repassada as tools que guardam estado por conversa. */
+  threadId?: string;
 }
 
 /** O que uma chamada de LLM deixa para a telemetria. */
@@ -278,6 +280,7 @@ export async function* executeReactLoop(
       undefined,
       messages.length,
       config.traceId,
+      config.threadId,
     );
     const effectiveMaxTokens = state.maxOutputTokensOverride ?? maxOutputTokens;
 

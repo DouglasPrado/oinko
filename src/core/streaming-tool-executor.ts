@@ -53,6 +53,8 @@ export class StreamingToolExecutor {
     recentMessages = 0,
     /** Execucao corrente, repassada a cada tool para correlacionar telemetria. */
     private readonly traceId?: string,
+    /** Conversa corrente. Uma tool que guarda estado por conversa precisa dela. */
+    private readonly threadId?: string,
   ) {
     this.executor = executor;
     this.signal = signal;
@@ -221,6 +223,7 @@ export class StreamingToolExecutor {
       const result = await this.executor.execute(tracked.name, parsedArgs, {
         signal: this.signal,
         ...(this.traceId !== undefined && { traceId: this.traceId }),
+        ...(this.threadId !== undefined && { threadId: this.threadId }),
         toolCallId: tracked.id,
         recentMessages: this.recentMessages,
         onProgress,

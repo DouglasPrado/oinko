@@ -493,6 +493,7 @@ export class Agent {
       maxIterations: this.config.maxIterations,
       ...(decider !== undefined && { decider }),
       traceId: ctx.traceId,
+      threadId,
       progressCheckInterval: this.config.progressCheckInterval,
       logger: this.logger,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,
