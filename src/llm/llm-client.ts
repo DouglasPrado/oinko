@@ -7,6 +7,7 @@ import type {
 } from './message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import { retry } from '../utils/retry.js';
+import { checkModelSuitsEndpoint } from './model-registry.js';
 import {
   buildReasoningArgs,
   isReasoningModel,
@@ -96,6 +97,9 @@ export class LLMClient {
    */
   private async sendChatRequest(params: StreamChatParams, streaming: boolean): Promise<Response> {
     const model = params.model ?? this.model;
+    const mismatch = checkModelSuitsEndpoint(model, this.baseUrl);
+    if (mismatch !== undefined) throw new Error(mismatch);
+
     if ((params.tools?.length ?? 0) > 0 && rejectsToolsOnChatCompletions(model)) {
       throw new Error(
         `Model "${model}" does not accept function tools on /chat/completions, which is the ` +

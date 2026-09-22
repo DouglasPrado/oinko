@@ -147,3 +147,43 @@ export const MODEL_REGISTRY: ModelFamily[] = [
 export function findModelFamily(modelId: string): ModelFamily | undefined {
   return MODEL_REGISTRY.find((entry) => entry.match.test(modelId));
 }
+
+/** Hosts whose model ids are bare names, without a provider prefix. */
+const BARE_ID_HOSTS = ['api.openai.com', 'api.anthropic.com'];
+
+/**
+ * Complains when a model id cannot belong to the endpoint it is going to.
+ *
+ * `openai/gpt-4o-mini` is how OpenRouter names a model; the OpenAI API calls
+ * the same thing `gpt-4o-mini` and answers a prefixed id with "invalid model
+ * ID". Switching `baseUrl` without revisiting every model name is an easy
+ * thing to do, and the provider's error does not mention the prefix.
+ *
+ * Says nothing about unknown hosts: a gateway may accept any naming it likes,
+ * and guessing there would block valid setups.
+ */
+export function checkModelSuitsEndpoint(model: string, baseUrl: string): string | undefined {
+  // Fine-tune ids are their own namespace and legitimately carry separators.
+  if (model.startsWith('ft:')) return undefined;
+
+  const slash = model.indexOf('/');
+  if (slash <= 0) return undefined;
+
+  let host: string;
+  try {
+    host = new URL(baseUrl).host;
+  } catch {
+    return undefined;
+  }
+
+  if (!BARE_ID_HOSTS.some((known) => host === known || host.endsWith(`.${known}`))) {
+    return undefined;
+  }
+
+  const prefix = model.slice(0, slash + 1);
+  const bare = model.slice(slash + 1);
+  return (
+    `Model "${model}" carries the provider prefix "${prefix}", which is OpenRouter's naming, ` +
+    `but the endpoint is ${host}. Use "${bare}", or point baseUrl at OpenRouter.`
+  );
+}
