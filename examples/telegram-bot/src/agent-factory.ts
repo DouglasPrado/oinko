@@ -106,23 +106,6 @@ Formatting:
     agent.addTool(tool);
   }
 
-  // Connect MCP servers
-  if (config.mcp.albert.url) {
-    try {
-      await agent.connectMCP({
-        name: "albert",
-        transport: "sse",
-        url: config.mcp.albert.url,
-        headers: config.mcp.albert.headers,
-        timeout: 60_000,
-      });
-    } catch (error) {
-      console.error(
-        "Failed to connect MCP albert:",
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }
 
   return agent;
 }
