@@ -144,15 +144,16 @@ interface ReasoningPlan {
 O que cada familia aceita em `/chat/completions` — tudo sondado contra a API
 de verdade, nao lido da doc do provedor:
 
-| Familia | `temperature` | Function tools | Flag no registry |
-| --- | --- | --- | --- |
-| `o1-*` | so o default | sim | `noSystemRole` (sem `system` role) |
-| `o3`, `o4-*` | so o default | sim | — |
-| `gpt-5`, `gpt-5.5` | so o default | sim | — |
-| `gpt-5.4*` | qualquer valor | sim | `acceptsTemperature` |
-| `gpt-5.6*` | so o default | so com `reasoning_effort: 'none'` | `toolsRequireEffortNone` |
-| `gpt-6*` | so o default | nao — so via `/v1/responses` | `noToolsOnChatCompletions` |
-| `gpt-4o*`, `claude-*`, `gemini-*` | qualquer valor | sim | — (nao sao reasoning) |
+| Familia | `temperature` | Function tools | Imagem | Flag no registry |
+| --- | --- | --- | --- | --- |
+| `o1-*` | so o default | sim | sim | `noSystemRole` (sem `system` role) |
+| `o3`, `o4-*` | so o default | sim | sim | — |
+| `gpt-5`, `gpt-5.5` | so o default | sim | sim | — |
+| `gpt-5.4*` | qualquer valor | sim | sim | `acceptsTemperature` |
+| `gpt-5.6*` | so o default | so com `reasoning_effort: 'none'` | sim | `toolsRequireEffortNone` |
+| `gpt-6*` | so o default | nao — so via `/v1/responses` | sim | `noToolsOnChatCompletions` |
+| `gpt-4*`, `claude-*`, `gemini-*` | qualquer valor | sim | sim | — (nao sao reasoning) |
+| `gpt-oss`, `deepseek-*`, `mistral-*` | qualquer valor | sim | **nao** | `noVision` |
 
 Duas regras derivadas disso:
 
@@ -162,6 +163,12 @@ Duas regras derivadas disso:
 2. **Tools OU reasoning, na linha gpt-5.6.** Como as tools exigem `'none'`, um
    turno com tools nao raciocina. Quem precisa dos dois usa `/v1/responses`,
    que este client nao fala — ou um modelo da linha gpt-5.5 pra baixo.
+
+A coluna de imagem e a unica em que o **default e permissivo**: visao e quase
+universal hoje, entao o registro marca quem *nao* enxerga e assume que o resto
+enxerga. O contrario cegaria em silencio todo modelo que o registro ainda nao
+aprendeu — e ele envelhece sozinho. Para uma familia `noVision`, a imagem e
+achatada para `[image: <url>]` e o agente emite um `warn`.
 
 O `temperature` do chamador e **descartado** quando a familia o recusa, em vez
 de repassado: o provedor responde 400 a request inteira, nao ignora o campo.

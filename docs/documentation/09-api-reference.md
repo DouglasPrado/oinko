@@ -140,6 +140,39 @@ type ContentPart =
   | { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
 ```
 
+A imagem pode ser uma URL publica ou um data URL inline
+(`data:image/png;base64,...`). Ela e persistida junto com a mensagem, entao
+continua no contexto nos turnos seguintes da mesma thread — quem enviou a
+imagem no turno 1 pode perguntar sobre ela no turno 5.
+
+```typescript
+await agent.chat(
+  [
+    { type: 'text', text: 'De que cor e este quadrado?' },
+    { type: 'image_url', image_url: { url: dataUrl, detail: 'low' } },
+  ],
+  { threadId: 'visao' },
+);
+```
+
+**Modelo sem visao.** Quase todo modelo atual le imagem — sondado com um PNG
+de verdade, a linha gpt-4 em diante, a o-series e o Gemini acertam a cor de um
+quadrado. As excecoes conhecidas estao marcadas com `noVision` no registro
+(gpt-oss, deepseek, mistral) e recebem a imagem **achatada para texto**, na
+forma `[image: <url>]`: o modelo nao ve, mas sabe que uma imagem foi enviada e
+onde ela esta. O agente registra um `warn` quando isso acontece, entao a
+degradacao nunca e silenciosa. Modelo que o registro nao conhece e tratado
+como capaz de ver.
+
+**Custo.** Uma imagem entra no orcamento de contexto pelo preco que o provedor
+cobra por ela (85 tokens em `detail: 'low'`), nao pelo tamanho da URL. Contar
+um data URL como texto estimava uma imagem de 500KB em ~170k tokens, e a
+mensagem era descartada do contexto antes de chegar ao modelo.
+
+**Resultado de tool.** Imagem devolvida por tool MCP continua virando
+`[Image: <mime>, ~<n>KB]`: o papel `tool` so aceita texto no endpoint que este
+cliente fala.
+
 ### ToolCall
 
 ```typescript
