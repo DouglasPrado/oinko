@@ -1,0 +1,8 @@
+# Vazio de proposito. O exemplo nao e membro do workspace da raiz: ele existe
+# para ser lido como um projeto que consome o SDK, com as proprias
+# dependencias e o proprio lockfile. Sem este arquivo, `pnpm install` aqui
+# dentro sobe para o workspace da raiz e nao instala nada.
+packages: []
+
+allowBuilds:
+  esbuild: true

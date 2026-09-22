@@ -7,12 +7,12 @@
     "dev": "tsx watch src/bot.ts",
     "start": "tsx src/bot.ts",
     "build": "tsc",
-    "start:prod": "node dist/bot.js"
+    "start:prod": "node dist/examples/telegram-bot/src/bot.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
     "dotenv": "^16.4.0",
     "grammy": "^1.30.0",
-    "@gba/ai-harness": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

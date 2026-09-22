@@ -8,10 +8,6 @@
 packages:
   - '.'
   - 'apps/*'
-  # O exemplo entra como membro para que `@gba/ai-harness` seja symlink para o
-  # dist real. Com `file:`, o pnpm copia o dist no momento do install e nunca
-  # mais atualiza: cada arquivo novo no SDK quebrava o bot com MODULE_NOT_FOUND.
-  - 'examples/telegram-bot'
 
 allowBuilds:
   esbuild: true
