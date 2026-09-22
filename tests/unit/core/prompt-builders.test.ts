@@ -18,17 +18,23 @@ describe('buildToolUsagePrompt', () => {
     expect(buildToolUsagePrompt([])).toBe('');
   });
 
-  it('should list all tools with names and descriptions', () => {
+  /**
+   * Was "should list all tools with names and descriptions". The list moved
+   * out: the same names, descriptions and schemas already travel in the
+   * request's `tools` field, so repeating them here was paying twice per turn
+   * for the same information — and the bill grew with the toolset.
+   */
+  it('should not repeat what the tools field already carries', () => {
     const tools = [
       createTool({ name: 'weather', description: 'Get weather data' }),
       createTool({ name: 'search', description: 'Search the web' }),
     ];
 
     const prompt = buildToolUsagePrompt(tools);
-    expect(prompt).toContain('**weather**');
-    expect(prompt).toContain('Get weather data');
-    expect(prompt).toContain('**search**');
-    expect(prompt).toContain('Search the web');
+    expect(prompt).not.toContain('Get weather data');
+    expect(prompt).not.toContain('Search the web');
+    // O que orienta comportamento continua.
+    expect(prompt).toContain('Tool Usage Guidelines');
   });
 
   it('should include tool usage guidelines', () => {
