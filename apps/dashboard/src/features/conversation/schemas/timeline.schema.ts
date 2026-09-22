@@ -95,6 +95,7 @@ export const ExecutionDetailSchema = z.object({
   execution: ExecutionSummarySchema,
   systemPrompt: PayloadRefSchema.nullable(),
   userInput: PayloadRefSchema.nullable(),
+  assistantText: PayloadRefSchema.nullable(),
   toolsSchema: PayloadRefSchema.nullable(),
   injections: z.array(InjectionSchema),
   items: z.array(TimelineItemSchema),

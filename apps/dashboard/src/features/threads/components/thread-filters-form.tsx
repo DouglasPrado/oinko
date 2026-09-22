@@ -26,10 +26,7 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
   }
 
   return (
-    <form
-      className="mt-5 flex flex-wrap items-end gap-4"
-      onSubmit={(event) => event.preventDefault()}
-    >
+    <form className="flex flex-wrap items-end gap-4" onSubmit={(event) => event.preventDefault()}>
       <div className="flex flex-col gap-1">
         <label htmlFor="q" className="text-[0.8125rem] text-ink-muted">
           Buscar thread

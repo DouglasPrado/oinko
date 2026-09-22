@@ -64,3 +64,16 @@ body {
   outline: 2px solid var(--color-time);
   outline-offset: 2px;
 }
+
+/*
+ * Largura do inspetor, ajustada arrastando a borda.
+ *
+ * Em CSS explicito e nao por classe utilitaria com var: a largura chega como
+ * custom property calculada em runtime, e o scanner do Tailwind so gera classes
+ * que consegue ler no fonte.
+ */
+@media (min-width: 1024px) {
+  .inspector-panel {
+    width: var(--inspector-width, 28rem);
+  }
+}

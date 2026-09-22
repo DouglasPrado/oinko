@@ -14,11 +14,14 @@ function when(ms: number): string {
  */
 export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
   return (
-    <div className="mt-6 overflow-x-auto">
+    <div className="overflow-x-auto border-t border-rule">
       <table className="w-full min-w-[42rem] border-collapse text-sm">
         <thead>
           <tr className="border-b border-rule text-left text-[0.8125rem] text-ink-muted">
-            <th scope="col" className="py-2 pr-4 font-normal">
+            <th
+              scope="col"
+              className="py-2 pr-4 pl-5 font-normal first:pl-5 [&:not(:first-child)]:pl-0"
+            >
               Thread
             </th>
             <th scope="col" className="py-2 pr-4 font-normal">
@@ -44,7 +47,7 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
         <tbody>
           {threads.map((thread) => (
             <tr key={thread.threadId} className="border-b border-rule/60 hover:bg-surface">
-              <td className="py-2 pr-4">
+              <td className="py-1.5 pr-4 pl-5">
                 <Link
                   href={`/threads/${encodeURIComponent(thread.threadId)}`}
                   className="font-mono text-time underline-offset-2 hover:underline"
@@ -55,7 +58,7 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
                   <span className="ml-2 text-xs text-fault">{thread.errorCount} com erro</span>
                 ) : null}
               </td>
-              <td className="py-2 pr-4 text-ink-muted">
+              <td className="py-1.5 pr-4 text-ink-muted">
                 {thread.lastModel}
                 {thread.modelCount > 1 ? (
                   <span className="ml-1.5 text-xs" title="a conversa usou mais de um modelo">
@@ -63,9 +66,9 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
                   </span>
                 ) : null}
               </td>
-              <td className="tabular py-2 pr-4 text-right">{thread.executionCount}</td>
-              <td className="tabular py-2 pr-4 text-right">{formatTokens(thread.totalTokens)}</td>
-              <td className="tabular py-2 pr-4 text-right text-spend">
+              <td className="tabular py-1.5 pr-4 text-right">{thread.executionCount}</td>
+              <td className="tabular py-1.5 pr-4 text-right">{formatTokens(thread.totalTokens)}</td>
+              <td className="tabular py-1.5 pr-4 text-right text-spend">
                 {formatUsd(thread.costUsd)}
                 {thread.unknownCostCount > 0 ? (
                   <span className="ml-1 text-xs text-ink-muted">
@@ -73,10 +76,10 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
                   </span>
                 ) : null}
               </td>
-              <td className="tabular py-2 pr-4 text-right text-time">
+              <td className="tabular py-1.5 pr-4 text-right text-time">
                 {formatDuration(thread.totalDurationMs)}
               </td>
-              <td className="tabular py-2 text-right text-ink-muted">
+              <td className="tabular py-1.5 pr-5 text-right text-ink-muted">
                 {when(thread.lastStartedAt)}
               </td>
             </tr>

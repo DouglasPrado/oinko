@@ -1,10 +1,9 @@
-import { Activity } from 'lucide-react';
 import { listThreads } from '@/server/repositories/thread-repository';
 import { ThreadFiltersSchema } from '@/features/threads/schemas/thread.schema';
+import { Workbench } from '@/components/shell/workbench';
 import { ThreadTable } from '@/features/threads/components/thread-table';
 import { ThreadFiltersForm } from '@/features/threads/components/thread-filters-form';
 import { EmptyState } from '@/components/shared/empty-state';
-import { Metric } from '@/components/shared/metric';
 import { formatUsd } from '@/lib/utils/format-usd';
 import { formatDuration } from '@/lib/utils/format-duration';
 import { formatTokens } from '@/lib/utils/format-tokens';
@@ -47,43 +46,50 @@ export default async function ThreadsPage({
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-      <header className="flex items-baseline gap-3 border-b border-rule pb-4">
-        <Activity className="size-5 text-time" aria-hidden />
-        <h1 className="text-xl font-medium">Conversas</h1>
-        <p className="text-sm text-ink-muted">
-          {threads.length === 1 ? '1 thread' : `${threads.length} threads`}
-        </p>
+    <Workbench>
+      <header className="flex flex-wrap items-baseline gap-x-8 gap-y-3 border-b border-rule px-5 py-4">
+        <div className="flex flex-col">
+          <span className="text-[0.6875rem] text-ink-muted">
+            {totals.unknownCostCount > 0
+              ? `Custo cobrado · ${totals.unknownCostCount} sem valor informado`
+              : 'Custo cobrado'}
+          </span>
+          <span className="tabular text-lg leading-tight font-medium text-spend">
+            {formatUsd(totals.costUsd)}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[0.6875rem] text-ink-muted">Respostas</span>
+          <span className="tabular text-lg leading-tight font-medium">{totals.executions}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[0.6875rem] text-ink-muted">Tokens</span>
+          <span className="tabular text-lg leading-tight font-medium">
+            {formatTokens(totals.tokens)}
+          </span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[0.6875rem] text-ink-muted">Tempo somado</span>
+          <span className="tabular text-lg leading-tight font-medium text-time">
+            {formatDuration(totals.durationMs)}
+          </span>
+        </div>
       </header>
 
-      <ThreadFiltersForm filters={filters} />
-
-      {threads.length > 0 ? (
-        <section className="mt-6 flex flex-wrap gap-x-10 gap-y-4 border-b border-rule pb-5">
-          <Metric
-            label="Custo real acumulado"
-            value={formatUsd(totals.costUsd)}
-            tone="spend"
-            hint={
-              totals.unknownCostCount > 0
-                ? `${totals.unknownCostCount} execucoes sem custo informado ficaram de fora`
-                : 'todas as execucoes tiveram custo confirmado'
-            }
-          />
-          <Metric label="Respostas" value={String(totals.executions)} />
-          <Metric label="Tokens" value={formatTokens(totals.tokens)} />
-          <Metric label="Tempo somado" value={formatDuration(totals.durationMs)} tone="time" />
-        </section>
-      ) : null}
+      <div className="px-5 py-3">
+        <ThreadFiltersForm filters={filters} />
+      </div>
 
       {threads.length === 0 ? (
-        <EmptyState
-          title="Nenhuma conversa registrada ainda"
-          description="Ligue a telemetria no agente e rode um turno. Cada execucao aparece aqui com o custo real cobrado, o tempo gasto e tudo que entrou e saiu do modelo."
-        />
+        <div className="px-5">
+          <EmptyState
+            title="Nenhuma conversa registrada ainda"
+            description="Ligue a telemetria no agente e rode um turno. Cada resposta aparece aqui com o custo cobrado, o tempo gasto e tudo que entrou e saiu do modelo."
+          />
+        </div>
       ) : (
         <ThreadTable threads={threads} />
       )}
-    </main>
+    </Workbench>
   );
 }

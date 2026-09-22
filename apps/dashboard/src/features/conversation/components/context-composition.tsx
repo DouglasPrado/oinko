@@ -38,12 +38,12 @@ export function ContextComposition({ injections, contextTokens }: Props) {
   const total = applied.reduce((sum, injection) => sum + injection.tokens, 0) || 1;
 
   return (
-    <section className="mt-6" aria-labelledby="composition-heading">
-      <h2 id="composition-heading" className="text-sm text-ink-muted">
+    <section aria-labelledby="composition-heading">
+      <h2 id="composition-heading" className="text-[0.6875rem] text-ink-muted">
         De que e feito este prompt
       </h2>
 
-      <div className="mt-2 flex h-7 w-full overflow-hidden border border-rule">
+      <div className="mt-1.5 flex h-5 w-full overflow-hidden border border-rule">
         {applied.map((injection) => (
           <div
             key={injection.source}
@@ -56,7 +56,7 @@ export function ContextComposition({ injections, contextTokens }: Props) {
         ))}
       </div>
 
-      <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[0.8125rem]">
+      <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs">
         {applied.map((injection) => (
           <li key={injection.source} className="flex items-center gap-1.5">
             <span

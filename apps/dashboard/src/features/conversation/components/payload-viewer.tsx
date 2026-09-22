@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import type { PayloadRef } from '../schemas/timeline.schema';
 import { usePayloadQuery } from '../api/use-payload-query';
+import { PayloadBody } from './payload-body';
 import { formatBytes } from '@/lib/utils/format-bytes';
 
 /**
@@ -63,10 +64,7 @@ export function PayloadViewer({ label, payload }: { label: string; payload: Payl
         </p>
       ) : null}
 
-      <pre className="mt-2 max-h-96 overflow-auto border border-rule bg-surface p-3 font-mono text-xs leading-relaxed whitespace-pre">
-        {body ?? payload.preview}
-        {body === null && !complete ? '\n…' : ''}
-      </pre>
+      <PayloadBody text={body ?? payload.preview} truncated={body === null && !complete} />
     </div>
   );
 }

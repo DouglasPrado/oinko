@@ -223,11 +223,12 @@ export function getExecutionDetail(traceId: string): ExecutionDetail | undefined
     .prepare(
       `SELECT ${EXECUTION_COLUMNS},
               ${payloadColumns('sp', 'system')}, ${payloadColumns('ui', 'input')},
-              ${payloadColumns('ts', 'tools')}
+              ${payloadColumns('ts', 'tools')}, ${payloadColumns('at', 'assistant')}
        FROM executions e
        ${payloadJoin('sp', 'system_prompt_payload_id', 'e')}
        ${payloadJoin('ui', 'user_input_payload_id', 'e')}
        ${payloadJoin('ts', 'tools_schema_payload_id', 'e')}
+       ${payloadJoin('at', 'assistant_text_payload_id', 'e')}
        WHERE e.trace_id = ?`,
     )
     .get(traceId) as Row | undefined;
@@ -254,6 +255,7 @@ export function getExecutionDetail(traceId: string): ExecutionDetail | undefined
     },
     systemPrompt: toPayloadRef(row, 'system'),
     userInput: toPayloadRef(row, 'input'),
+    assistantText: toPayloadRef(row, 'assistant'),
     toolsSchema: toPayloadRef(row, 'tools'),
     injections: injections(traceId),
     items,
