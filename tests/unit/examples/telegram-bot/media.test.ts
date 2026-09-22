@@ -17,7 +17,7 @@ function ctxOf(message: Record<string, unknown>, filePath = 'photos/file_1.jpg')
   return {
     message,
     getFile: vi.fn().mockResolvedValue({ file_path: filePath }),
-  } as unknown as FakeCtx;
+  } as FakeCtx;
 }
 
 const okFetch = (bytes: Uint8Array) =>
