@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils/cn';
-import { JsonTree } from './json-tree';
+import { JsonViewer } from './json-viewer';
 import { MessageList, parseMessages } from './message-list';
 
 type Mode = 'auto' | 'json' | 'raw';
@@ -65,7 +65,7 @@ export function PayloadBody({ text, truncated }: { text: string; truncated: bool
 
       <div className="max-h-[28rem] overflow-auto border border-rule bg-surface">
         {effective === 'auto' && messages ? <MessageList messages={messages} /> : null}
-        {effective === 'json' && json !== undefined ? <JsonTree data={json} /> : null}
+        {effective === 'json' && json !== undefined ? <JsonViewer data={json} /> : null}
         {effective === 'raw' ? (
           <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre">
             {text}

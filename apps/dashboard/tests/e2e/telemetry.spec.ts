@@ -94,6 +94,13 @@ test.describe('inspecao de telemetria', () => {
       'aria-pressed',
       'true',
     );
+
+    // Linha numerada e bloco que dobra: e assim que se confere a forma do que
+    // foi enviado.
+    const fold = page.getByRole('button', { name: 'Recolher bloco' }).first();
+    await expect(fold).toBeVisible();
+    await fold.click();
+    await expect(page.getByRole('button', { name: 'Expandir bloco' }).first()).toBeVisible();
   });
 
   test('diz que o custo e desconhecido em vez de mostrar zero', async ({ page }) => {
