@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Activity } from 'lucide-react';
 import { navThreads, navExecutions } from '@/server/repositories/navigation-repository';
+import { LiveBadge } from '@/features/live/components/live-badge';
 import { formatDuration } from '@/lib/utils/format-duration';
 import { formatUsd } from '@/lib/utils/format-usd';
 import { cn } from '@/lib/utils/cn';
@@ -35,13 +36,15 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
       aria-label="Conversas"
       className="flex h-full w-full flex-col overflow-y-auto border-rule bg-surface lg:w-72 lg:border-r"
     >
-      <Link
-        href="/"
-        className="flex items-center gap-2 border-b border-rule px-4 py-3 text-sm font-medium"
-      >
-        <Activity className="size-4 text-time" aria-hidden />
-        Telemetria
-      </Link>
+      <div className="flex items-center gap-2 border-b border-rule px-4 py-3">
+        <Link href="/" className="flex items-center gap-2 text-sm font-medium">
+          <Activity className="size-4 text-time" aria-hidden />
+          Telemetria
+        </Link>
+        <span className="ml-auto">
+          <LiveBadge />
+        </span>
+      </div>
 
       {threads.length === 0 ? (
         <p className="px-4 py-4 text-[0.8125rem] text-ink-muted">Nenhuma conversa gravada ainda.</p>

@@ -3,6 +3,7 @@ import { getExecutionDetail } from '@/server/repositories/execution-repository';
 import { Workbench } from '@/components/shell/workbench';
 import { ContextComposition } from '@/features/conversation/components/context-composition';
 import { ExecutionTape } from '@/features/conversation/components/execution-tape';
+import { ToolSummary } from '@/features/conversation/components/tool-summary';
 import { Inspector } from '@/features/conversation/components/inspector';
 import { TurnTranscript } from '@/features/conversation/components/turn-transcript';
 import { formatUsd } from '@/lib/utils/format-usd';
@@ -97,6 +98,7 @@ export default async function ExecutionPage({
           injections={detail.injections}
           contextTokens={execution.contextTokens}
         />
+        <ToolSummary available={detail.availableTools} items={detail.items} />
       </div>
 
       <TurnTranscript userInput={detail.userInput} assistantText={detail.assistantText} />

@@ -218,6 +218,31 @@ function injections(traceId: string): Injection[] {
   }));
 }
 
+/**
+ * Nomes das ferramentas que o modelo tinha a disposicao nesta execucao.
+ *
+ * Lidos do schema que foi enviado, e nao do registro do agente: o que importa
+ * e o que o modelo podia chamar naquele turno, que muda com skill ativada e
+ * servidor MCP conectado.
+ */
+function availableTools(payloadId: string | null): string[] {
+  if (payloadId === null) return [];
+
+  const row = telemetryDb().prepare('SELECT body FROM payloads WHERE id = ?').get(payloadId) as
+    { body: string } | undefined;
+  if (!row) return [];
+
+  try {
+    const schema = JSON.parse(row.body) as { function?: { name?: string } }[];
+    if (!Array.isArray(schema)) return [];
+    return schema
+      .map((entry) => entry.function?.name)
+      .filter((name): name is string => typeof name === 'string');
+  } catch {
+    return [];
+  }
+}
+
 export function getExecutionDetail(traceId: string): ExecutionDetail | undefined {
   const row = telemetryDb()
     .prepare(
@@ -257,6 +282,7 @@ export function getExecutionDetail(traceId: string): ExecutionDetail | undefined
     userInput: toPayloadRef(row, 'input'),
     assistantText: toPayloadRef(row, 'assistant'),
     toolsSchema: toPayloadRef(row, 'tools'),
+    availableTools: availableTools(nullableStr(row.tools_id)),
     injections: injections(traceId),
     items,
   });

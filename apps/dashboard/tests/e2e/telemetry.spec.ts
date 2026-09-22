@@ -135,6 +135,37 @@ test.describe('inspecao de telemetria', () => {
     await expect(handle).toHaveAttribute('aria-valuenow', String(after));
   });
 
+  test('diz quais ferramentas existiam e quais foram chamadas', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
+    await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
+
+    // A ferramenta registrada aparece mesmo quando o turno nao a chamou.
+    const tools = page.getByRole('region', { name: 'Ferramentas disponiveis' });
+    await expect(tools.getByText('buscar_pedido')).toBeVisible();
+    await expect(tools).toContainText('nenhuma foi chamada neste turno');
+
+    // O turno que de fato chamou: a chamada aparece na fita, com origem e tempo.
+    const rail = page.getByRole('navigation', { name: 'Conversas' });
+    await rail
+      .getByRole('link')
+      .filter({ hasText: /\d{2}\/\d{2}/ })
+      .last()
+      .click();
+    await expect(page.getByRole('link', { name: /buscar_pedido/ })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Ferramentas disponiveis' })).not.toContainText(
+      'nenhuma foi chamada',
+    );
+  });
+
+  test('acompanha o agente em tempo real', async ({ page }) => {
+    await page.goto('/');
+
+    // Sem este aviso, tela parada e ambigua: nao da para distinguir "nada
+    // aconteceu" de "parei de receber".
+    await expect(page.getByRole('status')).toContainText(/ao vivo|conectando/);
+  });
+
   test('percorre a interface pelo teclado', async ({ page }) => {
     await page.goto('/');
     await page.keyboard.press('Tab');
