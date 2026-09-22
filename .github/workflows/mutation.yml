@@ -26,11 +26,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Autentica no registry privado
-        run: printf '\n//npm.dify.com.br/:_authToken=%s\n' "$GBA_REGISTRY_TOKEN" >> "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-        env:
-          GBA_REGISTRY_TOKEN: ${{ secrets.GBA_REGISTRY_TOKEN }}
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

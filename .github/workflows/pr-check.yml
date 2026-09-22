@@ -6,6 +6,13 @@ name: PR Check
 # rodam direto — o filtro nao teria o que filtrar.
 #
 # Tambem ficaram de fora os passos de MCP server e Prisma: sao do monorepo.
+#
+# E ficou de fora a autenticacao no registry privado, que o workflow de
+# origem fazia: este pacote nao consome nenhuma dependencia @gba desde que o
+# vinculo com o ai-gateway foi cortado, entao o install resolve tudo no npmjs
+# publico. Alem de desnecessario, o passo quebraria PR vinda de fork, onde
+# secrets nao existem. Publicar continua exigindo o token — isso esta no
+# release.yml, que so roda na main.
 
 on:
   pull_request:
@@ -34,26 +41,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-
-      # O pnpm só expande variável em credencial vinda do npmrc do USUÁRIO —
-      # nunca do .npmrc do projeto, que é versionado. Por isso a linha é
-      # escrita aqui, e não commitada.
-      #
-      # O destino é `$NPM_CONFIG_USERCONFIG`, e não `~/.npmrc` direto: quando o
-      # `setup-node` recebe `registry-url`, ele escreve o npmrc num arquivo
-      # próprio no RUNNER_TEMP e aponta essa variável para lá. A partir daí o
-      # pnpm lê AQUELE arquivo como npmrc do usuário e ignora o `~/.npmrc` — o
-      # token do registry privado ia para um arquivo que ninguém lia, e o
-      # install morria com 401 "no authorization header was set".
-      #
-      # O `printf` com `\n` na frente, e não `echo`, porque o npmrc que o
-      # `setup-node` escreve NÃO termina em nova linha: com `echo >>` a linha
-      # grudava na anterior e o pnpm pedia cada pacote numa URL colada, tomando
-      # 404. Os dois defeitos custaram dias de publish quebrado no monorepo.
-      - name: Autentica no registry privado
-        run: printf '\n//npm.dify.com.br/:_authToken=%s\n' "$GBA_REGISTRY_TOKEN" >> "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
-        env:
-          GBA_REGISTRY_TOKEN: ${{ secrets.GBA_REGISTRY_TOKEN }}
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
