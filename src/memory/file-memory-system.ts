@@ -42,7 +42,7 @@ import { scanMemoryFiles, formatMemoryManifest, parseFrontmatter } from './memor
 import { selectRelevantMemories, selectRelevantMemoriesWithDecider } from './memory-relevance.js';
 import { findDuplicateMemory } from './dedup.js';
 import { memoryFreshnessNote } from './memory-age.js';
-import { buildMemoryInstructions } from './memory-prompts.js';
+import { buildRecallInstructions } from './memory-prompts.js';
 
 export interface FileMemoryConfig {
   enabled?: boolean;
@@ -323,7 +323,7 @@ export class FileMemorySystem {
    * Build the behavioral instructions prompt for the memory system.
    */
   getMemoryInstructions(): string {
-    return buildMemoryInstructions(this.memoryDir);
+    return buildRecallInstructions(this.memoryDir);
   }
 
   /**

@@ -189,6 +189,34 @@ export const PERSISTENCE_SECTION: readonly string[] = [
  * the system prompt / context. This provides the LLM with all the
  * cognitive scaffolding needed to manage the file-based memory system.
  */
+/**
+ * What the conversing agent needs to know about memory — and nothing more.
+ *
+ * It never holds the memory tools: only the extraction subagent does, and that
+ * one gets {@link buildMemoryInstructions} with the full taxonomy. Sending the
+ * writing instructions here costs ~2.5k tokens on every single turn to teach
+ * calls the agent cannot make.
+ *
+ * What stays is what it actually uses: that memories exist and arrive already
+ * injected, that they should be verified before being acted on, and that it
+ * must not claim to have no memory.
+ */
+export function buildRecallInstructions(memoryDir: string): string {
+  return [
+    '# Memory',
+    '',
+    `Relevant memories from \`${memoryDir}\` are injected into your context automatically when they apply. You do not need to look them up.`,
+    '',
+    ...TRUSTING_RECALL_SECTION,
+    '',
+    ...PERSISTENCE_SECTION,
+    '',
+  ].join('\n');
+}
+
+/**
+ * The complete instructions, for a subagent that will actually write memory.
+ */
 export function buildMemoryInstructions(memoryDir: string): string {
   const lines: string[] = [
     '# Memory System',
