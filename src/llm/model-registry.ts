@@ -17,17 +17,31 @@ export interface ModelFamily {
   /** Matched against the full model id, provider prefix included. */
   match: RegExp;
   contextWindow: number;
-  /** o-series and gpt-5+: no temperature, and tools force `reasoning_effort: 'none'`. */
+  /** o-series and gpt-5+: reasoning is on, so `temperature` is refused. */
   reasoning?: boolean;
+  /**
+   * The exception to that: a reasoning family that takes a non-default
+   * `temperature` anyway. Probed live — the gpt-5.4 line answers 200 where
+   * gpt-5, gpt-5.5, gpt-5.6, gpt-6 and the o-series all answer
+   * "Only the default (1) value is supported".
+   */
+  acceptsTemperature?: boolean;
   /** The original o1 family rejects the system role. */
   noSystemRole?: boolean;
   /**
    * Some reasoning models only accept function tools through /v1/responses.
    * On /chat/completions they refuse the request outright, and no
-   * `reasoning_effort` value makes it work — the error text suggesting
-   * 'none' is itself wrong, since these models reject 'none' too.
+   * `reasoning_effort` value makes it work — 'none', which the error text
+   * suggests, is not even an accepted value for these.
    */
   noToolsOnChatCompletions?: boolean;
+  /**
+   * Others do take tools on /chat/completions, but only with the reasoning
+   * budget at zero: `reasoning_effort: 'none'`. Any other value, and the
+   * absence of the field, both draw a 400. Tools and reasoning are exclusive
+   * on this endpoint for these models — /v1/responses is what gives both.
+   */
+  toolsRequireEffortNone?: boolean;
 }
 
 /** Conservative window for a model nobody registered. */
@@ -80,8 +94,9 @@ export const MODEL_REGISTRY: ModelFamily[] = [
     match: family('gpt-5.6'),
     contextWindow: 1_050_000,
     reasoning: true,
-    // luna, sol and terra all refuse tools on /chat/completions — probed live.
-    noToolsOnChatCompletions: true,
+    // The bare id and luna, sol and terra all take tools with effort 'none',
+    // and only with it — probed live against /chat/completions.
+    toolsRequireEffortNone: true,
   },
   { name: 'gpt-5.5', match: family('gpt-5.5'), contextWindow: 1_050_000, reasoning: true },
   {
@@ -89,10 +104,29 @@ export const MODEL_REGISTRY: ModelFamily[] = [
     match: family('gpt-5.4-image'),
     contextWindow: 272_000,
     reasoning: true,
+    acceptsTemperature: true,
   },
-  { name: 'gpt-5.4-mini', match: family('gpt-5.4-mini'), contextWindow: 400_000, reasoning: true },
-  { name: 'gpt-5.4-nano', match: family('gpt-5.4-nano'), contextWindow: 400_000, reasoning: true },
-  { name: 'gpt-5.4', match: family('gpt-5.4'), contextWindow: 1_050_000, reasoning: true },
+  {
+    name: 'gpt-5.4-mini',
+    match: family('gpt-5.4-mini'),
+    contextWindow: 400_000,
+    reasoning: true,
+    acceptsTemperature: true,
+  },
+  {
+    name: 'gpt-5.4-nano',
+    match: family('gpt-5.4-nano'),
+    contextWindow: 400_000,
+    reasoning: true,
+    acceptsTemperature: true,
+  },
+  {
+    name: 'gpt-5.4',
+    match: family('gpt-5.4'),
+    contextWindow: 1_050_000,
+    reasoning: true,
+    acceptsTemperature: true,
+  },
   { name: 'gpt-5.2-chat', match: family('gpt-5.2-chat'), contextWindow: 128_000, reasoning: true },
   { name: 'gpt-5', match: /(^|\/)gpt-5($|[-.:])/i, contextWindow: 400_000, reasoning: true },
 

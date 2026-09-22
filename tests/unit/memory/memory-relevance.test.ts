@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { selectRelevantMemories } from '../../../src/memory/memory-relevance.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
+import { LLMClient as RealLLMClient } from '../../../src/llm/llm-client.js';
 
 function createMockClient(response: string): LLMClient {
   return {
@@ -105,5 +106,58 @@ describe('memory-relevance', () => {
       'Memory relevance selection failed',
       expect.objectContaining({ error: 'API error' }),
     );
+  });
+});
+
+describe('memory-relevance request body', () => {
+  const CAPTURED_REPLY = JSON.stringify({ selected_memories: ['user_role.md'] });
+
+/**
+ * A real LLMClient with the transport faked, not a mocked `chat()`. The
+ * mocked client cannot see the request body, which is exactly where the bug
+ * lived: this module sends `temperature: 0`, and for a reasoning model the
+ * provider answers 400 to the whole request rather than ignoring the field.
+ */
+function captureRequest(model: string): {
+  client: LLMClient;
+  body: () => Record<string, unknown>;
+} {
+  let captured: Record<string, unknown> = {};
+  const client = new RealLLMClient({
+    apiKey: 'k',
+    model,
+    baseUrl: 'https://example.test/v1',
+    fetch: async (request: Request) => {
+      captured = JSON.parse(await request.text()) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: CAPTURED_REPLY }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  return { client, body: () => captured };
+}
+
+  const manifest = '- [user] user_role.md (2026-01-15T10:00:00.000Z): Senior Go developer';
+  const valid = new Set(['user_role.md']);
+
+  it('sends no temperature for a reasoning model', async () => {
+    for (const model of ['gpt-5.6', 'gpt-5.5', 'o3']) {
+      const { client, body } = captureRequest(model);
+      const result = await selectRelevantMemories('query', manifest, valid, client);
+
+      expect(result, model).toEqual(['user_role.md']);
+      expect(body(), model).not.toHaveProperty('temperature');
+    }
+  });
+
+  it('still sends the temperature for a model that takes one', async () => {
+    const { client, body } = captureRequest('gpt-4o');
+    await selectRelevantMemories('query', manifest, valid, client);
+
+    expect(body().temperature).toBe(0);
   });
 });

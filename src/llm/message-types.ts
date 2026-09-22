@@ -37,6 +37,13 @@ export interface ResponseFormat {
   json_schema?: { name: string; schema: Record<string, unknown>; strict?: boolean };
 }
 
+/**
+ * Reasoning budget. 'none' turns reasoning off, which is also what makes the
+ * gpt-5.5+ lines accept a non-default `temperature` and function tools on
+ * /chat/completions. 'xhigh' is accepted by the gpt-5.6 and gpt-6 lines.
+ */
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+
 /** Parameters for streamChat/chat */
 export interface StreamChatParams {
   messages: LLMMessage[];
@@ -44,7 +51,7 @@ export interface StreamChatParams {
   temperature?: number;
   responseFormat?: ResponseFormat;
   /** Reasoning budget for o-series / gpt-5+ models. 'none' disables it. */
-  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  reasoningEffort?: ReasoningEffort;
   signal?: AbortSignal;
   seed?: number;
   maxTokens?: number;

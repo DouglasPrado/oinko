@@ -134,6 +134,7 @@ export type {
   ChatParams,
   ToolDefinition,
   ResponseFormat,
+  ReasoningEffort,
 } from './llm/message-types.js';
 
 // Utils
