@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+/*
+ * Instrumento impresso, nao dashboard escuro.
+ *
+ * O conteudo dominante e texto longo para ler com atencao, e cinco acentos que
+ * codificam grandezas diferentes precisam de uma base neutra para nao brigarem.
+ * O claro e frio-esverdeado de proposito, para nao ser o cream quente que todo
+ * gerador produz.
+ */
+@theme {
+  --color-paper: #e9ebe8;
+  --color-surface: #f7f8f6;
+  --color-ink: #1b2320;
+  --color-ink-muted: #5a635e;
+  --color-rule: #c9cec9;
+
+  /* Acentos semanticos: cor codifica grandeza, nunca decora. */
+  --color-time: #2b6c8f;
+  --color-spend: #8a6a1f;
+  --color-judge: #4a4e9c;
+  --color-fault: #96262c;
+  --color-ok: #3f6b3a;
+
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /*
+   * Raio por hierarquia, nao um valor unico em tudo: a fita e registro
+   * continuo (0), controles sao objetos manipulaveis (2px), e so o inspetor
+   * de fato flutua (6px).
+   */
+  --radius-tape: 0;
+  --radius-control: 2px;
+  --radius-panel: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Toda coluna numerica alinha; e o que torna a fita legivel de relance. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-time);
+  outline-offset: 2px;
+}

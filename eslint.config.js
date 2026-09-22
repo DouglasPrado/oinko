@@ -8,6 +8,9 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      // A dashboard tem eslint.config.mjs proprio: o tsconfig da raiz nao tem
+      // jsx nem lib DOM, e todo .tsx cairia em "file not found by the project".
+      'apps/**',
       'node_modules/**',
       'documentation/**',
       'docs/**',

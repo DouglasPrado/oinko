@@ -1,11 +1,19 @@
-# Pacote unico, mas o arquivo precisa existir: o pnpm 11 nao le mais o campo
+# Workspace de dois pacotes: o SDK na raiz e a dashboard privada em apps/.
+# O arquivo tambem precisa existir por outro motivo: o pnpm 11 nao le mais o campo
 # `pnpm` (nem `overrides`) de manifests de pacote. As pinagens de seguranca e a
 # liberacao de build scripts so valem se vierem daqui.
 #
 # O `overrides` do package.json continua la, duplicado de proposito: ele e o que
 # chega a quem instala o @gba/ai-harness com npm.
+packages:
+  - '.'
+  - 'apps/*'
+
 allowBuilds:
   esbuild: true
+  '@tailwindcss/oxide': true
+  unrs-resolver: true
+  sharp: true
 
 overrides:
   hono: '>=4.12.16'

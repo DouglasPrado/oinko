@@ -38,3 +38,10 @@ examples/teams-bot/src/knowledge/
 # variantes com espaco/sufixo no nome escapam do padrao .env
 .env*
 !.env.example
+
+# Next.js (apps/dashboard)
+.next/
+next-env.d.ts
+apps/*/playwright-report/
+apps/*/test-results/
+.playwright-mcp/

@@ -18,9 +18,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.types.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && pnpm -r --filter './apps/*' test",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage && pnpm -r --filter './apps/*' test",
     "test:live": "tsc && vitest run --config vitest.live.config.ts",
     "test:mutation": "stryker run",
     "analyze:decisions": "node scripts/analyze-decisions.ts",
@@ -38,7 +38,10 @@
     "docs:dev": "cd documentation && npx mintlify@latest dev",
     "docs:build": "cd documentation && npx mintlify@latest build",
     "docs:api": "typedoc",
-    "docs:api:check": "typedoc --treatWarningsAsErrors --emit none"
+    "docs:api:check": "typedoc --treatWarningsAsErrors --emit none",
+    "lint:apps": "pnpm -r --filter './apps/*' lint",
+    "typecheck:apps": "pnpm -r --filter './apps/*' typecheck",
+    "build:apps": "pnpm -r --filter './apps/*' build"
   },
   "engines": {
     "node": ">=22.5.0"
