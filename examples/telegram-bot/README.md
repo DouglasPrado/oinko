@@ -90,13 +90,18 @@ of a chat does not belong in a metrics file.
 
 This example depends on the repo itself (`"@gba/ai-harness": "file:../../"`).
 pnpm does not symlink that — it copies the package into its store using
-hardlinks, which makes two different rules:
+hardlinks. So:
 
-- **Changed an existing SDK file?** `pnpm build` at the repo root is enough;
-  the hardlink means the example sees it immediately.
-- **Added a new SDK file?** The copy has no such file and never will. Run
-  `pnpm install --ignore-workspace --force` here, or you get
-  `ERR_MODULE_NOT_FOUND` for a module that plainly exists at the root.
+- **Changed an existing SDK file?** `pnpm build` at the repo root is usually
+  enough: the hardlink means the example sees the new bytes.
+- **Added a new SDK file, or rebuilt after `rm -rf dist`?** Run
+  `pnpm install --ignore-workspace --force` here. A new file was never linked,
+  and deleting `dist` breaks every existing link at once — the example then
+  keeps running the previous build, silently, including for files that did not
+  change.
+
+When in doubt, reinstall: the cost is seconds, and the failure mode is a bug
+you already fixed still reproducing.
 
 `--ignore-workspace` is required in both cases: the root `pnpm-workspace.yaml`
 makes plain `pnpm install` resolve to the root package and report
