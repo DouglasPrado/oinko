@@ -12,7 +12,7 @@
   "dependencies": {
     "dotenv": "^16.4.0",
     "grammy": "^1.30.0",
-    "@gba/ai-harness": "file:../../",
+    "@gba/ai-harness": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
