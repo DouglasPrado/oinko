@@ -1,8 +1,8 @@
 [
   {
-    "name": "dist/ total (raw + gzipped via tar)",
+    "name": "dist/ total (raw + gzipped via tar) \u2014 459 KB antes da camada de telemetria, 498 KB com ela; teto subido para acomodar enricher, purge e wiring",
     "path": "dist/**/*.{js,d.ts}",
-    "limit": "500 KB",
+    "limit": "560 KB",
     "brotli": false,
     "gzip": false
   },
