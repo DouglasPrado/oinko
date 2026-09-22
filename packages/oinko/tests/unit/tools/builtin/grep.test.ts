@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -100,10 +100,17 @@ describe('builtin/grep', () => {
   describe('ReDoS protection (issue #7)', () => {
     it('should reject patterns with nested quantifiers like (a+)+', async () => {
       const tool = createGrepTool();
-      const result = await tool.execute({ pattern: '(a+)+b', path: tempDir }, signal);
-      const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
-      expect(parsed.isError).toBe(true);
-      expect(parsed.content).toMatch(/complex|ReDoS/i);
+      // Intentionally unsafe input: the guard must reject it before RegExp construction.
+      const compile = vi.spyOn(globalThis, 'RegExp');
+      try {
+        const result = await tool.execute({ pattern: '(a+)+b', path: tempDir }, signal);
+        expect(compile).not.toHaveBeenCalled();
+        const parsed = typeof result === 'string' ? { content: result, isError: false } : result;
+        expect(parsed.isError).toBe(true);
+        expect(parsed.content).toMatch(/complex|ReDoS/i);
+      } finally {
+        compile.mockRestore();
+      }
     });
 
     it('should reject patterns with consecutive quantifiers like a+*', async () => {

@@ -18,7 +18,9 @@ const BASE_URL = process.env.LLM_BASE_URL;
  */
 const EMBEDDING_MODEL =
   process.env.EMBEDDING_MODEL ??
-  (BASE_URL?.includes('api.openai.com') ? 'text-embedding-3-small' : undefined);
+  (BASE_URL && URL.canParse(BASE_URL) && new URL(BASE_URL).hostname === 'api.openai.com'
+    ? 'text-embedding-3-small'
+    : undefined);
 
 export const hasLLM = Boolean(LLM_KEY);
 export const hasJev = Boolean(JEV_KEY);
