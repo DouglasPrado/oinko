@@ -32,3 +32,16 @@ export async function makeTempDir(prefix: string): Promise<string> {
   const { join } = await import('node:path');
   return realpath(await mkdtemp(join(tmpdir(), prefix)));
 }
+
+/** Monta uma Response SSE a partir das linhas de evento, como o provedor emite. */
+export function createSSEResponse(events: string[]): Response {
+  const text = events.join('\n\n') + '\n\n';
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(text));
+      controller.close();
+    },
+  });
+  return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+}

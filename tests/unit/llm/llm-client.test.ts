@@ -1,18 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LLMClient } from '../../../src/llm/llm-client.js';
 import type { StreamChunk } from '../../../src/llm/message-types.js';
-
-function createSSEResponse(events: string[]): Response {
-  const text = events.join('\n\n') + '\n\n';
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(encoder.encode(text));
-      controller.close();
-    },
-  });
-  return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
-}
+import { createSSEResponse } from '../../test-helpers.js';
 
 function mockFetch(response: Response) {
   return vi.spyOn(globalThis, 'fetch').mockResolvedValue(response);

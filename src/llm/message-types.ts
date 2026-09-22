@@ -1,4 +1,5 @@
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
+import type { LLMUsageDetail } from '../contracts/entities/telemetry.js';
 
 /** Message format for OpenAI-compatible APIs */
 export interface LLMMessage {
@@ -65,7 +66,20 @@ export type StreamChunk =
   | { type: 'content'; data: string }
   | { type: 'tool_call'; id: string; name: string; arguments: string }
   | { type: 'reasoning'; data: string }
-  | { type: 'done'; finishReason: string; usage?: TokenUsage };
+  | {
+      type: 'done';
+      finishReason: string;
+      usage?: TokenUsage;
+      /** Custo real e metadados por chamada. Ausente quando o provedor nao informa. */
+      usageDetail?: LLMUsageDetail;
+      /** Do primeiro byte de resposta ate o primeiro token. */
+      ttftMs?: number;
+      /** Da resposta aceita ate o fim do stream. */
+      durationMs?: number;
+      /** Ate a resposta ser aceita, incluindo os retries de rede. */
+      queuedMs?: number;
+      attempts?: number;
+    };
 
 /** Non-streaming chat response */
 export interface ChatResponse {
