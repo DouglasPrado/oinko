@@ -4,6 +4,7 @@ import { getAgent } from "./agent-factory.js";
 import { extractMedia, type MediaLink } from "./media-links.js";
 import { config } from "./config.js";
 import { buildAgentInput } from "./media.js";
+import { forgetImage, rememberImage } from "./pending-media.js";
 
 const TELEGRAM_MAX_LENGTH = 4096;
 const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
@@ -33,6 +34,10 @@ export async function handleReset(ctx: Context): Promise<void> {
   // but we can use a new threadId suffix to simulate a reset
   const chatId = ctx.chat!.id.toString();
   const resetKey = `reset_${chatId}`;
+
+  // Limpar a conversa inclui a imagem pendente: depois de um /reset, "a
+  // imagem que voce mandou" nao se refere mais a nada.
+  forgetImage(chatId);
 
   // Store reset timestamp in memory so the agent knows
   const agent = await getAgent();
@@ -140,6 +145,11 @@ export async function handleMessage(ctx: Context): Promise<void> {
     input = built.caption ? `${built.caption}\n\n${texto}` : texto;
   } else {
     input = built.input;
+    // A imagem fica disponivel para `preparar_imagem_enviada` durante este
+    // turno. Guardada por conversa, ela sobrevive ate ser usada ou ate a
+    // proxima foto chegar — quem manda a foto num turno e pede a edicao no
+    // seguinte continua atendido.
+    if (built.image) rememberImage(chatId, built.image);
   }
 
   // Show "typing" indicator

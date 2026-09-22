@@ -1,6 +1,7 @@
 import type { Context } from 'grammy';
 import type { ContentPart } from '@gba/ai-harness';
 import { config } from './config.js';
+import type { PendingImage } from './pending-media.js';
 
 /**
  * Teto do que vale a pena inlinar.
@@ -25,7 +26,13 @@ const TELEGRAM_FILE_HOST = 'https://api.telegram.org';
 
 /** O que o handler deve fazer com a mensagem que chegou. */
 export type BuiltInput =
-  | { kind: 'ok'; input: string | ContentPart[] }
+  /**
+   * `image` acompanha o turno quando a mensagem trouxe uma foto. O modelo ve a
+   * imagem inline no `input`, mas um data URL nao serve como referencia para o
+   * Higgsfield: ele quer um `media_id`, que so sai de um upload dos bytes. Por
+   * isso os bytes viajam junto, para o handler guarda-los na conversa.
+   */
+  | { kind: 'ok'; input: string | ContentPart[]; image?: PendingImage }
   /** Audio a transcrever antes de virar turno — o handler faz a chamada. */
   | { kind: 'audio'; audio: Uint8Array; filename: string; caption: string }
   | { kind: 'unsupported'; reason: string }
@@ -83,6 +90,12 @@ export function pickPhotoSize(sizes: readonly PhotoSize[]): PhotoSize | undefine
     (maior, atual) => ((atual.file_size ?? 0) > (maior?.file_size ?? -1) ? atual : maior),
     undefined,
   );
+}
+
+/** O nome do arquivo derivado do mime, para o upload que quiser um. */
+export function imageFilename(mimeType: string): string {
+  const extensao = mimeType.split('/')[1]?.split(';')[0] ?? 'jpg';
+  return `imagem.${extensao === 'jpeg' ? 'jpg' : extensao}`;
 }
 
 /** Os bytes viram o data URL que o provedor aceita inline. */
@@ -173,6 +186,7 @@ export async function buildAgentInput(
   return {
     kind: 'ok',
     input: legenda ? [{ type: 'text', text: legenda }, imagem] : [imagem],
+    image: { bytes, mimeType, filename: imageFilename(mimeType) },
   };
 }
 

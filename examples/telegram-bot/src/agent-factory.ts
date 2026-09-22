@@ -9,6 +9,28 @@ import { config } from "./config.js";
 import { createTools } from "./tools.js";
 import { CREDENTIAL_PATH, higgsfieldHeaders, readCredential } from "./higgsfield-auth.js";
 
+/**
+ * Regras de geracao, so quando o Higgsfield esta ligado.
+ *
+ * Cada linha aqui veio de um turno que deu errado: o modelo inventou ids como
+ * `higgsfield_preset` e `GPT Image 2`, ficou repetindo `job_status` de 26 em 26
+ * segundos, e desistiu de usar a foto recebida porque procurou a ferramenta de
+ * upload em vez da que o bot oferece.
+ */
+const GERACAO_PROMPT = config.higgsfield.enabled
+  ? `
+
+Imagem e video (Higgsfield):
+- o id do modelo sai de models_explore; nunca invente um nem reaproveite de
+  memoria — um id errado gasta uma chamada para dar erro
+- para usar a foto que a pessoa mandou como referencia, chame
+  preparar_imagem_enviada e passe o media_id em medias
+- depois de submeter, espere com jobs_wait; job_status em laco so queima
+  contexto
+- mande o link do resultado cru na resposta, sem markdown de imagem: quem
+  monta o envio da foto e o bot`
+  : '';
+
 let agent: Agent | null = null;
 let decisionSink: JsonlSink | null = null;
 
@@ -62,7 +84,7 @@ export async function getAgent(): Promise<Agent> {
       baseUrl: config.transcription.baseUrl,
       model: config.transcription.model,
     } : undefined,
-    /**
+        /**
      * O prompt cobre so o que o SDK nao injeta.
      *
      * As regras de uso de ferramenta ja chegam por `buildToolUsagePrompt`, e a
@@ -86,7 +108,7 @@ O canal e o Telegram:
 - mensagens curtas, que caibam na tela de um celular
 - texto simples ou markdown minimo: negrito, italico, bloco de codigo
 - nada de titulo com #, que o Telegram nao renderiza
-- responda no idioma em que a pessoa escreveu`,
+- responda no idioma em que a pessoa escreveu${GERACAO_PROMPT}`,
 
     memory: {
       enabled: true,
