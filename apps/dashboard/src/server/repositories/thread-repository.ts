@@ -14,6 +14,7 @@ interface ThreadRow {
   unknown_cost_count: number;
   error_count: number;
   last_model: string;
+  model_count: number;
   last_started_at: number;
   total_duration_ms: number;
 }
@@ -54,7 +55,13 @@ export function listThreads(filters: ThreadFilters): ThreadSummary[] {
          SUM(cost_usd)                                   AS cost_usd,
          SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END) AS unknown_cost_count,
          SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
-         MAX(model)                                      AS last_model,
+         -- Subquery, e nao MAX(model): MAX devolve o maior alfabetico, que
+         -- numa thread roteada entre gpt-4o-mini e gpt-5.6 nomeia o modelo
+         -- errado como se fosse o da conversa.
+         (SELECT model FROM executions inner_e
+           WHERE inner_e.thread_id = executions.thread_id
+           ORDER BY started_at DESC LIMIT 1)             AS last_model,
+         COUNT(DISTINCT model)                           AS model_count,
          MAX(started_at)                                 AS last_started_at,
          COALESCE(SUM(duration_ms), 0)                   AS total_duration_ms
        FROM executions
@@ -76,6 +83,7 @@ export function listThreads(filters: ThreadFilters): ThreadSummary[] {
       unknownCostCount: row.unknown_cost_count,
       errorCount: row.error_count,
       lastModel: row.last_model,
+      modelCount: row.model_count,
       lastStartedAt: row.last_started_at,
       totalDurationMs: row.total_duration_ms,
     }),

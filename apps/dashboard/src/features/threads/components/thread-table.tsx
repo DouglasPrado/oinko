@@ -22,7 +22,7 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
               Thread
             </th>
             <th scope="col" className="py-2 pr-4 font-normal">
-              Modelo
+              Ultimo modelo
             </th>
             <th scope="col" className="py-2 pr-4 text-right font-normal">
               Respostas
@@ -55,7 +55,14 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
                   <span className="ml-2 text-xs text-fault">{thread.errorCount} com erro</span>
                 ) : null}
               </td>
-              <td className="py-2 pr-4 text-ink-muted">{thread.lastModel}</td>
+              <td className="py-2 pr-4 text-ink-muted">
+                {thread.lastModel}
+                {thread.modelCount > 1 ? (
+                  <span className="ml-1.5 text-xs" title="a conversa usou mais de um modelo">
+                    +{thread.modelCount - 1}
+                  </span>
+                ) : null}
+              </td>
               <td className="tabular py-2 pr-4 text-right">{thread.executionCount}</td>
               <td className="tabular py-2 pr-4 text-right">{formatTokens(thread.totalTokens)}</td>
               <td className="tabular py-2 pr-4 text-right text-spend">

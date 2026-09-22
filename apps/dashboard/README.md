@@ -16,6 +16,12 @@ pnpm dev     # http://127.0.0.1:3111
 
 Aponte `TELEMETRY_DB_PATH` no `.env.local` para o banco que o seu agente escreve.
 
+Para ver o bot do Telegram deste repo, que ja vem com a telemetria ligada:
+
+```
+TELEMETRY_DB_PATH=../../examples/telegram-bot/data/telemetry.db
+```
+
 ## Ligar a telemetria no agente
 
 ```ts

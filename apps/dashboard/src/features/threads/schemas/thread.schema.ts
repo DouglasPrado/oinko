@@ -10,6 +10,8 @@ export const ThreadSummarySchema = z.object({
   unknownCostCount: z.number().int(),
   errorCount: z.number().int(),
   lastModel: z.string(),
+  /** Quantos modelos distintos a thread usou. Mais de um significa roteamento. */
+  modelCount: z.number().int(),
   lastStartedAt: z.number().int(),
   totalDurationMs: z.number().int(),
 });
