@@ -18,6 +18,11 @@ export interface PutPayloadOptions {
   redacted?: boolean;
   /** Caracteres do preview. Default 2048. */
   previewChars?: number;
+  /**
+   * Grava o corpo. Com `false`, a linha guarda identidade e tamanho reais mas
+   * corpo vazio — o modo `hashed`, para quem mede volume sem reter conteudo.
+   */
+  storeBody?: boolean;
   /** Relogio injetavel, para teste. */
   now?: number;
 }
@@ -49,10 +54,11 @@ export class PayloadStore {
   put(content: string, options?: PutPayloadOptions): PayloadRef {
     const id = createHash('sha256').update(content, 'utf8').digest('hex');
     const sizeBytes = Buffer.byteLength(content, 'utf8');
-    const preview = content.slice(0, options?.previewChars ?? DEFAULT_PREVIEW_CHARS);
+    const stored = options?.storeBody === false ? '' : content;
+    const preview = stored.slice(0, options?.previewChars ?? DEFAULT_PREVIEW_CHARS);
     const redacted = options?.redacted === false ? 0 : 1;
 
-    this.upsert.run(id, sizeBytes, preview, redacted, content, options?.now ?? Date.now());
+    this.upsert.run(id, sizeBytes, preview, redacted, stored, options?.now ?? Date.now());
 
     return { id, sizeBytes, preview };
   }
