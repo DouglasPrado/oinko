@@ -155,7 +155,7 @@ export async function handleMessage(ctx: Context): Promise<void> {
         case "tool_call_start": {
           isSearching = true;
           const toolName = event.toolCall.function.name;
-          // Clean up MCP namespace for display: mcp__albert__list_companies → list_companies
+          // Tira o namespace do MCP para exibir: mcp__servidor__buscar → buscar
           const displayName = toolName.replace(/^mcp__[^_]+__/, "");
           const statusMsg = `⚙️ ${displayName}...`;
 

@@ -70,12 +70,4 @@ export const config = {
      */
     capturePayloads: (process.env.TELEMETRY_CAPTURE ?? 'full') as 'none' | 'hashed' | 'full',
   },
-  mcp: {
-    albert: {
-      url: process.env.MCP_ALBERT_URL,
-      headers: process.env.MCP_ALBERT_TOKEN
-        ? { 'Authorization': `Bearer ${process.env.MCP_ALBERT_TOKEN}` }
-        : undefined,
-    },
-  },
 };
