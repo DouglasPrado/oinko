@@ -29,7 +29,7 @@ import { Agent } from '@gba/ai-harness';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: 'anthropic/claude-sonnet-5',
 });
 
 const response = await agent.chat('What is TypeScript?');

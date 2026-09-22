@@ -332,11 +332,16 @@ Maximum of 3 simultaneously active skills (configurable via `skills.maxActiveSki
 Persistent file-based memory system inspired by Claude Code.
 
 ```typescript
-// Save memory explicitly
-await agent.remember('User prefers dark mode', 'user');
+// Save memory inside a thread — the scope is required, so it cannot be
+// forgotten into the pile every conversation reads.
+await agent.remember('User prefers dark mode', 'thread-42');
 
-// Search relevant memories
-const memories = await agent.recall('What are the user preferences?');
+// Save something every thread should see — a named, deliberate call.
+await agent.rememberGlobal('Always answer in Portuguese', 'project');
+
+// List what this thread can see, ranked by affinity with the query.
+// Local and deterministic: no model call.
+const memories = await agent.recall('What are the user preferences?', 'thread-42');
 
 // Automatic extraction: after each turn, the agent extracts memories
 // from the conversation in the background (fire-and-forget)
@@ -346,17 +351,111 @@ Memories are `.md` files with YAML frontmatter in `.harness/memory/` (configurab
 
 Add `pinned: true` to the frontmatter to always inject a memory into the context, bypassing the LLM relevance selector. Use sparingly for durable reference content (team rosters, platform catalogs, global preferences).
 
+## Decider (typed in-loop decisions)
+
+Some decisions inside the loop are not about generating text — they are classifications. Without a decider, the harness decides whether a turn is worth remembering with a coin flip (`Math.random() < samplingRate`), which drops most facts a user states in passing.
+
+A `Decider` answers typed questions with calibrated confidence, cheaply enough to ask on every turn:
+
+```typescript
+import { Agent, JevDecider } from '@gba/ai-harness';
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+  memory: { minConfidence: 0.7 },
+});
+```
+
+With a decider configured, memory extraction runs when the turn actually holds a durable fact instead of when the dice say so — the expensive LLM extractor only fires on a positive verdict.
+
+The interface is provider-agnostic; implement `Decider` to plug any engine:
+
+```typescript
+interface Decider {
+  decide<Q extends Record<string, Question>>(
+    state: string,
+    questions: Q,
+    signal?: AbortSignal,
+  ): Promise<Answers<Q>>;
+}
+```
+
+Questions come in three shapes — `bool`, `choice` and `score` — and every question about the same state travels in a single request. If the decider errors or times out, the harness falls back to the sampling heuristic, so behaviour without a decider is unchanged. See [ADR-007](docs/adr/adr-007-pluggable-decider.md).
+
+Where the decider is consulted, when one is configured:
+
+| Point               | Without a decider                 | With one                                    |
+| ------------------- | --------------------------------- | ------------------------------------------- |
+| Memory extraction   | `Math.random() < samplingRate`    | Asked whether the turn holds a durable fact |
+| Memory relevance    | A full LLM call picking filenames | One yes/no per candidate, in one request    |
+| Knowledge retrieval | Searched on every single turn     | Skipped when the turn needs no lookup       |
+| Knowledge ranking   | Cosine similarity, `minScore` cut | Reranked by judged relevance                |
+| Skill activation    | One embedding per skill, per turn | A single choice question                    |
+| Tool retry          | Retries any non-abort error       | Only errors judged transient                |
+| Model routing       | Always `model`                    | Trivial turns go to `routing.fastModel`     |
+
+Each point degrades on its own: an unreachable decider falls back to the
+behaviour in the middle column, never to an error.
+
+### Measuring it
+
+None of the above is worth trusting until it is measured against the column it
+replaced. The instrumentation ships with the SDK:
+
+```typescript
+import { Agent, JevDecider, RecordingDecider, JsonlSink } from '@gba/ai-harness';
+
+const sink = new JsonlSink('./decisions.jsonl');
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new RecordingDecider(
+    new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+    (record) => sink.write(record),
+  ),
+});
+```
+
+Every decision is logged with its point, verdict, confidence and latency. The
+evaluated state is stored as a short digest by default, so no user content
+reaches the file — `{ stateMode: 'full' }` keeps the raw text and belongs only
+where storing it is intended.
+
+`ShadowDecider` runs a challenger alongside the engine in charge and logs how
+often they disagree, without letting the challenger change any behaviour.
+
+Then read the log:
+
+```bash
+pnpm analyze:decisions decisions.jsonl --labels labels.jsonl
+```
+
+Without labels it reports volume, latency, verdict mix and how much expensive
+work each point avoided. With a labels file (one `{"id","outcome"}` per line)
+it adds accuracy and a calibration table — whether a stated confidence of 0.8
+really means right 80% of the time, which is what makes the threshold in each
+gate meaningful rather than a guess.
+
 ## Knowledge (RAG)
 
 ```typescript
-await agent.ingestKnowledge({
-  id: 'docs-api',
-  content: apiDocs,
-  metadata: { source: 'api-docs.md' },
-});
+// Documents belong to a scope. Every agent in a pool shares one database, so
+// an unscoped ingest would turn one conversation's document into everyone's
+// context.
+await agent.ingestKnowledge(
+  { id: 'docs-api', content: apiDocs, metadata: { source: 'api-docs.md' } },
+  'thread-42',
+);
 
-// The agent automatically searches knowledge when relevant
-await agent.chat('How do I authenticate with the API?');
+// A shared collection is a scope like any other — deliberate, and named.
+await agent.ingestKnowledge({ content: platformDocs }, 'platform-docs');
+
+// Read a conversation's own documents plus the shared collection.
+const found = await agent.searchKnowledge('how do I authenticate?', ['thread-42', 'platform-docs']);
+
+// During a turn the agent searches the thread's own scope automatically.
+await agent.chat('How do I authenticate with the API?', { threadId: 'thread-42' });
 ```
 
 ## MCP (Model Context Protocol)
@@ -489,6 +588,31 @@ await agent.chat('Create a GitHub issue with labels bug and urgent');
 //   title: "...", labels: ["bug", "urgent"]
 // })
 ```
+
+## Model registry
+
+What the SDK knows about a model — context window, whether it is a reasoning
+family, whether it accepts the system role — lives in one file:
+`src/llm/model-registry.ts`. Matching is by first hit, so a specific family
+must sit above the shorter one it contains.
+
+A model nobody registered still works: it falls back to a conservative 128k
+window, and the agent logs a warning naming it once. That warning exists
+because silence was the real bug — a 1M model read as 128k compacts its
+context with most of the window free, and nothing says so.
+
+The registry ages on its own, since providers add models and change windows
+without any commit here. To see the drift:
+
+```bash
+pnpm check:models
+```
+
+It compares the registry against a provider catalogue and reports three
+things: windows that disagree (bugs, and it exits non-zero), catalogue models
+the registry ignores (gaps), and registry families the catalogue no longer
+carries. It needs the network, so it is a script rather than a test — run it
+before publishing a version.
 
 ## Streaming Events
 
@@ -915,11 +1039,16 @@ Maximo de 3 skills ativas simultaneamente (configuravel via `skills.maxActiveSki
 Sistema de memoria persistente baseado em arquivos markdown (inspirado no Claude Code).
 
 ```typescript
-// Salvar memoria explicitamente
-await agent.remember('User prefers dark mode', 'user');
+// Salva memoria dentro de uma thread — o escopo e obrigatorio, entao nao da
+// para esquecer e cair no acervo que toda conversa le.
+await agent.remember('User prefers dark mode', 'thread-42');
 
-// Buscar memorias relevantes
-const memories = await agent.recall('What are the user preferences?');
+// Salva algo que toda thread deve ver — chamada propria, dita em voz alta.
+await agent.rememberGlobal('Always answer in Portuguese', 'project');
+
+// Lista o que esta thread enxerga, ordenado por afinidade com a query.
+// Local e deterministico: sem chamada de modelo.
+const memories = await agent.recall('What are the user preferences?', 'thread-42');
 
 // Extracao automatica: apos cada turn, o agente extrai memorias
 // da conversa em background (fire-and-forget)
@@ -929,14 +1058,108 @@ Memorias sao arquivos `.md` com frontmatter YAML em `.harness/memory/` (configur
 
 Adicione `pinned: true` no frontmatter para sempre injetar uma memoria no contexto, ignorando o seletor de relevancia LLM. Use com parcimonia para conteudo de referencia durador (mapa do time, catalogo de plataformas, preferencias globais).
 
+## Decider (decisoes tipadas dentro do loop)
+
+Algumas decisoes dentro do loop nao sao sobre gerar texto — sao classificacoes. Sem um decisor, o harness decide se um turno merece virar memoria com um sorteio (`Math.random() < samplingRate`), o que descarta a maior parte dos fatos ditos de passagem.
+
+Um `Decider` responde perguntas tipadas com confianca calibrada, barato o suficiente para perguntar em todo turno:
+
+```typescript
+import { Agent, JevDecider } from '@gba/ai-harness';
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+  memory: { minConfidence: 0.7 },
+});
+```
+
+Com um decisor configurado, a extracao de memoria roda quando o turno realmente tem um fato duravel, em vez de quando o sorteio manda — o extrator LLM, que e o caro, so dispara com veredito positivo.
+
+A interface e agnostica de fornecedor; implemente `Decider` para plugar qualquer engine:
+
+```typescript
+interface Decider {
+  decide<Q extends Record<string, Question>>(
+    state: string,
+    questions: Q,
+    signal?: AbortSignal,
+  ): Promise<Answers<Q>>;
+}
+```
+
+As perguntas tem tres formatos — `bool`, `choice` e `score` — e todas sobre o mesmo estado viajam numa unica requisicao. Se o decisor falhar ou estourar o timeout, o harness cai na heuristica de amostragem: sem decisor, o comportamento e o mesmo de sempre. Veja a [ADR-007](docs/adr/adr-007-pluggable-decider.md).
+
+Onde o decisor e consultado, quando ha um configurado:
+
+| Ponto                   | Sem decisor                               | Com decisor                                |
+| ----------------------- | ----------------------------------------- | ------------------------------------------ |
+| Extracao de memoria     | `Math.random() < samplingRate`            | Pergunta se o turno tem fato duravel       |
+| Relevancia de memoria   | Uma chamada LLM escolhendo arquivos       | Um sim/nao por candidato, numa requisicao  |
+| Busca de conhecimento   | Busca em todo turno                       | Pula quando o turno nao precisa            |
+| Ranking de conhecimento | Similaridade de cosseno, corte `minScore` | Rerank por relevancia julgada              |
+| Ativacao de skill       | Um embedding por skill, por turno         | Uma unica pergunta de escolha              |
+| Retry de tool           | Retenta qualquer erro nao-abort           | So os erros julgados transitorios          |
+| Roteamento de modelo    | Sempre `model`                            | Turno trivial vai para `routing.fastModel` |
+
+Cada ponto degrada sozinho: decisor fora do ar cai no comportamento da coluna
+do meio, nunca em erro.
+
+### Como medir
+
+Nada disso merece confianca antes de ser medido contra a coluna que substituiu.
+O instrumental vem junto:
+
+```typescript
+import { Agent, JevDecider, RecordingDecider, JsonlSink } from '@gba/ai-harness';
+
+const sink = new JsonlSink('./decisions.jsonl');
+
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  decider: new RecordingDecider(
+    new JevDecider({ apiKey: process.env.TYPESAFE_API_KEY! }),
+    (record) => sink.write(record),
+  ),
+});
+```
+
+Cada decisao vai para o log com ponto, veredito, confianca e latencia. O estado
+avaliado e gravado como digest por padrao, entao nenhum conteudo do usuario
+chega ao arquivo — `{ stateMode: 'full' }` guarda o texto cru e so cabe onde
+guardar isso e intencional.
+
+O `ShadowDecider` roda um desafiante ao lado do motor no comando e registra
+quantas vezes discordam, sem deixar o desafiante mudar comportamento nenhum.
+
+Depois, leia o log:
+
+```bash
+pnpm analyze:decisions decisions.jsonl --labels labels.jsonl
+```
+
+Sem rotulos ele reporta volume, latencia, mistura de vereditos e quanto
+trabalho caro cada ponto evitou. Com um arquivo de rotulos (um
+`{"id","outcome"}` por linha) entram acuracia e a tabela de calibracao — se uma
+confianca declarada de 0.8 significa mesmo acertar 80% das vezes, que e o que
+torna o limiar de cada gate uma escolha e nao um chute.
+
 ## Knowledge (RAG)
 
 ```typescript
-await agent.ingestKnowledge({
-  id: 'docs-api',
-  content: apiDocs,
-  metadata: { source: 'api-docs.md' },
-});
+// Documento pertence a um escopo. Todos os agentes de um pool compartilham o
+// mesmo banco, entao um ingest sem escopo transforma o documento de uma
+// conversa em contexto de todas.
+await agent.ingestKnowledge(
+  { id: 'docs-api', content: apiDocs, metadata: { source: 'api-docs.md' } },
+  'thread-42',
+);
+
+// Um acervo compartilhado e um escopo como outro qualquer — deliberado e com nome.
+await agent.ingestKnowledge({ content: platformDocs }, 'platform-docs');
+
+// Le o que a conversa ingeriu mais o acervo compartilhado.
+const found = await agent.searchKnowledge('como autentico?', ['thread-42', 'platform-docs']);
 
 // O agente busca automaticamente no knowledge quando relevante
 await agent.chat('How do I authenticate with the API?');
@@ -1072,6 +1295,30 @@ await agent.chat('Crie uma issue no GitHub com labels bug e urgent');
 //   title: "...", labels: ["bug", "urgent"]
 // })
 ```
+
+## Registro de modelos
+
+O que o SDK sabe sobre um modelo — janela de contexto, se e familia de
+raciocinio, se aceita role system — vive num arquivo so:
+`src/llm/model-registry.ts`. O match e por primeira ocorrencia, entao uma
+familia especifica precisa ficar acima da mais curta que a contem.
+
+Modelo que ninguem registrou continua funcionando: cai numa janela
+conservadora de 128k, e o agente loga um aviso nomeando ele uma vez. O aviso
+existe porque o silencio era o bug de verdade — um modelo de 1M lido como
+128k compacta o contexto com quase toda a janela livre, e nada avisa.
+
+O registro envelhece sozinho, porque os provedores mudam catalogo sem commit
+nenhum aqui. Para ver a deriva:
+
+```bash
+pnpm check:models
+```
+
+Ele compara o registro com o catalogo do provedor e reporta tres coisas:
+janelas divergentes (bug, e sai com codigo != 0), modelos do catalogo que o
+registro ignora (lacuna) e familias do registro que o catalogo nao tem mais.
+Precisa de rede, entao e script e nao teste — rode antes de publicar versao.
 
 ## Streaming Events
 

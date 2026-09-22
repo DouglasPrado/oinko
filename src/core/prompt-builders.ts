@@ -20,27 +20,23 @@ import type { AgentTool } from '../contracts/entities/agent-tool.js';
 export function buildToolUsagePrompt(tools: AgentTool[]): string {
   if (tools.length === 0) return '';
 
+  // No list of tools here: name, description and schema of every one already
+  // travel in the request's `tools` field. Repeating them costs tokens on each
+  // turn and grows with the toolset — at 25 tools it was ~840 tokens of pure
+  // duplication. What follows is only what the protocol cannot express.
   const lines: string[] = [
-    '# Available Tools',
+    '# Using Tools',
     '',
-    'You have access to the following tools. Use them proactively when the user asks for data, actions, or analysis — do not describe what you would do, just do it.',
+    'Use the tools available to you proactively when the user asks for data, actions, or analysis — do not describe what you would do, just do it.',
     '',
   ];
 
-  // Categorize tools
   const destructive: AgentTool[] = [];
-
   for (const tool of tools) {
     const dest = typeof tool.isDestructive === 'function' ? false : tool.isDestructive === true;
     if (dest) destructive.push(tool);
   }
 
-  // List all tools with descriptions
-  for (const tool of tools) {
-    lines.push(`- **${tool.name}**: ${tool.description}`);
-  }
-
-  lines.push('');
   lines.push('## Tool Usage Guidelines');
   lines.push('');
   lines.push(

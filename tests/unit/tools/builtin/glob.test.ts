@@ -3,13 +3,14 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createGlobTool } from '../../../../src/tools/builtin/glob.js';
+import { makeTempDir } from '../../../test-helpers.js';
 
 describe('builtin/glob', () => {
   let tempDir: string;
   const signal = new AbortController().signal;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'glob-tool-'));
+    tempDir = await makeTempDir('glob-tool-');
     await mkdir(join(tempDir, 'src'), { recursive: true });
     await mkdir(join(tempDir, 'docs'), { recursive: true });
     await writeFile(join(tempDir, 'src', 'index.ts'), 'export {}');

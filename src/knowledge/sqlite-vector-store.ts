@@ -23,14 +23,15 @@ export class SQLiteVectorStore implements VectorStore {
     this.database.db
       .prepare(
         `
-      INSERT OR REPLACE INTO vectors (id, content, embedding, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO vectors (id, content, embedding, scope, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `,
       )
       .run(
         chunk.id,
         chunk.content,
         Buffer.from(chunk.embedding.buffer),
+        chunk.scope,
         chunk.metadata ? JSON.stringify(chunk.metadata) : null,
         chunk.createdAt,
       );
@@ -40,8 +41,8 @@ export class SQLiteVectorStore implements VectorStore {
   upsertMany(chunks: KnowledgeChunk[]): void {
     if (chunks.length === 0) return;
     const stmt = this.database.db.prepare(`
-      INSERT OR REPLACE INTO vectors (id, content, embedding, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO vectors (id, content, embedding, scope, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     this.database.transaction(() => {
       for (const c of chunks) {
@@ -49,6 +50,7 @@ export class SQLiteVectorStore implements VectorStore {
           c.id,
           c.content,
           Buffer.from(c.embedding.buffer),
+          c.scope,
           c.metadata ? JSON.stringify(c.metadata) : null,
           c.createdAt,
         );
@@ -70,10 +72,19 @@ export class SQLiteVectorStore implements VectorStore {
     return new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
   }
 
-  search(queryEmbedding: Float32Array, topK: number): RetrievedKnowledge[] {
+  search(
+    queryEmbedding: Float32Array,
+    topK: number,
+    scopes: readonly string[],
+  ): RetrievedKnowledge[] {
+    if (scopes.length === 0) return [];
+
+    // The scope filter lives in SQL, not in a post-filter: rows from other
+    // conversations must never be read into this process's memory at all.
+    const placeholders = scopes.map(() => '?').join(', ');
     const rows = this.database.db
-      .prepare('SELECT * FROM vectors LIMIT ?')
-      .all(MAX_SCAN) as unknown as VectorRow[];
+      .prepare(`SELECT * FROM vectors WHERE scope IN (${placeholders}) LIMIT ?`)
+      .all(...scopes, MAX_SCAN) as unknown as VectorRow[];
 
     const scored = rows.map((row) => {
       const embedding = this.bufferToFloat32(row.embedding);
@@ -101,6 +112,7 @@ export class SQLiteVectorStore implements VectorStore {
       id: row.id,
       content: row.content,
       embedding: this.bufferToFloat32(row.embedding),
+      scope: row.scope ?? '',
       metadata: row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : undefined,
       createdAt: row.created_at,
     }));
@@ -117,6 +129,8 @@ interface VectorRow {
   id: string;
   content: string;
   embedding: Uint8Array;
+  /** Null for rows written before scoping existed — see migrateV2. */
+  scope: string | null;
   metadata: string | null;
   created_at: number;
 }

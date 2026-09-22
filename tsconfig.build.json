@@ -1,0 +1,9 @@
+{
+  "//": "Codigo executavel: sem comentarios. Quem roda o dist nunca os le, e eles custavam 85 KB no pacote publicado.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "removeComments": true,
+    "declaration": false,
+    "declarationMap": false
+  }
+}

@@ -275,7 +275,7 @@ import { z } from 'zod';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: 'anthropic/claude-sonnet-5',
   systemPrompt: `You are a research assistant. When the user asks a question:
 1. Use web_search to find current, authoritative information
 2. Synthesize the results into a clear, well-structured answer

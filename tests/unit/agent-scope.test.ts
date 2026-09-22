@@ -38,7 +38,7 @@ const consumir = async (agente: Agent, entrada: string, threadId: string): Promi
  * global passa a ser dito em voz alta.
  */
 describe('Agent — escopo obrigatorio de memoria e consumo por thread', () => {
-  const criados: Array<{ agente: Agent; raiz: string }> = [];
+  const criados: { agente: Agent; raiz: string }[] = [];
 
   const criarAgente = (): Agent => {
     const raiz = mkdtempSync(join(tmpdir(), 'harness-agente-'));

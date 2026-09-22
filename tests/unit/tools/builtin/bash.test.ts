@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createBashTool } from '../../../../src/tools/builtin/bash.js';
+import { realpath } from 'node:fs/promises';
 
 describe('builtin/bash', () => {
   const signal = new AbortController().signal;
@@ -48,11 +49,15 @@ describe('builtin/bash', () => {
 
   describe('sandboxing: workingDir + allowedCommands (issue #23)', () => {
     it('should restrict cwd to workingDir when set', async () => {
+      // `/tmp` is a symlink to `/private/tmp` on macOS, and `pwd` reports the
+      // resolved path. Comparing against the canonical form asserts the
+      // sandbox, not the host's layout.
+      const sandbox = await realpath('/tmp');
       const tool = createBashTool({ workingDir: '/tmp' });
       const result = await tool.execute({ command: 'pwd' }, signal);
       const content = (typeof result === 'string' ? result : result.content).trim();
-      // Must run inside /tmp, not the process cwd
-      expect(content).toBe('/tmp');
+      // Must run inside the sandbox, not the process cwd
+      expect(content).toBe(sandbox);
     });
 
     it('should allow commands matching allowedCommands prefixes', async () => {

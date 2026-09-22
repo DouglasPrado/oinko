@@ -429,6 +429,9 @@ export class MCPAdapter {
       isReadOnly,
       isDestructive,
       isConcurrencySafe: isReadOnly, // read-only tools are safe for parallel execution
+      // Whatever a remote server returns is content this conversation did not
+      // produce, so it gets screened like any other outside text.
+      untrustedOutput: true,
       execute: async (args: unknown, signal: AbortSignal): Promise<string | AgentToolResult> => {
         try {
           const controller = new AbortController();

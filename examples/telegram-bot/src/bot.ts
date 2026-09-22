@@ -41,7 +41,6 @@ bot.start({
     console.log(`Bot @${botInfo.username} started`);
     console.log(`Model: ${config.agent.model}`);
     console.log(`Tavily: ${config.tavily.apiKey ? 'enabled' : 'disabled'}`);
-    console.log(`MCP Albert: ${config.mcp.albert.url ? 'enabled' : 'disabled'}`);
     console.log(`Memory: enabled`);
     console.log('Waiting for messages...');
   },

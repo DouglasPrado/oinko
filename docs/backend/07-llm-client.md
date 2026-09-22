@@ -127,19 +127,46 @@ interface TokenUsage {
 
 > Como o client adapta parametros de reasoning por modelo?
 
-**Arquivo:** `src/agent/llm/reasoning.ts`
+**Arquivo:** `src/llm/reasoning.ts`
 
 ```typescript
-function buildReasoningArgs(model: string): Partial<StreamChatParams>;
+function buildReasoningArgs(
+  model: string,
+  params: { hasTools?: boolean; reasoningEffort?: ReasoningEffort },
+): ReasoningPlan;
+
+interface ReasoningPlan {
+  dropTemperature: boolean;
+  reasoningEffort?: ReasoningEffort;
+}
 ```
 
-| Familia | Comportamento | Parametros Especiais |
-| --- | --- | --- |
-| `anthropic/claude-*` | Extended thinking quando disponivel | `thinking` parameter |
-| `openai/o1-*` | Reasoning nativo | sem `temperature`, sem `system` role |
-| `openai/gpt-4o*` | Padrao | nenhum ajuste |
-| `google/gemini-*` | Padrao | nenhum ajuste |
-| Outros | Padrao generico | nenhum ajuste |
+O que cada familia aceita em `/chat/completions` — tudo sondado contra a API
+de verdade, nao lido da doc do provedor:
+
+| Familia | `temperature` | Function tools | Flag no registry |
+| --- | --- | --- | --- |
+| `o1-*` | so o default | sim | `noSystemRole` (sem `system` role) |
+| `o3`, `o4-*` | so o default | sim | — |
+| `gpt-5`, `gpt-5.5` | so o default | sim | — |
+| `gpt-5.4*` | qualquer valor | sim | `acceptsTemperature` |
+| `gpt-5.6*` | so o default | so com `reasoning_effort: 'none'` | `toolsRequireEffortNone` |
+| `gpt-6*` | so o default | nao — so via `/v1/responses` | `noToolsOnChatCompletions` |
+| `gpt-4o*`, `claude-*`, `gemini-*` | qualquer valor | sim | — (nao sao reasoning) |
+
+Duas regras derivadas disso:
+
+1. **`'none'` e a dobradica.** Com reasoning desligado, o mesmo modelo que
+   recusava `temperature` passa a aceitar. Por isso o effort e resolvido antes,
+   e a decisao sobre temperatura le o resultado.
+2. **Tools OU reasoning, na linha gpt-5.6.** Como as tools exigem `'none'`, um
+   turno com tools nao raciocina. Quem precisa dos dois usa `/v1/responses`,
+   que este client nao fala — ou um modelo da linha gpt-5.5 pra baixo.
+
+O `temperature` do chamador e **descartado** quando a familia o recusa, em vez
+de repassado: o provedor responde 400 a request inteira, nao ignora o campo.
+Ja o `reasoningEffort` explicito do chamador sempre ganha do que a familia
+forca — valor deliberado nao e reescrito em silencio.
 
 ---
 

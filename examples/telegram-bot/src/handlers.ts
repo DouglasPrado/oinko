@@ -36,6 +36,7 @@ export async function handleReset(ctx: Context): Promise<void> {
   try {
     await agent.remember(
       `Conversation was reset by the user at ${new Date().toISOString()}`,
+      chatId,
       "project",
     );
   } catch {
@@ -49,8 +50,10 @@ export async function handleReset(ctx: Context): Promise<void> {
  * /usage command — show token usage
  */
 export async function handleUsage(ctx: Context): Promise<void> {
+  const chatId = ctx.chat!.id.toString();
   const agent = await getAgent();
-  const usage = agent.getUsage();
+  // Usage for THIS chat — the process total would show other people's spend.
+  const usage = agent.getUsage(chatId);
 
   await ctx.reply(
     `*Token Usage*\n\n` +
@@ -74,9 +77,12 @@ export async function handleMemory(ctx: Context): Promise<void> {
     return;
   }
 
+  const chatId = ctx.chat!.id.toString();
   const agent = await getAgent();
   try {
-    const filename = await agent.remember(text);
+    // Scoped to this chat: /memory used to write into the shared pile that
+    // every other conversation reads.
+    const filename = await agent.remember(text, chatId);
     await ctx.reply(`Memory saved: ${filename}`);
   } catch (error) {
     await ctx.reply("Failed to save memory. Memory subsystem may be disabled.");

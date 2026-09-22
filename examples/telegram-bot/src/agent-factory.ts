@@ -1,8 +1,39 @@
-import { Agent } from "@gba/ai-harness";
+import {
+  Agent,
+  JevDecider,
+  RecordingDecider,
+  JsonlSink,
+  type Decider,
+} from "@gba/ai-harness";
 import { config } from "./config.js";
 import { createTools } from "./tools.js";
 
 let agent: Agent | null = null;
+let decisionSink: JsonlSink | null = null;
+
+/**
+ * Monta o decisor com gravacao ligada.
+ *
+ * Tudo que ele decidir vai para um JSONL — ponto, veredito, confianca e
+ * latencia — para depois medir com `pnpm analyze:decisions`. O estado avaliado
+ * e gravado como digest: e mensagem de usuario, e log nao e lugar para isso.
+ *
+ * Sem TYPESAFE_API_KEY devolve undefined, e o agente segue nas heuristicas.
+ */
+function createDecider(): Decider | undefined {
+  if (!config.typesafe.apiKey) {
+    console.log("TYPESAFE_API_KEY ausente — rodando sem decisor (heuristicas de sempre)");
+    return undefined;
+  }
+
+  decisionSink = new JsonlSink(config.typesafe.decisionLog);
+  console.log(`Decisor ligado — log em ${config.typesafe.decisionLog}`);
+
+  return new RecordingDecider(
+    new JevDecider({ apiKey: config.typesafe.apiKey }),
+    (record) => decisionSink?.write(record),
+  );
+}
 
 /**
  * Creates and configures the shared Agent instance.
@@ -11,6 +42,8 @@ let agent: Agent | null = null;
  */
 export async function getAgent(): Promise<Agent> {
   if (agent) return agent;
+
+  const decider = createDecider();
 
   agent = Agent.create({
     apiKey: config.agent.apiKey,
@@ -55,6 +88,13 @@ Formatting:
       onLimitReached: "warn",
     },
 
+    ...(decider !== undefined && { decider }),
+
+    // Roteamento so existe com decisor E com um modelo barato configurado.
+    ...(decider !== undefined && config.typesafe.fastModel
+      ? { routing: { fastModel: config.typesafe.fastModel, minConfidence: 0.85 } }
+      : {}),
+
     maxIterations: 20,
     onToolError: "continue",
     logLevel: "debug",
@@ -66,23 +106,6 @@ Formatting:
     agent.addTool(tool);
   }
 
-  // Connect MCP servers
-  if (config.mcp.albert.url) {
-    try {
-      await agent.connectMCP({
-        name: "albert",
-        transport: "sse",
-        url: config.mcp.albert.url,
-        headers: config.mcp.albert.headers,
-        timeout: 60_000,
-      });
-    } catch (error) {
-      console.error(
-        "Failed to connect MCP albert:",
-        error instanceof Error ? error.message : error,
-      );
-    }
-  }
 
   return agent;
 }
@@ -91,5 +114,12 @@ export async function destroyAgent(): Promise<void> {
   if (agent) {
     await agent.destroy();
     agent = null;
+  }
+  // Escreve o que ficou no buffer antes de sair — senao as ultimas decisoes
+  // da sessao se perdem justo na hora de medir.
+  if (decisionSink) {
+    await decisionSink.close();
+    console.log("Log de decisoes:", decisionSink.stats());
+    decisionSink = null;
   }
 }

@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import type { Agent, AgentTool } from '@gba/ai-harness';
 import { createWebFetchTool } from '@gba/ai-harness';
-import { config } from './config.js';
+import { config, SHARED_KNOWLEDGE_SCOPE } from './config.js';
 
 /**
  * All tools available to the agent.
  * Receives a getter to the owning Agent instance (avoids circular import).
  */
-export function createTools(getAgent: () => Agent): AgentTool[] {
+export function createTools(getAgent: () => Agent, conversationId: string): AgentTool[] {
   const tools: AgentTool[] = [];
 
   // Web search via Tavily (if API key provided)
@@ -64,7 +64,12 @@ export function createTools(getAgent: () => Agent): AgentTool[] {
     }),
     execute: async (rawArgs) => {
       const agent = getAgent();
-      const results = await agent.searchKnowledge((rawArgs as { query: string }).query);
+      // Le o que esta conversa ingeriu mais o acervo compartilhado — e nada
+      // do que as outras conversas ensinaram.
+      const results = await agent.searchKnowledge((rawArgs as { query: string }).query, [
+        conversationId,
+        SHARED_KNOWLEDGE_SCOPE,
+      ]);
       if (!results || results.length === 0) {
         return 'No relevant knowledge found for this query.';
       }

@@ -9,6 +9,12 @@ export interface KnowledgeChunk {
   id: string;
   content: string;
   embedding: Float32Array;
+  /**
+   * Which conversation this chunk belongs to. The store is shared by the
+   * process, so without it one conversation's documents become every other
+   * conversation's context.
+   */
+  scope: string;
   metadata?: Record<string, unknown>;
   createdAt: number;
 }

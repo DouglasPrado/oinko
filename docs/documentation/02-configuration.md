@@ -20,7 +20,7 @@ const agent = Agent.create(config);
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | `string` | **required** | OpenRouter API key |
-| `model` | `string` | `'anthropic/claude-sonnet-4-20250514'` | Default LLM model |
+| `model` | `string` | `'anthropic/claude-sonnet-5'` | Default LLM model |
 | `baseUrl` | `string` | `'https://openrouter.ai/api/v1'` | OpenRouter API base URL |
 | `systemPrompt` | `string` | `undefined` | System prompt prepended to all conversations |
 | `logLevel` | `LogLevel` | `'info'` | Logger verbosity: `debug`, `info`, `warn`, `error`, `silent` |
@@ -202,7 +202,7 @@ import { Agent } from '@gba/ai-harness';
 
 const agent = Agent.create({
   apiKey: process.env.OPENROUTER_API_KEY!,
-  model: 'anthropic/claude-sonnet-4-20250514',
+  model: 'anthropic/claude-sonnet-5',
   systemPrompt: 'You are a helpful coding assistant.',
 
   maxIterations: 15,

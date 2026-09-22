@@ -25,7 +25,7 @@ export const config = {
   agent: {
     apiKey: required('LLM_API_KEY'),
     baseUrl: process.env.LLM_BASE_URL,
-    model: process.env.AGENT_MODEL ?? 'anthropic/claude-sonnet-4-20250514',
+    model: process.env.AGENT_MODEL ?? 'anthropic/claude-sonnet-5',
   },
   embedding: {
     apiKey: process.env.EMBEDDING_API_KEY,
@@ -44,3 +44,12 @@ export const config = {
     },
   },
 };
+
+/**
+ * Acervo de RAG que toda conversa pode ler — a documentacao da plataforma,
+ * ingerida pelo scripts/ingest-docs.ts.
+ *
+ * O que um usuario ensina pelo /learn vai para o escopo da propria conversa;
+ * so o que e ingerido aqui, deliberadamente, e compartilhado.
+ */
+export const SHARED_KNOWLEDGE_SCOPE = 'platform-docs';

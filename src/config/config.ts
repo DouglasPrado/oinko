@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
+import type { Decider } from '../contracts/entities/decider.js';
 
 /** MCP server connection configuration */
 const MCPConnectionConfigSchema = z.object({
@@ -35,6 +36,8 @@ const MemoryConfigSchema = z.object({
   extractionEnabled: z.boolean().default(true),
   samplingRate: z.number().min(0).max(1).default(0.3),
   extractionInterval: z.number().int().positive().default(10),
+  /** Confidence floor for a decider verdict on whether a turn is worth remembering. */
+  minConfidence: z.number().min(0).max(1).default(0.7),
 });
 
 /** Knowledge/RAG subsystem configuration */
@@ -45,6 +48,10 @@ const KnowledgeConfigSchema = z.object({
   chunkOverlap: z.number().int().min(0).default(64),
   topK: z.number().int().positive().default(5),
   minScore: z.number().min(0).max(1).default(0.3),
+  /** Confidence required for a decider to skip retrieval on a turn. */
+  minConfidence: z.number().min(0).max(1).default(0.7),
+  /** Minimum judged relevance (0..3 scale) to keep a reranked chunk. */
+  minRelevance: z.number().min(0).max(3).default(1.5),
 });
 
 /** Skills subsystem configuration */
@@ -64,7 +71,7 @@ const EmbeddingProviderConfigSchema = z.object({
 /** Full Agent configuration — validated with Zod */
 export const AgentConfigSchema = z.object({
   apiKey: z.string().min(1, 'apiKey is required'),
-  model: z.string().default('anthropic/claude-sonnet-4-20250514'),
+  model: z.string().default('anthropic/claude-sonnet-5'),
   baseUrl: z.string().url().default('https://openrouter.ai/api/v1'),
   /**
    * Intercepta as chamadas de chat ao LLM. Recebe uma Request e devolve a
@@ -100,12 +107,60 @@ export const AgentConfigSchema = z.object({
     })
     .optional(),
 
+  /**
+   * Decision engine for in-loop choices that would otherwise cost a model call
+   * or fall back to a blind heuristic. Without it, behaviour is unchanged.
+   *
+   * z.custom because it is an interface with methods — structural check only.
+   */
+  decider: z
+    .custom<Decider>(
+      (v) => typeof v === 'object' && v !== null && typeof (v as Decider).decide === 'function',
+    )
+    .optional(),
+
+  /**
+   * Screens each user message for attempts to get the agent out from under its
+   * instructions. Requires a `decider`.
+   *
+   * 'warn' tells the model what was detected and lets it answer; 'block'
+   * refuses the turn without spending an LLM call. Default 'off' — this is
+   * moderation policy, which belongs to the consumer, not to the library.
+   */
+  jailbreak: z
+    .object({
+      mode: z.enum(['off', 'warn', 'block']).default('off'),
+      minConfidence: z.number().min(0).max(1).default(0.75),
+      /** Reply sent when a blocked turn is refused. */
+      blockedMessage: z
+        .string()
+        .default('Não posso atender esse pedido. Posso ajudar com outra coisa?'),
+    })
+    .optional(),
+
+  /**
+   * Routes trivial turns to a cheaper model. Requires a `decider`; without
+   * one, every turn uses `model` as before.
+   */
+  routing: z
+    .object({
+      fastModel: z.string().min(1),
+      minConfidence: z.number().min(0).max(1).default(0.7),
+    })
+    .optional(),
+
   // MCP
   mcp: z.array(MCPConnectionConfigSchema).optional(),
 
   // Behavior
   maxIterations: z.number().int().positive().default(10),
   maxConsecutiveErrors: z.number().int().positive().default(3),
+  /**
+   * Iterations between progress checks when a decider is configured: it
+   * judges whether the loop is still getting anywhere, instead of leaving
+   * `maxIterations` as the only brake. 0 disables.
+   */
+  progressCheckInterval: z.number().int().min(0).default(5),
   onToolError: z.enum(['continue', 'stop', 'retry']).default('continue'),
 
   // Context budget

@@ -133,7 +133,7 @@ describe('Memory Pipeline (end-to-end)', () => {
       knowledge: { enabled: false },
     });
 
-    const filename = await agent.remember('User name is Douglas');
+    const filename = await agent.rememberGlobal('User name is Douglas');
     expect(typeof filename).toBe('string');
     expect(filename).toMatch(/\.md$/);
 

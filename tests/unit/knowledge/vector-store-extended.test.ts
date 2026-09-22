@@ -21,12 +21,14 @@ describe('SQLiteVectorStore — extended methods', () => {
       id: 'c1',
       content: 'chunk 1',
       embedding: new Float32Array([1, 0]),
+      scope: 'escopo-de-teste',
       createdAt: 100,
     });
     store.upsert({
       id: 'c2',
       content: 'chunk 2',
       embedding: new Float32Array([0, 1]),
+      scope: 'escopo-de-teste',
       createdAt: 200,
     });
 
@@ -46,6 +48,7 @@ describe('SQLiteVectorStore — extended methods', () => {
       id: 'c1',
       content: 'a',
       embedding: new Float32Array([1]),
+      scope: 'escopo-de-teste',
       metadata: { sourceId: 'doc-1' },
       createdAt: 100,
     });
@@ -53,6 +56,7 @@ describe('SQLiteVectorStore — extended methods', () => {
       id: 'c2',
       content: 'b',
       embedding: new Float32Array([1]),
+      scope: 'escopo-de-teste',
       metadata: { sourceId: 'doc-1' },
       createdAt: 200,
     });
@@ -60,6 +64,7 @@ describe('SQLiteVectorStore — extended methods', () => {
       id: 'c3',
       content: 'c',
       embedding: new Float32Array([1]),
+      scope: 'escopo-de-teste',
       metadata: { sourceId: 'doc-2' },
       createdAt: 300,
     });
@@ -76,6 +81,7 @@ describe('SQLiteVectorStore — extended methods', () => {
       id: 'c1',
       content: 'a',
       embedding: new Float32Array([1]),
+      scope: 'escopo-de-teste',
       metadata: { sourceId: 'doc-1' },
       createdAt: 100,
     });

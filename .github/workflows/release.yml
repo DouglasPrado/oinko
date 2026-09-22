@@ -1,0 +1,85 @@
+name: Release
+
+# release-please abre e mantem a PR de release lendo os commits
+# convencionais; quando ela e mergeada, a tag sai e o publish roda.
+#
+# Adaptado do release.yml do monorepo: la havia um release-please para varios
+# pacotes, com `separate-pull-requests` e componente no nome da tag. Aqui o
+# repo tem um pacote so, entao a config e a de raiz simples e a tag e `vX.Y.Z`.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      # Ver a nota longa no pr-check.yml: o destino e $NPM_CONFIG_USERCONFIG e
+      # o printf leva `\n` na frente. As duas coisas ja custaram publish
+      # quebrado sem ninguem notar.
+      - name: Autentica no registry privado
+        run: printf '\n//npm.dify.com.br/:_authToken=%s\n' "$GBA_REGISTRY_TOKEN" >> "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+        env:
+          GBA_REGISTRY_TOKEN: ${{ secrets.GBA_REGISTRY_TOKEN }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Validate publish artifacts
+        run: pnpm validate:publish
+
+      # O destino e o registry PRIVADO (npm.dify.com.br), nao o npmjs: o escopo
+      # `@gba` resolve la (ver .npmrc) e o pacote nao existe no npmjs publico. O
+      # `registry-url` do setup-node aponta para o npmjs de proposito — e ele
+      # que cria o npmrc onde a credencial privada e escrita, e o install
+      # precisa do npmjs para as dependencias de terceiros. Quem manda no
+      # publish e o `publishConfig.registry` do package.json.
+      #
+      # Sem `--provenance`: a atestacao depende do OIDC do npmjs e o Verdaccio
+      # a rejeita. Por isso `id-token: write` tambem sai.
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GBA_REGISTRY_TOKEN }}

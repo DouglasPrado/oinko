@@ -30,6 +30,37 @@ export { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 export { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
 export { SQLiteDatabase } from './storage/sqlite-database.js';
 
+// Decision engine (System One decider)
+export { JevDecider, JevError } from './decision/jev-decider.js';
+export { RecordingDecider, inferDecisionPoint } from './decision/recording-decider.js';
+export type { DecisionRecord, DecisionPoint, StateMode } from './decision/recording-decider.js';
+export { ShadowDecider } from './decision/shadow-decider.js';
+export type { ShadowRecord } from './decision/shadow-decider.js';
+export { JsonlSink } from './decision/jsonl-sink.js';
+export type { JsonlSinkOptions, JsonlSinkStats } from './decision/jsonl-sink.js';
+export type { JevDeciderOptions } from './decision/jev-decider.js';
+export { shouldExtractWithDecider, DURABLE_FACT_QUESTIONS } from './memory/extraction-gate.js';
+export { findDuplicateMemory, NO_DUPLICATE } from './memory/dedup.js';
+export { shouldRetrieveKnowledge, KNOWLEDGE_NEEDED_QUESTION } from './knowledge/retrieval-gate.js';
+export { rerankChunks, RELEVANCE_LEVELS } from './knowledge/rerank.js';
+export { decideSkill, NO_SKILL } from './skills/skill-decider.js';
+export { classifyToolError, TOOL_ERROR_KINDS } from './tools/error-classifier.js';
+export {
+  screenUntrustedContent,
+  UNTRUSTED_WRAPPER,
+  INSTRUCTS_AGENT_QUESTION,
+} from './tools/injection-guard.js';
+export type { ScreenResult } from './tools/injection-guard.js';
+export { routeModel, ROUTE_TIERS } from './llm/model-router.js';
+export { isLoopProductive, PROGRESS_QUESTION } from './core/progress-gate.js';
+export { screenTurn, JAILBREAK_QUESTION } from './core/turn-screening.js';
+export type { JailbreakConfig, TurnScreeningResult } from './core/turn-screening.js';
+export type { ModelRouteOptions } from './llm/model-router.js';
+export type { ToolErrorKind } from './tools/error-classifier.js';
+export type { ExtractionGateConfig } from './memory/extraction-gate.js';
+export type { RetrievalGateConfig } from './knowledge/retrieval-gate.js';
+export type { RerankOptions } from './knowledge/rerank.js';
+
 // Builtin tools
 export { builtinTools } from './tools/builtin/index.js';
 export {
@@ -103,6 +134,7 @@ export type {
   ChatParams,
   ToolDefinition,
   ResponseFormat,
+  ReasoningEffort,
 } from './llm/message-types.js';
 
 // Utils

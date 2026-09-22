@@ -3,6 +3,7 @@ import { microcompact } from '../../../src/core/compaction/microcompact.js';
 import { autocompact } from '../../../src/core/compaction/autocompact.js';
 import type { LLMMessage } from '../../../src/llm/message-types.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
+import { LLMClient as RealLLMClient } from '../../../src/llm/llm-client.js';
 
 describe('microcompact', () => {
   it('should truncate tool results exceeding maxChars', () => {
@@ -167,5 +168,67 @@ describe('autocompact', () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+describe('autocompact request body', () => {
+  const CAPTURED_REPLY = 'Summary of the conversation so far.';
+
+/**
+ * A real LLMClient with the transport faked, not a mocked `chat()`. The
+ * mocked client cannot see the request body, which is exactly where the bug
+ * lived: this module sends `temperature: 0`, and for a reasoning model the
+ * provider answers 400 to the whole request rather than ignoring the field.
+ */
+function captureRequest(model: string): {
+  client: LLMClient;
+  body: () => Record<string, unknown>;
+} {
+  let captured: Record<string, unknown> = {};
+  const client = new RealLLMClient({
+    apiKey: 'k',
+    model,
+    baseUrl: 'https://example.test/v1',
+    fetch: async (request: Request) => {
+      captured = JSON.parse(await request.text()) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: CAPTURED_REPLY }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        }),
+        { status: 200 },
+      );
+    },
+  });
+  return { client, body: () => captured };
+}
+
+  const bulky: LLMMessage[] = [
+    { role: 'system', content: 'You are helpful.' },
+    { role: 'user', content: 'First question' },
+    { role: 'assistant', content: 'First answer with lots of detail '.repeat(100) },
+    { role: 'user', content: 'Second question' },
+    { role: 'assistant', content: 'Second answer with lots of detail '.repeat(100) },
+    { role: 'user', content: 'Third question' },
+    { role: 'assistant', content: 'Third answer' },
+  ];
+
+  const OPTIONS = { maxContextTokens: 500, compactionThreshold: 0.5, tailProtection: 2 };
+
+  it('sends no temperature for a reasoning model', async () => {
+    for (const model of ['gpt-5.6', 'gpt-5.5', 'o3']) {
+      const { client, body } = captureRequest(model);
+      const result = await autocompact(bulky, client, OPTIONS);
+
+      expect(result, model).not.toBeNull();
+      expect(body(), model).not.toHaveProperty('temperature');
+    }
+  });
+
+  it('still sends the temperature for a model that takes one', async () => {
+    const { client, body } = captureRequest('gpt-4o');
+    await autocompact(bulky, client, OPTIONS);
+
+    expect(body().temperature).toBe(0);
   });
 });

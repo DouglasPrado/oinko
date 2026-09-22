@@ -137,6 +137,7 @@ export function createWebFetchTool(options?: { dnsResolver?: DnsResolver }): Age
     parameters: WebFetchParams,
     isConcurrencySafe: true,
     isReadOnly: true,
+    untrustedOutput: true,
 
     async execute(rawArgs: unknown, signal: AbortSignal) {
       const { url, max_chars } = rawArgs as z.infer<typeof WebFetchParams>;

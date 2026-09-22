@@ -18,7 +18,7 @@ export const config = {
   agent: {
     apiKey: required('LLM_API_KEY'),
     baseUrl: process.env.LLM_BASE_URL,
-    model: process.env.AGENT_MODEL ?? 'anthropic/claude-sonnet-4-20250514',
+    model: process.env.AGENT_MODEL ?? 'anthropic/claude-sonnet-5',
   },
   embedding: {
     apiKey: process.env.EMBEDDING_API_KEY,
@@ -27,6 +27,19 @@ export const config = {
   },
   tavily: {
     apiKey: process.env.TAVILY_API_KEY,
+  },
+  /**
+   * TypeSafe AI (Jev) — decisor tipado para as escolhas internas do agente.
+   *
+   * Sem a chave o bot roda exatamente como antes: cada ponto de decisao cai na
+   * heuristica que ja existia.
+   */
+  typesafe: {
+    apiKey: process.env.TYPESAFE_API_KEY,
+    // Onde gravar o log de decisoes para `pnpm analyze:decisions`.
+    decisionLog: process.env.DECISION_LOG ?? './data/decisions.jsonl',
+    // Modelo barato para turnos triviais. Sem isso, nao ha roteamento.
+    fastModel: process.env.FAST_MODEL,
   },
   mcp: {
     albert: {

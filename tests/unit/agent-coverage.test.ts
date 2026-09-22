@@ -202,7 +202,9 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.remember('something')).rejects.toThrow(/Memory subsystem not enabled/);
+    await expect(agent.remember('something', 'thread-1')).rejects.toThrow(
+      /Memory subsystem not enabled/,
+    );
   });
 
   it('recall() rejects when memory subsystem is disabled', async () => {
@@ -212,7 +214,9 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.recall('anything')).rejects.toThrow(/Memory subsystem not enabled/);
+    await expect(agent.recall('anything', 'thread-1')).rejects.toThrow(
+      /Memory subsystem not enabled/,
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -226,9 +230,9 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.ingestKnowledge({ id: 'doc-1', content: 'body' })).rejects.toThrow(
-      /Knowledge subsystem not enabled/,
-    );
+    await expect(
+      agent.ingestKnowledge({ id: 'doc-1', content: 'body' }, 'escopo-de-teste'),
+    ).rejects.toThrow(/Knowledge subsystem not enabled/);
   });
 
   it('searchKnowledge() rejects when knowledge subsystem is disabled', async () => {
@@ -238,7 +242,9 @@ describe('Agent — additional coverage', () => {
       knowledge: { enabled: false },
     });
 
-    await expect(agent.searchKnowledge('q')).rejects.toThrow(/Knowledge subsystem not enabled/);
+    await expect(agent.searchKnowledge('q', 'escopo-de-teste')).rejects.toThrow(
+      /Knowledge subsystem not enabled/,
+    );
   });
 
   // ---------------------------------------------------------------------------

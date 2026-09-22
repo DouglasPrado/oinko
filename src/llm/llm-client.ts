@@ -7,7 +7,13 @@ import type {
 } from './message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import { retry } from '../utils/retry.js';
-import { buildReasoningArgs, isReasoningModel, requiresNoSystemRole } from './reasoning.js';
+import { checkModelSuitsEndpoint } from './model-registry.js';
+import {
+  buildReasoningArgs,
+  isReasoningModel,
+  requiresNoSystemRole,
+  rejectsToolsOnChatCompletions,
+} from './reasoning.js';
 import { validateSsrfUrl } from '../utils/ssrf-guard.js';
 
 /**
@@ -91,7 +97,24 @@ export class LLMClient {
    */
   private async sendChatRequest(params: StreamChatParams, streaming: boolean): Promise<Response> {
     const model = params.model ?? this.model;
-    const reasoningArgs = buildReasoningArgs(model);
+    const mismatch = checkModelSuitsEndpoint(model, this.baseUrl);
+    if (mismatch !== undefined) throw new Error(mismatch);
+
+    const hasTools = (params.tools?.length ?? 0) > 0;
+
+    if (hasTools && rejectsToolsOnChatCompletions(model)) {
+      throw new Error(
+        `Model "${model}" does not accept function tools on /chat/completions, which is the ` +
+          'only endpoint this client speaks. Use a model that does (the gpt-5 line works), ' +
+          'run the agent without tools, or route this model through a gateway that speaks ' +
+          '/v1/responses.',
+      );
+    }
+
+    const reasoning = buildReasoningArgs(model, {
+      hasTools,
+      reasoningEffort: params.reasoningEffort,
+    });
 
     let messages = params.messages;
     if (requiresNoSystemRole(model)) {
@@ -102,7 +125,6 @@ export class LLMClient {
       model,
       messages,
       stream: streaming,
-      ...reasoningArgs,
     };
 
     // OpenAI-compatible providers (OpenAI, OpenRouter, LiteLLM, vLLM) only emit
@@ -111,8 +133,14 @@ export class LLMClient {
     if (streaming) body.stream_options = { include_usage: true };
 
     if (params.tools?.length) body.tools = params.tools;
-    if (params.temperature !== undefined) body.temperature = params.temperature;
+    // Dropped rather than passed through: a reasoning model answers 400 to any
+    // temperature but its default, which would kill the whole request.
+    if (params.temperature !== undefined && !reasoning.dropTemperature) {
+      body.temperature = params.temperature;
+    }
     if (params.responseFormat) body.response_format = params.responseFormat;
+    // camelCase on the way in, snake_case on the wire.
+    if (reasoning.reasoningEffort !== undefined) body.reasoning_effort = reasoning.reasoningEffort;
     if (params.seed !== undefined) body.seed = params.seed;
     if (params.maxTokens !== undefined) {
       if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;
@@ -176,10 +204,18 @@ export class LLMClient {
   }
 
   async embed(texts: string[], model?: string): Promise<number[][]> {
+    // Mesma checagem do chat: o modelo de embedding tem default proprio
+    // (`openai/text-embedding-3-small`, a grafia do OpenRouter), e quem aponta
+    // o baseUrl para a OpenAI sem trocar esse campo recebia um "invalid model
+    // ID" cru, vindo de um caminho que nem parece relacionado ao que mudou.
+    const embedModel = model ?? this.model;
+    const mismatch = checkModelSuitsEndpoint(embedModel, this.baseUrl);
+    if (mismatch !== undefined) throw new Error(mismatch);
+
     const response = await retry(
       () =>
         this.fetchAPI('/embeddings', {
-          model: model ?? this.model,
+          model: embedModel,
           input: texts,
         }),
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },

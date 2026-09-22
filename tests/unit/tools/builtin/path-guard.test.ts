@@ -3,14 +3,15 @@ import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { assertSafePath } from '../../../../src/tools/builtin/path-guard.js';
+import { makeTempDir } from '../../../test-helpers.js';
 
 describe('assertSafePath', () => {
   let workDir: string;
   let outsideDir: string;
 
   beforeEach(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'path-guard-work-'));
-    outsideDir = await mkdtemp(join(tmpdir(), 'path-guard-outside-'));
+    workDir = await makeTempDir('path-guard-work-');
+    outsideDir = await makeTempDir('path-guard-outside-');
   });
 
   afterEach(async () => {

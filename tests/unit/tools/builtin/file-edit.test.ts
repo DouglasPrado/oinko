@@ -3,13 +3,14 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createFileEditTool } from '../../../../src/tools/builtin/file-edit.js';
+import { makeTempDir } from '../../../test-helpers.js';
 
 describe('builtin/file-edit', () => {
   let tempDir: string;
   const signal = new AbortController().signal;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'fedit-tool-'));
+    tempDir = await makeTempDir('fedit-tool-');
     await writeFile(join(tempDir, 'code.ts'), 'function hello() {\n  return "world";\n}\n');
   });
 

@@ -18,6 +18,9 @@ import { formatMemoryManifest } from './memory-scanner.js';
 import { buildForkedExtractionPrompt } from './memory-prompts.js';
 import { createMemoryTools } from './memory-tools.js';
 
+/** Floor for the extraction subagent: enough to read candidates then write. */
+const MIN_EXTRACTION_ITERATIONS = 8;
+
 /** Extraction trigger keywords (multilingual) */
 const EXPLICIT_TRIGGERS = [
   'remember that',
@@ -66,6 +69,7 @@ export type ForkFn = (
     model?: string;
     tools?: AgentTool[];
     background?: boolean;
+    maxIterations?: number;
   },
 ) => Promise<string>;
 
@@ -123,6 +127,11 @@ export async function extractMemories(
       model: options?.model,
       tools,
       background: true,
+      // The subagent has a known shape of work — read the files it might
+      // update, then write them — and inherits the parent's budget. A host
+      // that caps its own loop low would silently starve extraction, which
+      // fails without an error because it is best-effort.
+      maxIterations: MIN_EXTRACTION_ITERATIONS,
     });
   } catch (e) {
     // Extraction is best-effort — never propagate errors

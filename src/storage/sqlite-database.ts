@@ -40,6 +40,7 @@ export class SQLiteDatabase {
 
     try {
       this.migrateV1(db);
+      this.migrateV2(db);
       this._db = db;
     } catch (err) {
       db.close();
@@ -77,6 +78,24 @@ export class SQLiteDatabase {
       this._db.close();
       this._db = null;
     }
+  }
+
+  /**
+   * Adds the scope column to `vectors`.
+   *
+   * Rows written before this migration keep a NULL scope, which belongs to no
+   * conversation and therefore matches no search. That is deliberate: making
+   * old rows visible would mean picking a conversation to leak them into.
+   * Re-ingest them under the right scope if they are still wanted.
+   */
+  private migrateV2(db: DatabaseSync): void {
+    const columns = db.prepare('PRAGMA table_info(vectors)').all() as unknown as {
+      name: string;
+    }[];
+    if (columns.some((column) => column.name === 'scope')) return;
+
+    db.exec('ALTER TABLE vectors ADD COLUMN scope TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_vectors_scope ON vectors(scope)');
   }
 
   private migrateV1(db: DatabaseSync): void {

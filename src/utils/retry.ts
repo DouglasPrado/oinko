@@ -4,7 +4,7 @@ export interface RetryOptions {
   backoffMultiplier?: number;
   maxDelay?: number;
   signal?: AbortSignal;
-  isRetryable?: (error: unknown) => boolean;
+  isRetryable?: (error: unknown) => boolean | Promise<boolean>;
 }
 
 function abortError(signal: AbortSignal): Error {
@@ -55,7 +55,7 @@ export async function retry<T>(fn: () => Promise<T>, options: RetryOptions): Pro
     } catch (error) {
       lastError = error;
 
-      if (attempt >= maxRetries || !isRetryable(error)) {
+      if (attempt >= maxRetries || !(await isRetryable(error))) {
         throw error;
       }
 

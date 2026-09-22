@@ -8,6 +8,16 @@ export type { AgentTool, ToolValidationContext, ToolProgressCallback } from './a
 export type { AgentSkill, SkillMatchContext, SkillPromptContext } from './agent-skill.js';
 export type { VectorStore, ConversationStore } from './stores.js';
 export type {
+  Decider,
+  Decision,
+  Question,
+  BoolQuestion,
+  ChoiceQuestion,
+  ScoreQuestion,
+  Answer,
+  Answers,
+} from './decider.js';
+export type {
   AgentEvent,
   AgentStartEvent,
   TextDeltaEvent,

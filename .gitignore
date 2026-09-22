@@ -34,3 +34,7 @@ examples/teams-bot/src/knowledge/
 # Restos historicos
 /docs/src/*
 /old_src/*
+
+# variantes com espaco/sufixo no nome escapam do padrao .env
+.env*
+!.env.example
