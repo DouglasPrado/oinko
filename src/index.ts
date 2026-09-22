@@ -185,6 +185,8 @@ export { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
 export { PayloadStore } from './telemetry/payload-store.js';
 export { guardSink } from './telemetry/safe-sink.js';
 export { redactSecrets } from './telemetry/redact.js';
+export { purgeTelemetry } from './telemetry/purge.js';
+export type { PurgeOptions, PurgeResult } from './telemetry/purge.js';
 export type {
   SqliteTelemetrySinkOptions,
   CapturePayloads,

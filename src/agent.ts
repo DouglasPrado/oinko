@@ -28,6 +28,7 @@ import { SQLiteDatabase } from './storage/sqlite-database.js';
 import { TelemetryDatabase } from './telemetry/telemetry-database.js';
 import { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
 import { guardSink } from './telemetry/safe-sink.js';
+import { purgeTelemetry } from './telemetry/purge.js';
 import type { TelemetrySink } from './contracts/entities/telemetry.js';
 import { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 import { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
@@ -71,6 +72,7 @@ export class Agent {
   private costAccumulator: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   private telemetry?: TelemetrySink;
   private telemetryDatabase?: TelemetryDatabase;
+  private telemetryPurgeTimer?: NodeJS.Timeout;
   /** Per-thread usage — a thread must not be able to read another's spend. */
   private readonly usageByThread = new Map<string, TokenUsage>();
   /** Per-thread turn count for memory extraction scheduling. */
@@ -1089,6 +1091,7 @@ export class Agent {
     this.surfacedMemoriesByThread.clear();
     this.turnsSinceExtractionByThread.clear();
     await this.mcpAdapter.disconnectAll();
+    if (this.telemetryPurgeTimer) clearInterval(this.telemetryPurgeTimer);
     await this.telemetry?.close();
     this.telemetryDatabase?.close();
     this.database?.close();
@@ -1143,6 +1146,7 @@ export class Agent {
           secrets: [this.config.apiKey],
         }),
       );
+      this.schedulePurge(config.retentionDays);
     } catch (err) {
       // Telemetria indisponivel nao impede o agente de trabalhar.
       this.logger.warn('Telemetry disabled: could not open the telemetry database', {
@@ -1152,6 +1156,34 @@ export class Agent {
     }
 
     return this.telemetry;
+  }
+
+  /**
+   * Agenda a purga por retencao.
+   *
+   * Nunca no caminho do turno: a primeira passada sai por `setTimeout(0)` e as
+   * seguintes a cada seis horas, ambas com `unref` — instrumentacao nao segura
+   * o processo aberto nem atrasa a primeira resposta.
+   */
+  private schedulePurge(retentionDays: number): void {
+    const run = (): void => {
+      const database = this.telemetryDatabase;
+      if (!database) return;
+
+      try {
+        const result = purgeTelemetry(database, { retentionDays });
+        const removed = Object.values(result.deleted).reduce((sum, n) => sum + n, 0);
+        if (removed > 0) this.logger.info('Telemetry purged', { removed, retentionDays });
+      } catch (err) {
+        this.logger.warn('Telemetry purge failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    };
+
+    setTimeout(run, 0).unref?.();
+    this.telemetryPurgeTimer = setInterval(run, Agent.TELEMETRY_PURGE_INTERVAL_MS);
+    this.telemetryPurgeTimer.unref?.();
   }
 
   private ensureDatabase(): void {
@@ -1165,6 +1197,9 @@ export class Agent {
       this.database.initialize();
     }
   }
+
+  /** Intervalo entre passadas da purga de telemetria. */
+  private static readonly TELEMETRY_PURGE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 
   /** Timeout for memory relevance prefetch (ms). */
   private static readonly MEMORY_PREFETCH_TIMEOUT = 5_000;
