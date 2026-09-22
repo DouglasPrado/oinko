@@ -30,6 +30,7 @@ import { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
 import { guardSink } from './telemetry/safe-sink.js';
 import { purgeTelemetry } from './telemetry/purge.js';
 import { traceDecisions } from './telemetry/decision-bridge.js';
+import { CostEnricher } from './telemetry/cost-enricher.js';
 import type { TelemetrySink } from './contracts/entities/telemetry.js';
 import { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 import { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';
@@ -75,6 +76,7 @@ export class Agent {
   private telemetry?: TelemetrySink;
   private telemetryDatabase?: TelemetryDatabase;
   private telemetryPurgeTimer?: NodeJS.Timeout;
+  private costEnricher?: CostEnricher;
   /** Per-thread usage — a thread must not be able to read another's spend. */
   private readonly usageByThread = new Map<string, TokenUsage>();
   /** Per-thread turn count for memory extraction scheduling. */
@@ -443,9 +445,7 @@ export class Agent {
       threadId,
       ...(this.config.telemetry?.app !== undefined && { app: this.config.telemetry.app }),
       model,
-      providerKind: /(^|\.)openrouter\.ai$/.test(new URL(this.config.baseUrl).hostname)
-        ? 'openrouter'
-        : 'other',
+      providerKind: this.providerKind(),
       // O system prompt e sempre texto; as partes multimodais vivem nas
       // mensagens de usuario, e serializa-las aqui so poluiria o registro.
       systemPrompt: systemPromptOf(contextResult.messages),
@@ -523,9 +523,16 @@ export class Agent {
           finishReason: call.finishReason,
           ...(call.usage !== undefined && { usage: call.usage }),
           ...(call.usageDetail !== undefined && { usageDetail: call.usageDetail }),
-          // Confirmado so quando o provedor informou o valor. Sem isso fica
-          // indisponivel — nunca estimado.
-          costStatus: call.usageDetail?.costUsd === undefined ? 'unavailable' : 'confirmed',
+          // Tres estados, nao dois. Confirmado quando o valor veio no stream;
+          // pendente quando o provedor tem como informar depois e ha id de
+          // geracao para perguntar; indisponivel so quando nao ha a quem
+          // perguntar. Estimar nao e opcao em nenhum deles.
+          costStatus:
+            call.usageDetail?.costUsd !== undefined
+              ? 'confirmed'
+              : this.providerKind() === 'openrouter' && call.usageDetail?.generationId !== undefined
+                ? 'pending'
+                : 'unavailable',
           ...(call.usageDetail?.costUsd !== undefined && { costSource: 'stream_usage' as const }),
           ...(call.ttftMs !== undefined && { ttftMs: call.ttftMs }),
           ...(call.durationMs !== undefined && { durationMs: call.durationMs }),
@@ -718,6 +725,10 @@ export class Agent {
       durationMs: Date.now() - ctx.startedAt,
     });
     void telemetry?.flush();
+
+    // Fora do caminho do turno: a resposta ja foi entregue, e o custo fecha
+    // quando o provedor fechar.
+    this.costEnricher?.enqueue(ctx.traceId);
 
     // Turn-end hooks pipeline (memory extraction + custom hooks)
     const turnEndContext = {
@@ -1109,6 +1120,7 @@ export class Agent {
     this.turnsSinceExtractionByThread.clear();
     await this.mcpAdapter.disconnectAll();
     if (this.telemetryPurgeTimer) clearInterval(this.telemetryPurgeTimer);
+    await this.costEnricher?.drain();
     await this.telemetry?.close();
     this.telemetryDatabase?.close();
     this.database?.close();
@@ -1164,6 +1176,7 @@ export class Agent {
         }),
       );
       this.schedulePurge(config.retentionDays);
+      this.startCostEnricher();
     } catch (err) {
       // Telemetria indisponivel nao impede o agente de trabalhar.
       this.logger.warn('Telemetry disabled: could not open the telemetry database', {
@@ -1173,6 +1186,26 @@ export class Agent {
     }
 
     return this.telemetry;
+  }
+
+  /**
+   * Liga a confirmacao de custo, quando o provedor tem como informar.
+   *
+   * A varredura inicial e o que impede um restart de perder o custo de uma
+   * chamada que ficou pendente entre a resposta e a confirmacao.
+   */
+  private startCostEnricher(): void {
+    const database = this.telemetryDatabase;
+    if (!database || this.providerKind() !== 'openrouter') return;
+
+    this.costEnricher = new CostEnricher(database, (id) => this.client.getGeneration(id), {
+      logger: this.logger,
+    });
+
+    setTimeout(() => {
+      const recovered = this.costEnricher?.recoverPending() ?? 0;
+      if (recovered > 0) this.logger.info('Recovering pending costs', { executions: recovered });
+    }, 0).unref?.();
   }
 
   /**
@@ -1201,6 +1234,23 @@ export class Agent {
     setTimeout(run, 0).unref?.();
     this.telemetryPurgeTimer = setInterval(run, Agent.TELEMETRY_PURGE_INTERVAL_MS);
     this.telemetryPurgeTimer.unref?.();
+  }
+
+  /**
+   * Se o provedor informa custo por uma API propria.
+   *
+   * Hoje so o OpenRouter informa: com qualquer outro, custo real simplesmente
+   * nao existe para ser buscado, e a alternativa seria estimar — que e o que
+   * esta camada existe para nao fazer.
+   */
+  private providerKind(): 'openrouter' | 'other' {
+    try {
+      return /(^|\.)openrouter\.ai$/.test(new URL(this.config.baseUrl).hostname)
+        ? 'openrouter'
+        : 'other';
+    } catch {
+      return 'other';
+    }
   }
 
   private ensureDatabase(): void {

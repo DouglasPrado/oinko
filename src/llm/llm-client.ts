@@ -15,6 +15,7 @@ import {
   requiresNoSystemRole,
   rejectsToolsOnChatCompletions,
 } from './reasoning.js';
+import { GenerationNotReadyError } from './errors.js';
 import { validateSsrfUrl } from '../utils/ssrf-guard.js';
 
 /**
@@ -391,24 +392,66 @@ export class LLMClient {
     const injected = path === '/chat/completions' ? this.fetchImpl : undefined;
     const response = injected ? await injected(new Request(url, init)) : await fetch(url, init);
 
-    if (!response.ok) {
-      if (isRetryableStatus(response.status)) {
-        // Parse Retry-After header (seconds or HTTP-date)
-        let retryAfterMs: number | undefined;
-        const retryAfter = response.headers.get('retry-after');
-        if (retryAfter) {
-          const seconds = Number(retryAfter);
-          retryAfterMs = Number.isNaN(seconds)
-            ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
-            : seconds * 1000;
-        }
-        throw new RetryableError(`LLM API error: ${response.status}`, retryAfterMs);
-      }
-      const text = await response.text().catch(() => '');
-      throw new Error(`LLM API error ${response.status}: ${sanitizeErrorBody(text)}`);
+    await throwForStatus(response);
+    return response;
+  }
+
+  /**
+   * Custo confirmado de uma geracao, no OpenRouter.
+   *
+   * O valor que vem no stream ja e o cobrado, mas nem sempre esta pronto no
+   * instante em que a resposta termina. Este endpoint fecha a conta depois.
+   *
+   * A `apiKey` fica aqui dentro: o enriquecedor recebe uma funcao, nunca a
+   * credencial.
+   */
+  async getGeneration(id: string, signal?: AbortSignal): Promise<GenerationStats> {
+    const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
+    if (signal) signals.push(signal);
+
+    const url = `${this.baseUrl}/generation?id=${encodeURIComponent(id)}`;
+    const init: RequestInit = {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.any(signals),
+    };
+
+    const response = this.fetchImpl
+      ? await this.fetchImpl(new Request(url, init))
+      : await fetch(url, init);
+
+    // 404 e 425 dizem "ainda nao", nao "nao existe": a geracao pode nao ter
+    // sido contabilizada no instante em que o stream fechou.
+    if (response.status === 404 || response.status === 425) {
+      throw new GenerationNotReadyError(`generation ${id} ainda nao esta disponivel`);
     }
 
-    return response;
+    await throwForStatus(response);
+
+    const json = (await response.json()) as { data?: GenerationPayload };
+    const data = json.data;
+
+    // Corpo sem custo tambem e "ainda nao": tratar como definitivo gravaria
+    // indisponivel numa geracao que so demorou a fechar a conta.
+    if (data?.total_cost === null || data?.total_cost === undefined) {
+      throw new GenerationNotReadyError(`generation ${id} ainda sem custo`);
+    }
+
+    return {
+      totalCostUsd: data.total_cost,
+      ...(data.upstream_inference_cost !== undefined && {
+        upstreamCostUsd: data.upstream_inference_cost,
+      }),
+      ...(data.cache_discount !== undefined && { cacheDiscountUsd: data.cache_discount }),
+      ...(data.native_tokens_cached !== undefined && { cachedTokens: data.native_tokens_cached }),
+      ...(data.native_tokens_reasoning !== undefined && {
+        reasoningTokens: data.native_tokens_reasoning,
+      }),
+      ...(data.provider_name !== undefined && { providerName: data.provider_name }),
+      ...(data.native_finish_reason !== undefined && {
+        nativeFinishReason: data.native_finish_reason,
+      }),
+    };
   }
 
   private async *parseSSEStream(
@@ -608,6 +651,48 @@ interface SentRequest {
   /** Depois do ultimo retry, quando a resposta foi aceita. */
   headersAt: number;
   attempts: number;
+}
+
+/** Traduz um status de erro em excecao, distinguindo o que vale retentar. */
+async function throwForStatus(response: Response): Promise<void> {
+  if (response.ok) return;
+
+  if (isRetryableStatus(response.status)) {
+    // Parse Retry-After header (seconds or HTTP-date)
+    let retryAfterMs: number | undefined;
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      retryAfterMs = Number.isNaN(seconds)
+        ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
+        : seconds * 1000;
+    }
+    throw new RetryableError(`LLM API error: ${response.status}`, retryAfterMs);
+  }
+
+  const text = await response.text().catch(() => '');
+  throw new Error(`LLM API error ${response.status}: ${sanitizeErrorBody(text)}`);
+}
+
+/** Resposta de `GET /generation`, nos campos que interessam ao custo. */
+interface GenerationPayload {
+  total_cost?: number | null;
+  upstream_inference_cost?: number;
+  cache_discount?: number;
+  native_tokens_cached?: number;
+  native_tokens_reasoning?: number;
+  provider_name?: string;
+  native_finish_reason?: string;
+}
+
+export interface GenerationStats {
+  totalCostUsd: number;
+  upstreamCostUsd?: number;
+  cacheDiscountUsd?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
+  providerName?: string;
+  nativeFinishReason?: string;
 }
 
 interface SSEPayload {

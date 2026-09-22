@@ -113,7 +113,9 @@ describe('Agent telemetry', () => {
     expect(call.durationMs).toBeGreaterThanOrEqual(0);
   });
 
-  it('marks cost unavailable rather than guessing when the provider is silent', async () => {
+  // Tres estados, nao dois: "ainda vou saber" e "nao tenho a quem perguntar"
+  // levam a acoes diferentes, e so o segundo e definitivo.
+  it('leaves the cost pending when the provider can still confirm it', async () => {
     mockProvider(WITHOUT_COST);
     const { sink, records } = collectingSink();
 
@@ -122,11 +124,37 @@ describe('Agent telemetry', () => {
     const call = records.find((record) => record.kind === 'llm_call');
     if (call?.kind !== 'llm_call') throw new Error('no llm_call');
 
-    expect(call.costStatus).toBe('unavailable');
+    // baseUrl padrao e o OpenRouter, e ha id de geracao para perguntar depois.
+    expect(call.costStatus).toBe('pending');
     expect(call.usageDetail?.costUsd).toBeUndefined();
     expect(call.costSource).toBeUndefined();
     // Token counts are still real even when the price is not known.
     expect(call.usage?.totalTokens).toBe(12);
+  });
+
+  it('marks cost unavailable when no provider can report it', async () => {
+    mockProvider(WITHOUT_COST);
+    const { sink, records } = collectingSink();
+
+    const agent = Agent.create({
+      apiKey: 'sk-test-key-0123456789abcdef',
+      // OpenAI direta nao informa custo por API: nao ha o que buscar depois.
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o-mini',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      telemetry: { sink },
+    });
+    for await (const _ of agent.stream('Hi')) {
+      /* drain */
+    }
+    await agent.destroy();
+
+    const call = records.find((record) => record.kind === 'llm_call');
+    if (call?.kind !== 'llm_call') throw new Error('no llm_call');
+
+    expect(call.costStatus).toBe('unavailable');
+    expect(call.usageDetail?.costUsd).toBeUndefined();
   });
 
   it('never lets a broken sink take the turn down', async () => {
