@@ -1,6 +1,6 @@
 {
   "name": "@gba/ai-harness",
-  "version": "2.1.2",
+  "version": "3.0.0",
   "packageManager": "pnpm@11.17.0",
   "description": "AI Harness SDK by GBA - Standalone TypeScript agent library with streaming, tools, memory, knowledge (RAG), and skills",
   "type": "module",
