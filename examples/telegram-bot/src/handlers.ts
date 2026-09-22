@@ -12,14 +12,14 @@ const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
  */
 export async function handleStart(ctx: Context): Promise<void> {
   await ctx.reply(
-    `*AI Harness SDK Bot* \n\n` +
-      `I'm an AI assistant powered by AI Harness SDK.\n\n` +
-      `*Commands:*\n` +
-      `/start — This message\n` +
-      `/reset — Clear conversation history\n` +
-      `/usage — Show token usage\n` +
-      `/memory — Save a memory\n\n` +
-      `Send me a message, a photo or a voice note — I read all three.`,
+    `*Oinko*\n\n` +
+      `Seu assistente pessoal. Eu lembro do que conversamos.\n\n` +
+      `*Comandos*\n` +
+      `/start — esta mensagem\n` +
+      `/reset — limpa o historico desta conversa\n` +
+      `/usage — quanto foi consumido em tokens\n` +
+      `/memory — guarda algo que eu devo lembrar\n\n` +
+      `Manda texto, foto ou audio — eu leio os tres.`,
     { parse_mode: "Markdown" },
   );
 }
