@@ -146,6 +146,18 @@ export class SqliteTelemetrySink implements TelemetrySink {
     return { written: this.written, dropped: this.dropped };
   }
 
+  /**
+   * Redige um texto curto que vai direto para uma coluna, sem virar payload.
+   *
+   * Mensagem de erro de provedor ecoa credencial com frequencia — um 401 da
+   * OpenAI responde "Incorrect API key provided: sk-…" com a chave inteira. A
+   * coluna de erro precisa da mesma redacao que o payload.
+   */
+  private scrub(text: string | undefined): SqlValue {
+    if (text === undefined) return null;
+    return redactSecrets(text, { secrets: this.secrets, maxChars: this.maxPayloadChars });
+  }
+
   /** Guarda o conteudo e devolve a referencia, conforme o modo de captura. */
   private payload(content: string | undefined): SqlValue {
     if (content === undefined || this.capture === 'none') return null;
@@ -250,8 +262,8 @@ export class SqliteTelemetrySink implements TelemetrySink {
       record.usage?.outputTokens ?? 0,
       record.usage?.totalTokens ?? 0,
       record.error?.name ?? null,
-      record.error?.message ?? null,
-      record.error?.stack ?? null,
+      this.scrub(record.error?.message),
+      this.scrub(record.error?.stack),
       record.endedAt,
       record.durationMs,
       record.ttftMs ?? null,
@@ -323,7 +335,7 @@ export class SqliteTelemetrySink implements TelemetrySink {
       streamed: bool(record.streamed),
       cancelled: bool(record.cancelled),
       error_name: record.error?.name ?? null,
-      error_message: record.error?.message ?? null,
+      error_message: this.scrub(record.error?.message),
       started_at: record.startedAt,
       ended_at: record.endedAt ?? null,
     });
@@ -363,7 +375,7 @@ export class SqliteTelemetrySink implements TelemetrySink {
       content_types: record.contentTypes ?? null,
       is_error: bool(record.isError),
       timed_out: bool(record.timedOut),
-      error_message: record.errorMessage ?? null,
+      error_message: this.scrub(record.errorMessage),
       duration_ms: record.durationMs,
       started_at: record.startedAt,
     });
@@ -381,7 +393,7 @@ export class SqliteTelemetrySink implements TelemetrySink {
       questions_json: json(record.questions) ?? '{}',
       answers_json: json(record.answers) ?? '{}',
       duration_ms: record.durationMs,
-      error: record.error ?? null,
+      error: this.scrub(record.error),
       created_at: record.createdAt,
     });
   }

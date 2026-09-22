@@ -323,3 +323,39 @@ describe('cost roll-up', () => {
     expect(saved?.cost_status).toBe('unavailable');
   });
 });
+
+describe('error columns', () => {
+  // Um 401 da OpenAI responde "Incorrect API key provided: sk-…" com a chave
+  // inteira. A coluna de erro precisa da mesma redacao que o payload.
+  it('redacts credentials echoed back inside an error message', async () => {
+    const leaky = new SqliteTelemetrySink(database, {
+      flushIntervalMs: 0,
+      secrets: ['sk-fake-key-value'],
+    });
+
+    leaky.write(start);
+    leaky.write({
+      kind: 'execution_end',
+      traceId: 't1',
+      status: 'error',
+      error: {
+        name: 'Error',
+        message: 'LLM API error 401: Incorrect API key provided: sk-fake-key-value',
+        stack: 'Error: sk-fake-key-value\n  at x',
+      },
+      endedAt: 2_000,
+      durationMs: 1_000,
+    });
+    await leaky.flush();
+
+    const saved = row<{ error_message: string; error_stack: string }>(
+      'SELECT error_message, error_stack FROM executions WHERE trace_id = ?',
+      't1',
+    );
+
+    expect(saved?.error_message).not.toContain('sk-fake-key-value');
+    expect(saved?.error_message).toContain('401');
+    expect(saved?.error_stack).not.toContain('sk-fake-key-value');
+    await leaky.close();
+  });
+});

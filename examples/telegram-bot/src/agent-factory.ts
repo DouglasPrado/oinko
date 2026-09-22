@@ -101,11 +101,25 @@ Formatting:
       ? { routing: { fastModel: config.typesafe.fastModel, minConfidence: 0.85 } }
       : {}),
 
+    ...(config.telemetry.enabled && {
+      telemetry: {
+        dbPath: config.telemetry.dbPath,
+        retentionDays: config.telemetry.retentionDays,
+        capturePayloads: config.telemetry.capturePayloads,
+        // Separa este bot dos outros que escrevam no mesmo banco.
+        app: "telegram-bot",
+      },
+    }),
+
     maxIterations: 20,
     onToolError: "continue",
     logLevel: "debug",
     dbPath: "./data/agent.db",
   });
+
+  if (config.telemetry.enabled) {
+    console.log(`Telemetria ligada — banco em ${config.telemetry.dbPath}`);
+  }
 
   // Register tools
   for (const tool of createTools()) {

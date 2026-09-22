@@ -51,6 +51,25 @@ export const config = {
     // Modelo barato para turnos triviais. Sem isso, nao ha roteamento.
     fastModel: process.env.FAST_MODEL,
   },
+  /**
+   * Telemetria de execucao.
+   *
+   * Grava, por turno, o prompt montado, cada chamada de LLM com o custo que o
+   * provedor cobrou, as tool calls e os tempos. A dashboard le esse arquivo.
+   *
+   * Ligada por padrao: o proposito deste exemplo e mostrar o SDK trabalhando,
+   * e telemetria desligada nao mostra nada. TELEMETRY=off desliga.
+   */
+  telemetry: {
+    enabled: process.env.TELEMETRY !== 'off',
+    dbPath: process.env.TELEMETRY_DB_PATH ?? './data/telemetry.db',
+    retentionDays: Number(process.env.TELEMETRY_RETENTION_DAYS ?? 30),
+    /**
+     * Conteudo de conversa fica no banco em 'full'. Em producao com dados de
+     * terceiro, 'hashed' guarda tamanho e identidade sem o texto.
+     */
+    capturePayloads: (process.env.TELEMETRY_CAPTURE ?? 'full') as 'none' | 'hashed' | 'full',
+  },
   mcp: {
     albert: {
       url: process.env.MCP_ALBERT_URL,
