@@ -60,6 +60,30 @@ export const config = {
    * Ligada por padrao: o proposito deste exemplo e mostrar o SDK trabalhando,
    * e telemetria desligada nao mostra nada. TELEMETRY=off desliga.
    */
+  /**
+   * Higgsfield: geracao de imagem e video por MCP.
+   *
+   * A credencial e obtida na dashboard (fluxo OAuth com browser) e gravada em
+   * .harness/credentials/higgsfield.json; aqui so se le e renova. Sem
+   * credencial, o bot sobe igual, sem as ferramentas.
+   */
+  higgsfield: {
+    enabled: process.env.HIGGSFIELD !== 'off',
+    url: process.env.HIGGSFIELD_MCP_URL ?? 'https://mcp.higgsfield.ai/mcp',
+    /**
+     * Recorte deliberado das 101 ferramentas que o servidor publica: o schema
+     * de todas custaria cerca de 44 mil tokens em cada chamada de LLM.
+     */
+    tools: (
+      process.env.HIGGSFIELD_TOOLS ??
+      'generate_image,generate_video,job_status,jobs_wait,models_explore'
+    )
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean),
+    /** Geracao e assincrona, mas jobs_wait faz long-poll; 2 min cobre o caso comum. */
+    timeoutMs: Number(process.env.HIGGSFIELD_TIMEOUT_MS ?? 120_000),
+  },
   telemetry: {
     enabled: process.env.TELEMETRY !== 'off',
     dbPath: process.env.TELEMETRY_DB_PATH ?? './data/telemetry.db',

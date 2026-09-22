@@ -736,7 +736,12 @@ export function withFreshHeaders(
 ): (url: string | URL, init?: RequestInit) => Promise<Response> {
   return async (url, init) => {
     const fresh = await getHeaders();
-    return fetch(url, { ...init, headers: { ...init?.headers, ...fresh } });
+    // Via `Headers`, e nao por spread: o transporte passa uma instancia de
+    // Headers, e espalhar um objeto assim produz `{}` — o Content-Type se
+    // perde e o servidor recusa a requisicao.
+    const merged = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(fresh)) merged.set(name, value);
+    return fetch(url, { ...init, headers: merged });
   };
 }
 

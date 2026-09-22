@@ -20,10 +20,10 @@ describe('withFreshHeaders', () => {
     await wrapped('https://exemplo.test/mcp');
 
     expect(getHeaders).toHaveBeenCalledTimes(2);
-    const first = fetchSpy.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    const second = fetchSpy.mock.calls[1]?.[1]?.headers as Record<string, string>;
-    expect(first.Authorization).toBe('Bearer primeiro');
-    expect(second.Authorization).toBe('Bearer segundo');
+    const first = fetchSpy.mock.calls[0]?.[1]?.headers as Headers;
+    const second = fetchSpy.mock.calls[1]?.[1]?.headers as Headers;
+    expect(first.get('authorization')).toBe('Bearer primeiro');
+    expect(second.get('authorization')).toBe('Bearer segundo');
   });
 
   it('keeps the other headers the transport had set', async () => {
@@ -35,10 +35,10 @@ describe('withFreshHeaders', () => {
       headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json' },
     });
 
-    const headers = fetchSpy.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    expect(headers.Accept).toBe('text/event-stream');
-    expect(headers['Content-Type']).toBe('application/json');
-    expect(headers.Authorization).toBe('Bearer x');
+    const headers = fetchSpy.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get('accept')).toBe('text/event-stream');
+    expect(headers.get('content-type')).toBe('application/json');
+    expect(headers.get('authorization')).toBe('Bearer x');
   });
 
   it('lets the fresh value win over a stale one already in the init', async () => {
@@ -47,8 +47,25 @@ describe('withFreshHeaders', () => {
 
     await wrapped('https://exemplo.test/mcp', { headers: { Authorization: 'Bearer velho' } });
 
-    const headers = fetchSpy.mock.calls[0]?.[1]?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer novo');
+    const headers = fetchSpy.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get('authorization')).toBe('Bearer novo');
+  });
+
+  // O transporte do MCP passa uma instancia de Headers. Espalhar um objeto
+  // desses com `...` produz `{}`: o Content-Type sumia e o servidor respondia
+  // "Unsupported Media Type".
+  it('preserves headers given as a Headers instance, not a plain object', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('ok'));
+    const wrapped = withFreshHeaders(() => Promise.resolve({ Authorization: 'Bearer x' }));
+
+    await wrapped('https://exemplo.test/mcp', {
+      headers: new Headers({ 'Content-Type': 'application/json', Accept: 'text/event-stream' }),
+    });
+
+    const sent = fetchSpy.mock.calls[0]?.[1]?.headers as Headers;
+    expect(sent.get('content-type')).toBe('application/json');
+    expect(sent.get('accept')).toBe('text/event-stream');
+    expect(sent.get('authorization')).toBe('Bearer x');
   });
 
   it('propagates a failure to renew instead of calling with no credential', async () => {

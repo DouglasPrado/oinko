@@ -7,6 +7,7 @@ import {
 } from "@gba/ai-harness";
 import { config } from "./config.js";
 import { createTools } from "./tools.js";
+import { CREDENTIAL_PATH, higgsfieldHeaders, readCredential } from "./higgsfield-auth.js";
 
 let agent: Agent | null = null;
 let decisionSink: JsonlSink | null = null;
@@ -133,8 +134,45 @@ O canal e o Telegram:
     agent.addTool(tool);
   }
 
+  await connectHiggsfield(agent);
+
 
   return agent;
+}
+
+/**
+ * Liga o MCP do Higgsfield, se houver credencial.
+ *
+ * Falhar aqui nao impede o bot de funcionar: sem as ferramentas de geracao ele
+ * continua conversando, e a mensagem diz o que fazer para ligar.
+ */
+async function connectHiggsfield(agent: Agent): Promise<void> {
+  if (!config.higgsfield.enabled) return;
+
+  if (!readCredential(CREDENTIAL_PATH)) {
+    console.log(
+      "Higgsfield sem credencial — abra a dashboard e autorize para ligar a geracao de imagem e video",
+    );
+    return;
+  }
+
+  try {
+    await agent.connectMCP({
+      name: "higgsfield",
+      transport: "http",
+      url: config.higgsfield.url,
+      // Resolvido a cada requisicao: o token dura 24 horas.
+      getHeaders: () => higgsfieldHeaders(),
+      tools: config.higgsfield.tools,
+      timeout: config.higgsfield.timeoutMs,
+    });
+    console.log(`Higgsfield ligado — ${config.higgsfield.tools.length} ferramentas`);
+  } catch (error) {
+    console.error(
+      "Higgsfield nao conectou:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 export async function destroyAgent(): Promise<void> {
