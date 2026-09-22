@@ -64,7 +64,7 @@ export function toolsRequireEffortNone(model: string): boolean {
 }
 
 /** True when this reasoning model takes a non-default temperature anyway. */
-export function acceptsTemperature(model: string): boolean {
+function acceptsTemperature(model: string): boolean {
   return findModelFamily(model)?.acceptsTemperature === true;
 }
 
