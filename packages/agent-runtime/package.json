@@ -20,7 +20,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@oinko/core": "workspace:*"
+    "@oinko/core": "workspace:*",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

@@ -41,15 +41,11 @@ describe('multi-channel agent', () => {
     expect(agent.chat).toHaveBeenCalledTimes(2);
   });
 
-  it('requires Telegram credentials only when enabled and validates modes', () => {
+  it('configures the agent independently of channel credentials', () => {
     const env = { HIGGSFIELD: 'off', LLM_API_KEY: 'test', AGENT_MODEL: 'test-model' };
-    expect(readConfig(env, ['cli']).mode).toBe('cli');
-    expect(readConfig({ ...env, TELEGRAM_BOT_TOKEN: '' }, ['cli']).mode).toBe('cli');
-    expect(() => readConfig(env, ['both'])).toThrow(/TELEGRAM_BOT_TOKEN/);
-    expect(() => readConfig(env, ['typo'])).toThrow();
-    expect(() => readConfig({ ...env, TELEGRAM_BOT_TOKEN: '123:test' }, ['telegram'])).toThrow(
-      /TELEGRAM_ALLOWED_USER_IDS/,
-    );
+    expect(readConfig(env).AGENT_ID).toBe('oink-lp');
+    expect(readConfig(env)).not.toHaveProperty('mode');
+    expect(() => readConfig({ ...env, LLM_API_KEY: '' })).toThrow(/LLM_API_KEY/);
   });
 
   it('orders commands after active turns and recovers the queue after errors', async () => {

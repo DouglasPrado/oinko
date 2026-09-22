@@ -1,0 +1,24 @@
+{
+  "channels": [
+    { "id": "local", "type": "cli" },
+    {
+      "id": "telegram",
+      "type": "telegram",
+      "options": {
+        "token": { "env": "TELEGRAM_BOT_TOKEN" },
+        "allowedUserIds": { "env": "TELEGRAM_ALLOWED_USER_IDS", "split": "," }
+      }
+    }
+  ],
+  "mcps": [
+    {
+      "id": "higgsfield",
+      "type": "higgsfield",
+      "options": {
+        "credentialPath": { "env": "HIGGSFIELD_CREDENTIAL_PATH" },
+        "url": { "env": "HIGGSFIELD_MCP_URL" },
+        "tools": { "env": "HIGGSFIELD_TOOLS", "split": "," }
+      }
+    }
+  ]
+}

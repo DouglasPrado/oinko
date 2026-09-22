@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { z } from 'zod';
+import type { McpProvider } from '@oinko/agent-runtime';
 import type { Agent } from '@oinko/core';
 import { higgsfieldHeaders } from './credentials.js';
 
@@ -15,6 +16,7 @@ export const HIGGSFIELD_INSTRUCTIONS =
   '\nHiggsfield: consulte models_explore para obter IDs reais de modelos. Após gerar, aguarde com jobs_wait. Para usar a imagem enviada na conversa, chame preparar_imagem_enviada antes da geração. Retorne links reais dos resultados; nunca invente IDs ou URLs.';
 export interface HiggsfieldOptions {
   credentialPath: string;
+  name?: string;
   url?: string;
   tools?: string[];
   timeoutMs?: number;
@@ -112,7 +114,7 @@ export function createHiggsfieldIntegration(options: HiggsfieldOptions) {
     uploadImage,
     async connect(agent: Agent) {
       await agent.connectMCP({
-        name: 'higgsfield',
+        name: options.name ?? 'higgsfield',
         transport: 'http',
         url,
         getHeaders: headers,
@@ -120,7 +122,10 @@ export function createHiggsfieldIntegration(options: HiggsfieldOptions) {
         timeout,
       });
       agent.addTool({
-        name: 'preparar_imagem_enviada',
+        name:
+          options.name && options.name !== 'higgsfield'
+            ? `${options.name}_preparar_imagem_enviada`
+            : 'preparar_imagem_enviada',
         description:
           'Envia a última imagem desta conversa ao Higgsfield e devolve media_id para usar como referência na geração.',
         parameters: z.object({}),
@@ -168,3 +173,34 @@ export function createHiggsfieldIntegration(options: HiggsfieldOptions) {
     },
   };
 }
+
+export const higgsfieldMcp: McpProvider = async (options, context) => {
+  const parsed = z
+    .object({
+      credentialPath: z.string().min(1),
+      url: z.url().optional(),
+      tools: z.array(z.string()).optional(),
+      timeoutMs: z.number().positive().optional(),
+    })
+    .parse(options);
+  const integration = createHiggsfieldIntegration({ ...parsed, name: context.id });
+  const cleanup = async () => {
+    try {
+      await context.agent.disconnectMCP(context.id);
+    } finally {
+      context.agent.removeTool(
+        context.id === 'higgsfield'
+          ? 'preparar_imagem_enviada'
+          : `${context.id}_preparar_imagem_enviada`,
+      );
+      await integration.close();
+    }
+  };
+  try {
+    await integration.connect(context.agent);
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+  return cleanup;
+};

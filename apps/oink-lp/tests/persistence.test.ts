@@ -18,10 +18,12 @@ it('persists history across restarts and keeps Telegram separate from CLI', asyn
       { headers: { 'Content-Type': 'text/event-stream' } },
     );
   });
-  const config = readConfig(
-    { HIGGSFIELD: 'off', LLM_API_KEY: 'fake', AGENT_MODEL: 'test', AGENT_DATA_DIR: directory },
-    ['cli'],
-  );
+  const config = readConfig({
+    HIGGSFIELD: 'off',
+    LLM_API_KEY: 'fake',
+    AGENT_MODEL: 'test',
+    AGENT_DATA_DIR: directory,
+  });
   const route = { channel: 'cli' as const, connectionId: 'local', conversationId: '42' };
   let app = createAgent(config);
   try {

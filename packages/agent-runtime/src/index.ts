@@ -18,7 +18,7 @@ export class TranscriptionError extends Error {
 }
 
 export interface ConversationRoute {
-  channel: 'cli' | 'telegram';
+  channel: string;
   connectionId: string;
   conversationId: string;
 }
@@ -47,7 +47,7 @@ export class AgentRuntime {
   }
 
   handle(route: ConversationRoute, input: AgentInput, signal?: AbortSignal): Promise<string> {
-    const operation = this.pending.then(async () => {
+    return this.exclusive(async () => {
       signal?.throwIfAborted();
       if (typeof input === 'string') return this.execute(route, input.trim(), signal);
       let content: string | ContentPart[];
@@ -66,6 +66,10 @@ export class AgentRuntime {
       // Captions and spoken text are conversation content, not app commands.
       return this.agent.chat(content, { threadId: threadIdFor(this.agentId, route), signal });
     });
+  }
+
+  exclusive<T>(action: () => Promise<T>): Promise<T> {
+    const operation = this.pending.then(action);
     this.pending = operation.catch(() => undefined);
     return operation;
   }
@@ -97,3 +101,7 @@ export class AgentRuntime {
 }
 
 export { createAgentHost, type AgentHostConfig } from './host.js';
+
+export * from './connections.js';
+export * from './control.js';
+export * from './service.js';

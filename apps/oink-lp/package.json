@@ -11,7 +11,10 @@
     "start": "node --env-file-if-exists=.env dist/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "chat": "node --env-file-if-exists=.env dist/main.js chat",
+    "status": "node --env-file-if-exists=.env dist/main.js status",
+    "reload": "node --env-file-if-exists=.env dist/main.js reload"
   },
   "dependencies": {
     "zod": "^4.4.3",

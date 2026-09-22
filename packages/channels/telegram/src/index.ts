@@ -1,5 +1,5 @@
 import { Bot, type Context } from 'grammy';
-import { TranscriptionError, type AgentRuntime } from '@oinko/agent-runtime';
+import { TranscriptionError, type AgentRuntime, type ChannelProvider } from '@oinko/agent-runtime';
 import { buildAgentInput, MEDIA_ERROR_MESSAGES } from './media.js';
 
 // Count UTF-16 units conservatively and never split an emoji surrogate pair.
@@ -19,6 +19,7 @@ export function splitMessage(text: string): string[] {
 
 export interface TelegramOptions {
   token: string;
+  onReady?: () => void;
   allowedUserIds: readonly string[];
 }
 
@@ -119,7 +120,10 @@ export async function runTelegram(
       allowed_updates: ['message'],
       onStart: () => {
         if (signal.aborted) stop();
-        else console.log(`${runtime.name} · Telegram conectado`);
+        else {
+          config.onReady?.();
+          console.log(`${runtime.name} · Telegram conectado`);
+        }
       },
     });
   } catch (error) {
@@ -129,3 +133,21 @@ export async function runTelegram(
     await stopping;
   }
 }
+
+export const telegramChannel: ChannelProvider = async (options, context) => {
+  const { token, allowedUserIds } = options;
+  if (
+    typeof token !== 'string' ||
+    !token.trim() ||
+    !Array.isArray(allowedUserIds) ||
+    !allowedUserIds.length ||
+    allowedUserIds.some((id) => typeof id !== 'string' || !/^[1-9]\d*$/.test(id))
+  ) {
+    throw new Error('Configure token e allowedUserIds do Telegram.');
+  }
+  await runTelegram(
+    { token, allowedUserIds, onReady: context.ready },
+    context.runtime,
+    context.signal,
+  );
+};

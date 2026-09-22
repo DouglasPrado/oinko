@@ -39,9 +39,7 @@ const schema = z.object({
   TELEMETRY_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
 });
 
-export function readConfig(env: NodeJS.ProcessEnv, args: string[]) {
-  const mode = z.enum(['cli', 'telegram', 'both']).parse(args[0] ?? 'cli');
-  if (args.length > 1) throw new Error('Uso: oink-lp [cli|telegram|both]');
+export function readConfig(env: NodeJS.ProcessEnv) {
   const result = schema.safeParse({
     ...env,
     LLM_BASE_URL: env.LLM_BASE_URL || undefined,
@@ -62,17 +60,8 @@ export function readConfig(env: NodeJS.ProcessEnv, args: string[]) {
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean);
-  if (mode !== 'cli') {
-    if (!values.TELEGRAM_BOT_TOKEN) throw new Error('Configure TELEGRAM_BOT_TOKEN.');
-    if (!allowedUserIds.length || allowedUserIds.some((id) => !/^[1-9]\d*$/.test(id))) {
-      throw new Error(
-        'Configure TELEGRAM_ALLOWED_USER_IDS com IDs numéricos separados por vírgulas.',
-      );
-    }
-  }
   return {
     ...values,
-    mode,
     allowedUserIds,
     dataDir: resolve(values.AGENT_DATA_DIR, values.AGENT_ID),
     telemetryDbPath: values.TELEMETRY_DB_PATH

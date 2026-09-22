@@ -1,9 +1,9 @@
 import { createInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
-import type { AgentRuntime } from '@oinko/agent-runtime';
+import { controlRequest, type ChannelProvider, type AgentRuntime } from '@oinko/agent-runtime';
 
 export async function runCli(
-  runtime: AgentRuntime,
+  runtime: Pick<AgentRuntime, 'name' | 'handle'>,
   sessionId: string,
   signal: AbortSignal,
   input: Readable = process.stdin,
@@ -42,4 +42,46 @@ export async function runCli(
     signal.removeEventListener('abort', close);
     reader.close();
   }
+}
+
+export const cliChannel: ChannelProvider = async (_options, context) => {
+  if (context.signal.aborted) return;
+  context.ready();
+  await new Promise<void>((resolve) =>
+    context.signal.addEventListener('abort', () => resolve(), { once: true }),
+  );
+};
+
+export async function attachCli(
+  socketPath: string,
+  sessionId: string,
+  signal: AbortSignal,
+  connectionId = 'local',
+  input: Readable = process.stdin,
+  output: Writable = process.stdout,
+): Promise<void> {
+  const status = await controlRequest<{ agentId: string }>(
+    socketPath,
+    '/status',
+    undefined,
+    signal,
+  );
+  await runCli(
+    {
+      name: status.agentId,
+      async handle(_route, text, requestSignal) {
+        const result = await controlRequest<{ answer: string }>(
+          socketPath,
+          '/message',
+          { connectionId, sessionId, text },
+          requestSignal,
+        );
+        return result.answer;
+      },
+    },
+    sessionId,
+    signal,
+    input,
+    output,
+  );
 }

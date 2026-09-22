@@ -43,16 +43,13 @@ describe('channel adapters', () => {
 
   it('routes Telegram replies and rejects unauthorized users and group chats', async () => {
     const { runtime, agent } = fixture();
-    const config = readConfig(
-      {
-        HIGGSFIELD: 'off',
-        LLM_API_KEY: 'fake',
-        AGENT_MODEL: 'fake',
-        TELEGRAM_BOT_TOKEN: '123:fake',
-        TELEGRAM_ALLOWED_USER_IDS: '42',
-      },
-      ['telegram'],
-    );
+    const config = readConfig({
+      HIGGSFIELD: 'off',
+      LLM_API_KEY: 'fake',
+      AGENT_MODEL: 'fake',
+      TELEGRAM_BOT_TOKEN: '123:fake',
+      TELEGRAM_ALLOWED_USER_IDS: '42',
+    });
     const bot = createTelegramBot(
       { token: config.TELEGRAM_BOT_TOKEN!, allowedUserIds: config.allowedUserIds },
       runtime,

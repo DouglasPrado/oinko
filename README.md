@@ -26,11 +26,11 @@ Node 22.13+ e pnpm 11 (versão fixada no `packageManager`).
 ```bash
 pnpm install
 pnpm build:packages
-pnpm --filter @oinko/oink-lp dev cli
+pnpm --filter @oinko/oink-lp dev
 pnpm --filter @oinko/dashboard dev
 ```
 
-Configure `apps/oink-lp/.env` usando seu `.env.example`. Os modos `telegram` e `both` exigem o token e os IDs autorizados; execute um único consumidor por token. [Configuração do Oink LP](apps/oink-lp/README.md).
+Configure `apps/oink-lp/.env` usando seu `.env.example`. O bot inicia todos os canais e MCPs habilitados em `apps/oink-lp/connections.json`. Use `pnpm --filter @oinko/oink-lp chat` para conectar a CLI ao processo existente e `reload` para aplicar mudanças nas conexões. Telegram exige token e IDs autorizados. [Configuração do Oink LP](apps/oink-lp/README.md).
 
 ## Dependências e responsabilidades
 
@@ -46,7 +46,7 @@ A dashboard autoriza a conta e os agentes consomem a credencial em `.harness/cre
 
 O pacote compartilha o formato de credencial, grava arquivos atomicamente com permissão 600 e serializa a renovação entre processos por arquivo. Se um processo morrer segurando o bloqueio, a próxima tentativa falha por timeout; após parar os consumidores, remova somente o diretório `<credencial>.lock` para liberar a renovação. Credenciais antigas dos exemplos não são versionadas nem apagadas.
 
-O Oink LP conecta Higgsfield ao iniciar quando a credencial está disponível; `HIGGSFIELD=off` desativa. Depois da autorização inicial, reinicie o agente para carregar as ferramentas. As imagens recebidas podem ser preparadas como referência com `preparar_imagem_enviada`.
+O Oink LP conecta Higgsfield ao iniciar quando a credencial está disponível; `HIGGSFIELD=off` desativa. Depois da autorização inicial, execute `pnpm --filter @oinko/oink-lp reload` para carregar as ferramentas. As imagens recebidas podem ser preparadas como referência com `preparar_imagem_enviada`.
 
 ## Verificação
 
