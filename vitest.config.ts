@@ -14,6 +14,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // A suite live fala com provedores reais e gasta tokens: roda so por
+    // 'pnpm test:live', nunca junto do 'pnpm test'.
+    exclude: ['tests/live/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

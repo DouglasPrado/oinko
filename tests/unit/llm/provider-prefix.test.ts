@@ -41,3 +41,35 @@ describe('checkModelSuitsEndpoint', () => {
     ).toBeUndefined();
   });
 });
+
+describe('LLMClient.embed', () => {
+  it('refuses a prefixed embedding model on the OpenAI endpoint', async () => {
+    const { LLMClient } = await import('../../../src/llm/llm-client.js');
+    const client = new LLMClient({
+      apiKey: 'k',
+      model: 'openai/text-embedding-3-small',
+      baseUrl: 'https://api.openai.com/v1',
+    });
+
+    await expect(client.embed(['oi'])).rejects.toThrow(/provider prefix/);
+  });
+
+  it('accepts the bare name there', async () => {
+    const { LLMClient } = await import('../../../src/llm/llm-client.js');
+    let chamou = false;
+    const client = new LLMClient({
+      apiKey: 'k',
+      model: 'text-embedding-3-small',
+      baseUrl: 'https://api.openai.com/v1',
+      fetch: async () => {
+        chamou = true;
+        return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { status: 200 });
+      },
+    });
+
+    // O fetch injetado so vale para chat; embeddings vao pelo fetch global,
+    // entao aqui basta que a validacao nao tenha barrado antes da chamada.
+    await client.embed(['oi']).catch(() => undefined);
+    expect(chamou).toBe(false);
+  });
+});

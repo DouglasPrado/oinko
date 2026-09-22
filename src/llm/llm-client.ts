@@ -196,10 +196,18 @@ export class LLMClient {
   }
 
   async embed(texts: string[], model?: string): Promise<number[][]> {
+    // Mesma checagem do chat: o modelo de embedding tem default proprio
+    // (`openai/text-embedding-3-small`, a grafia do OpenRouter), e quem aponta
+    // o baseUrl para a OpenAI sem trocar esse campo recebia um "invalid model
+    // ID" cru, vindo de um caminho que nem parece relacionado ao que mudou.
+    const embedModel = model ?? this.model;
+    const mismatch = checkModelSuitsEndpoint(embedModel, this.baseUrl);
+    if (mismatch !== undefined) throw new Error(mismatch);
+
     const response = await retry(
       () =>
         this.fetchAPI('/embeddings', {
-          model: model ?? this.model,
+          model: embedModel,
           input: texts,
         }),
       { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
