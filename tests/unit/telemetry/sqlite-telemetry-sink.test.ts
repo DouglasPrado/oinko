@@ -279,3 +279,47 @@ describe('SqliteTelemetrySink', () => {
     });
   });
 });
+
+describe('cost roll-up', () => {
+  it('consolidates the execution cost from its calls', async () => {
+    sink.write(start);
+    sink.write({ ...llmCall, id: 'c1', seq: 0, usageDetail: { costUsd: 0.004 } });
+    sink.write({ ...llmCall, id: 'c2', seq: 1, usageDetail: { costUsd: 0.006 } });
+    sink.write({
+      kind: 'execution_end',
+      traceId: 't1',
+      status: 'ok',
+      endedAt: 3_000,
+      durationMs: 2_000,
+    });
+    await sink.flush();
+
+    const saved = row<{ cost_usd: number; cost_status: string; llm_call_count: number }>(
+      'SELECT cost_usd, cost_status, llm_call_count FROM executions WHERE trace_id = ?',
+      't1',
+    );
+    expect(saved?.cost_usd).toBeCloseTo(0.01, 9);
+    expect(saved?.cost_status).toBe('confirmed');
+    expect(saved?.llm_call_count).toBe(2);
+  });
+
+  it('leaves the execution cost null when no call reported one', async () => {
+    sink.write(start);
+    sink.write({ ...llmCall, id: 'c1', seq: 0, costStatus: 'unavailable', usageDetail: {} });
+    sink.write({
+      kind: 'execution_end',
+      traceId: 't1',
+      status: 'ok',
+      endedAt: 3_000,
+      durationMs: 2_000,
+    });
+    await sink.flush();
+
+    const saved = row<{ cost_usd: number | null; cost_status: string }>(
+      'SELECT cost_usd, cost_status FROM executions WHERE trace_id = ?',
+      't1',
+    );
+    expect(saved?.cost_usd).toBeNull();
+    expect(saved?.cost_status).toBe('unavailable');
+  });
+});

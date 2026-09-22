@@ -496,7 +496,11 @@ export class Agent {
           traceId: ctx.traceId,
           seq: call.seq,
           model: call.model,
+          requestBody: JSON.stringify(call.requestMessages),
           responseText: call.responseText,
+          ...(call.responseToolCalls !== undefined && {
+            responseToolCalls: call.responseToolCalls,
+          }),
           finishReason: call.finishReason,
           ...(call.usage !== undefined && { usage: call.usage }),
           ...(call.usageDetail !== undefined && { usageDetail: call.usageDetail }),

@@ -257,6 +257,34 @@ export class SqliteTelemetrySink implements TelemetrySink {
       record.ttftMs ?? null,
       record.traceId,
     );
+
+    this.rollUp(record.traceId);
+  }
+
+  /**
+   * Consolida custo e contagens na linha da execucao.
+   *
+   * Feito por SUM sobre as chamadas, nunca acumulado a cada insercao: assim um
+   * enriquecimento de custo que chegue depois — ou duas vezes — nao dobra a
+   * fatura. `pending` em qualquer chamada mantem a execucao pendente, e soma
+   * nula vira `unavailable` em vez de zero.
+   */
+  private rollUp(traceId: string): void {
+    this.exec(
+      `UPDATE executions SET
+         cost_usd = (SELECT SUM(cost_usd) FROM llm_calls WHERE trace_id = ?1),
+         cost_status = CASE
+           WHEN EXISTS (SELECT 1 FROM llm_calls WHERE trace_id = ?1 AND cost_status = 'pending')
+             THEN 'pending'
+           WHEN (SELECT SUM(cost_usd) FROM llm_calls WHERE trace_id = ?1) IS NULL
+             THEN 'unavailable'
+           ELSE 'confirmed'
+         END,
+         llm_call_count = (SELECT COUNT(*) FROM llm_calls WHERE trace_id = ?1),
+         tool_call_count = (SELECT COUNT(*) FROM tool_calls WHERE trace_id = ?1)
+       WHERE trace_id = ?1`,
+      traceId,
+    );
   }
 
   private persistLLMCall(record: TelemetryLLMCall): void {

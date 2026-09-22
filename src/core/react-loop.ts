@@ -92,6 +92,16 @@ export interface LLMCallTelemetry {
   startedAt: number;
   endedAt: number;
   responseText: string;
+  /**
+   * Mensagens exatamente como foram enviadas nesta iteracao.
+   *
+   * Muda a cada volta do loop — a segunda chamada carrega o resultado da tool
+   * que a primeira pediu —, e e isso que responde "o que o modelo viu quando
+   * decidiu isso". O prompt guardado na execucao so cobre a primeira.
+   */
+  requestMessages: readonly LLMMessage[];
+  /** Tool calls que o modelo pediu nesta chamada, em JSON. */
+  responseToolCalls?: string;
 }
 
 /**
@@ -319,6 +329,10 @@ export async function* executeReactLoop(
                   startedAt: callStartedAt,
                   endedAt: Date.now(),
                   responseText: fullText,
+                  requestMessages: normalizedMessages,
+                  ...(toolCalls.length > 0 && {
+                    responseToolCalls: JSON.stringify(toolCalls),
+                  }),
                 });
               } catch {
                 // Instrumentacao nunca derruba o turno.
