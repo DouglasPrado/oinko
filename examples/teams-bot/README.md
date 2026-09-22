@@ -82,8 +82,8 @@ Add the bot to Teams and send a message.
 | `EMBEDDING_BASE_URL`      | No       | Embedding base URL (default: LLM_BASE_URL)|
 | `EMBEDDING_MODEL`         | No       | Embedding model (default: text-embedding-3-small) |
 | `TAVILY_API_KEY`          | No       | Tavily API key for web search             |
-| `MCP_ALBERT_URL`          | No       | MCP server URL                            |
-| `MCP_ALBERT_TOKEN`        | No       | MCP server Bearer token                   |
+| `MCP_SERVER_URL`          | No       | MCP server URL                            |
+| `MCP_SERVER_TOKEN`        | No       | MCP server Bearer token                   |
 
 ## Architecture
 

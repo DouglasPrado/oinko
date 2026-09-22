@@ -58,7 +58,7 @@ export function createTools(getAgent: () => Agent, conversationId: string): Agen
   // Knowledge search (RAG)
   tools.push({
     name: 'search_knowledge',
-    description: 'Search the internal knowledge base for information about Albert platform: plans, subscriptions, cashback, partners, onboarding, permissions, invite system, public API, etc. Use this BEFORE answering any question about how the Albert platform works.',
+    description: 'Search the internal knowledge base: plans, subscriptions, cashback, partners, onboarding, permissions, invite system, public API. Use this before answering any question about how the product works.',
     parameters: z.object({
       query: z.string().describe('Search query in natural language — be specific'),
     }),

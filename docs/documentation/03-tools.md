@@ -88,10 +88,10 @@ await agent.destroy();
 for await (const event of agent.stream('Search for the latest TypeScript 5.5 features')) {
   switch (event.type) {
     case 'tool_call_start':
-      console.log(`🔍 Searching: ${JSON.parse(event.toolCall.function.arguments).query}`);
+      console.log(`Searching: ${JSON.parse(event.toolCall.function.arguments).query}`);
       break;
     case 'tool_call_end':
-      console.log(`✅ Found ${event.result.metadata?.resultCount} results (${event.duration}ms)`);
+      console.log(`Found ${event.result.metadata?.resultCount} results (${event.duration}ms)`);
       break;
     case 'text_delta':
       process.stdout.write(event.content);
@@ -337,13 +337,13 @@ agent.addTool({
 for await (const event of agent.stream('What are the key features of Bun 1.2?')) {
   switch (event.type) {
     case 'tool_call_start':
-      console.log(`\n🔍 Searching...\n`);
+      console.log(`\nSearching...\n`);
       break;
     case 'text_delta':
       process.stdout.write(event.content);
       break;
     case 'agent_end':
-      console.log(`\n\n📊 Tokens: ${event.usage.totalTokens} | Duration: ${event.duration}ms`);
+      console.log(`\n\nTokens: ${event.usage.totalTokens} | Duration: ${event.duration}ms`);
       break;
   }
 }

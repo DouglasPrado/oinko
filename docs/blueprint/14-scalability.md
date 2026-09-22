@@ -77,7 +77,7 @@
 
 ## 14.4 Diagrama de Deploy Escalado
 
-> 📐 Diagrama: [production-scaled.mmd](../diagrams/deployment/production-scaled.mmd)
+> Diagrama: [production-scaled.mmd](../diagrams/deployment/production-scaled.mmd)
 
 ---
 

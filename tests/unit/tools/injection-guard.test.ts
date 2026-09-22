@@ -50,7 +50,7 @@ describe('screenUntrustedContent', () => {
 
   it('asks a single bool question naming the tool', async () => {
     const decider = createDecider(false);
-    await screenUntrustedContent(CLEAN, 'mcp_albert_query', decider);
+    await screenUntrustedContent(CLEAN, 'mcp_docs_query', decider);
 
     const [state, questions] = (decider.decide as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(state).toContain(CLEAN);

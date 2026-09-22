@@ -157,7 +157,7 @@ export async function handleMessage(ctx: Context): Promise<void> {
           const toolName = event.toolCall.function.name;
           // Tira o namespace do MCP para exibir: mcp__servidor__buscar → buscar
           const displayName = toolName.replace(/^mcp__[^_]+__/, "");
-          const statusMsg = `⚙️ ${displayName}...`;
+          const statusMsg = `${displayName}...`;
 
           if (!sentMessage) {
             sentMessage = await ctx.reply(statusMsg);

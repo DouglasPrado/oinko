@@ -38,7 +38,7 @@
 ## [2.0.0](https://github.com/DouglasPrado/gba.dev/compare/ai-harness-v1.0.0...ai-harness-v2.0.0) (2026-08-24)
 
 
-### ⚠ BREAKING CHANGES
+### BREAKING CHANGES
 
 * renomeia o pacote harness para ai-harness ([#18](https://github.com/DouglasPrado/gba.dev/issues/18))
 
@@ -49,7 +49,7 @@
 ## [1.0.0](https://github.com/DouglasPrado/gba.dev/compare/harness-v0.8.0...harness-v1.0.0) (2026-08-24)
 
 
-### ⚠ BREAKING CHANGES
+### BREAKING CHANGES
 
 * o diretorio de dados mudou de `.agentx` para `.harness`. Instalacoes existentes nao encontrarao a memoria nem o banco SQLite anteriores e comecarao vazias. Para preservar, renomeie a pasta antes de atualizar: `mv .agentx .harness`. As notas de migracao em README e nos docs en/pt documentam isso.
 

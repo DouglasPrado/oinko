@@ -31,7 +31,7 @@ function convert(callTool: (req: unknown) => Promise<unknown>): AgentTool {
       ) => AgentTool;
     }
   ).convertTool(
-    'albert',
+    'docs',
     { name: 'buscar', description: 'busca algo', inputSchema: { type: 'object', properties: {} } },
     { callTool },
     {},
@@ -58,7 +58,7 @@ describe('telemetria do MCP', () => {
 
     expect(call.traceId).toBe('t1');
     expect(call.toolCallId).toBe('call-9');
-    expect(call.serverName).toBe('albert');
+    expect(call.serverName).toBe('docs');
     expect(call.remoteToolName).toBe('buscar');
     expect(call.request).toContain('pedido');
     expect(call.response).toContain('resultado do servidor');

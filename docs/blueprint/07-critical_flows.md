@@ -33,7 +33,7 @@
 
 ### Diagrama de Sequência
 
-> 📐 Diagrama: [stream-chat-tool-calling.mmd](../diagrams/sequences/stream-chat-tool-calling.mmd)
+> Diagrama: [stream-chat-tool-calling.mmd](../diagrams/sequences/stream-chat-tool-calling.mmd)
 
 ### Tratamento de Erros
 
@@ -86,7 +86,7 @@
 
 ### Diagrama de Sequência
 
-> 📐 Diagrama: [memory-extraction-recall.mmd](../diagrams/sequences/memory-extraction-recall.mmd)
+> Diagrama: [memory-extraction-recall.mmd](../diagrams/sequences/memory-extraction-recall.mmd)
 
 ### Tratamento de Erros
 
@@ -135,7 +135,7 @@
 
 ### Diagrama de Sequência
 
-> 📐 Diagrama: [knowledge-rag.mmd](../diagrams/sequences/knowledge-rag.mmd)
+> Diagrama: [knowledge-rag.mmd](../diagrams/sequences/knowledge-rag.mmd)
 
 ### Tratamento de Erros
 
@@ -177,7 +177,7 @@
 
 ### Diagrama de Sequência
 
-> 📐 Diagrama: [mcp-connection.mmd](../diagrams/sequences/mcp-connection.mmd)
+> Diagrama: [mcp-connection.mmd](../diagrams/sequences/mcp-connection.mmd)
 
 ### Tratamento de Erros
 
@@ -222,7 +222,7 @@
 
 ### Diagrama de Sequência
 
-> 📐 Diagrama: [context-pipeline.mmd](../diagrams/sequences/context-pipeline.mmd)
+> Diagrama: [context-pipeline.mmd](../diagrams/sequences/context-pipeline.mmd)
 
 ### Tratamento de Erros
 

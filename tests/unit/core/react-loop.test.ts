@@ -274,7 +274,7 @@ describe('executeReactLoop', () => {
             type: 'tool_call',
             id: 'skill-1',
             name: SKILL_TOOL_NAME,
-            arguments: '{"skill":"albert-api"}',
+            arguments: '{"skill":"docs-api"}',
           };
           yield {
             type: 'done',
@@ -297,7 +297,7 @@ describe('executeReactLoop', () => {
       name: SKILL_TOOL_NAME,
       description: 'Skill tool',
       parameters: z.object({ skill: z.string() }),
-      execute: vi.fn().mockResolvedValue('<skill name="albert-api">instructions</skill>'),
+      execute: vi.fn().mockResolvedValue('<skill name="docs-api">instructions</skill>'),
     });
 
     const initial: LLMMessage[] = [

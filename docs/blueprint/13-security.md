@@ -102,14 +102,14 @@ Checklist adaptado do **OWASP Top 10** para contexto de biblioteca (não aplica�
 
 | Item | Status | Observacoes |
 |------|--------|-------------|
-| Prevenção de Injection (SQL) | ✅ Aplicado | `node:sqlite` usa prepared statements nativamente. Nenhum SQL construído por concatenação |
-| Prevenção de Injection (Prompt) | ⚠️ Parcial | Tool results vão como role:"tool", não como system. Consumidor responsável por sanitizar inputs |
-| Validação de entrada | ✅ Aplicado | Todas as configurações validadas via Zod. Args de tools validados via Zod antes de execução |
-| Exposição de dados sensíveis | ✅ Aplicado | API key nunca em logs/eventos. Dados em SQLite sem criptografia (responsabilidade do consumidor) |
-| Controle de acesso | ⚠️ Parcial | beforeToolCall hook disponível. Sem sistema de permissões built-in para tools |
-| Vulnerabilidades em dependências | ✅ Aplicado | ≤4 dependências diretas, todas maduras e auditadas. `npm audit` no CI |
-| Rate limiting / DoS | ✅ Aplicado | CostPolicy com limites por execução e sessão. maxToolCallsPerExecution. maxConsecutiveErrors |
-| Logging seguro | ✅ Aplicado | Logger não inclui API keys. Eventos não expõem credenciais |
+| Prevenção de Injection (SQL) | Aplicado | `node:sqlite` usa prepared statements nativamente. Nenhum SQL construído por concatenação |
+| Prevenção de Injection (Prompt) | Parcial | Tool results vão como role:"tool", não como system. Consumidor responsável por sanitizar inputs |
+| Validação de entrada | Aplicado | Todas as configurações validadas via Zod. Args de tools validados via Zod antes de execução |
+| Exposição de dados sensíveis | Aplicado | API key nunca em logs/eventos. Dados em SQLite sem criptografia (responsabilidade do consumidor) |
+| Controle de acesso | Parcial | beforeToolCall hook disponível. Sem sistema de permissões built-in para tools |
+| Vulnerabilidades em dependências | Aplicado | ≤4 dependências diretas, todas maduras e auditadas. `npm audit` no CI |
+| Rate limiting / DoS | Aplicado | CostPolicy com limites por execução e sessão. maxToolCallsPerExecution. maxConsecutiveErrors |
+| Logging seguro | Aplicado | Logger não inclui API keys. Eventos não expõem credenciais |
 
 <!-- APPEND:security-checklist -->
 

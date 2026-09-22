@@ -36,10 +36,11 @@ export const config = {
     apiKey: process.env.TAVILY_API_KEY,
   },
   mcp: {
-    albert: {
-      url: process.env.MCP_ALBERT_URL,
-      headers: process.env.MCP_ALBERT_TOKEN
-        ? { 'Authorization': `Bearer ${process.env.MCP_ALBERT_TOKEN}` }
+    /** Servidor MCP remoto. Sem URL, o bot roda so com as tools locais. */
+    server: {
+      url: process.env.MCP_SERVER_URL,
+      headers: process.env.MCP_SERVER_TOKEN
+        ? { Authorization: `Bearer ${process.env.MCP_SERVER_TOKEN}` }
         : undefined,
     },
   },

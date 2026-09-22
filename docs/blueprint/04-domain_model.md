@@ -245,7 +245,7 @@ O modelo de domínio representa as entidades centrais do sistema, suas responsab
 
 > Atualize o diagrama abaixo conforme as entidades e relacionamentos definidos acima.
 
-> 📐 Diagrama: [class-diagram.mmd](../diagrams/domain/class-diagram.mmd)
+> Diagrama: [class-diagram.mmd](../diagrams/domain/class-diagram.mmd)
 
 ---
 
