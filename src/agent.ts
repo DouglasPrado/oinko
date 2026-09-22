@@ -445,6 +445,11 @@ export class Agent {
       threadId,
       ...(this.config.telemetry?.app !== undefined && { app: this.config.telemetry.app }),
       model,
+      // O que a config pediu, ao lado do que de fato rodou. Quando o
+      // roteamento decide descer de modelo mas nao atinge a confianca minima,
+      // os dois sao iguais — e e isso que explica um turno "roteado para fast"
+      // que rodou no modelo caro.
+      requestedModel,
       providerKind: this.providerKind(),
       // O system prompt e sempre texto; as partes multimodais vivem nas
       // mensagens de usuario, e serializa-las aqui so poluiria o registro.

@@ -27,6 +27,7 @@ function toExecution(row: Row): ExecutionSummary {
     threadId: str(row.thread_id),
     app: nullableStr(row.app),
     model: str(row.model),
+    requestedModel: nullableStr(row.requested_model),
     status: str(row.status),
     endReason: nullableStr(row.end_reason),
     inputTokens: num(row.input_tokens),

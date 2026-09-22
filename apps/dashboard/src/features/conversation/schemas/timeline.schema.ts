@@ -16,6 +16,7 @@ const ExecutionSummarySchema = z.object({
   threadId: z.string(),
   app: z.string().nullable(),
   model: z.string(),
+  requestedModel: z.string().nullable(),
   status: z.string(),
   endReason: z.string().nullable(),
   inputTokens: z.number().int(),

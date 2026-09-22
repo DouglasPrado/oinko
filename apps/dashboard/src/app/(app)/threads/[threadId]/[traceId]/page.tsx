@@ -4,6 +4,7 @@ import { Workbench } from '@/components/shell/workbench';
 import { ContextComposition } from '@/features/conversation/components/context-composition';
 import { ExecutionTape } from '@/features/conversation/components/execution-tape';
 import { ToolSummary } from '@/features/conversation/components/tool-summary';
+import { RoutingNote } from '@/features/conversation/components/routing-note';
 import { Inspector } from '@/features/conversation/components/inspector';
 import { TurnTranscript } from '@/features/conversation/components/turn-transcript';
 import { formatUsd } from '@/lib/utils/format-usd';
@@ -85,6 +86,12 @@ export default async function ExecutionPage({
             tone={execution.status === 'error' ? 'text-fault' : 'text-ok'}
           />
         </div>
+
+        <RoutingNote
+          model={execution.model}
+          requestedModel={execution.requestedModel}
+          items={detail.items}
+        />
 
         {execution.errorMessage ? (
           <p className="mt-3 border-l-2 border-fault bg-surface px-3 py-1.5 text-sm text-fault">
