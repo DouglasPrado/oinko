@@ -10,7 +10,7 @@
 import { z } from 'zod';
 import { Agent, TelemetryDatabase } from '@oinko/core';
 
-const DB = '.harness/telemetry.db';
+const DB = process.env.TELEMETRY_DB_PATH || '.harness/telemetry.db';
 
 function sse(lines) {
   const text = lines.map((line) => `data: ${line}`).join('\n\n') + '\n\n' + 'data: [DONE]\n\n';

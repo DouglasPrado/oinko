@@ -1,3 +1,4 @@
+import { authenticated } from '@/server/auth/auth';
 import { NextResponse } from 'next/server';
 import { getPayloadChunk } from '@/server/repositories/payload-repository';
 
@@ -11,6 +12,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ payloadId: string }> },
 ): Promise<NextResponse> {
+  if (!authenticated(request.headers)) return new NextResponse('Não autorizado.', { status: 401 });
   const { payloadId } = await params;
   const url = new URL(request.url);
   const offset = Number(url.searchParams.get('offset') ?? 0);

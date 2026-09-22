@@ -52,10 +52,8 @@ function resolveEnvironment(value: unknown, env: NodeJS.ProcessEnv): unknown {
   );
 }
 
-export async function readConnections(path: string, env: NodeJS.ProcessEnv): Promise<Connections> {
-  const parsed = Schema.safeParse(
-    resolveEnvironment(JSON.parse(await readFile(path, 'utf8')), env),
-  );
+export function parseConnections(input: unknown, env: NodeJS.ProcessEnv): Connections {
+  const parsed = Schema.safeParse(resolveEnvironment(input, env));
   if (!parsed.success)
     throw new Error('connections.json inválido: confira channels, mcps e suas opções.');
   for (const entries of [parsed.data.channels, parsed.data.mcps]) {
@@ -63,6 +61,10 @@ export async function readConnections(path: string, env: NodeJS.ProcessEnv): Pro
       throw new Error('IDs de conexão duplicados.');
   }
   return parsed.data;
+}
+
+export async function readConnections(path: string, env: NodeJS.ProcessEnv): Promise<Connections> {
+  return parseConnections(JSON.parse(await readFile(path, 'utf8')), env);
 }
 
 interface Running {

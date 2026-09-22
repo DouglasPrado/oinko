@@ -1,3 +1,4 @@
+import { authenticated } from '@/server/auth/auth';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { exchangeCode } from '@/server/higgsfield/oauth';
@@ -17,6 +18,7 @@ function back(origin: string, status: string): Response {
  * poderia fazer o navegador de quem esta logado trocar um code de outra pessoa.
  */
 export async function GET(request: Request): Promise<Response> {
+  if (!authenticated(request.headers)) return new Response('Não autorizado.', { status: 401 });
   const url = new URL(request.url);
   const origin = url.origin;
   const jar = await cookies();

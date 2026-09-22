@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "predev": "pnpm -w build:packages",
-    "dev": "next dev -p 3111",
+    "dev": "next dev -H 127.0.0.1 -p 3111",
     "prebuild": "pnpm -w build:packages",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3111",
@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "start:network": "node scripts/network.mjs start",
+    "dev:network": "node scripts/network.mjs dev"
   },
   "dependencies": {
     "@tanstack/react-query": "5.103.2",
@@ -24,7 +26,8 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
     "zod": "4.6.5",
-    "@oinko/mcp-higgsfield": "workspace:*"
+    "@oinko/mcp-higgsfield": "workspace:*",
+    "@oinko/bots": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -1,0 +1,49 @@
+{
+  "name": "@oinko/bots",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js"
+    },
+    "./manager": {
+      "types": "./dist/manager.d.ts",
+      "import": "./dist/manager.js"
+    },
+    "./import-legacy": {
+      "types": "./dist/import-legacy.d.ts",
+      "import": "./dist/import-legacy.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "cli": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@oinko/agent-runtime": "workspace:*",
+    "@oinko/channel-cli": "workspace:*",
+    "@oinko/channel-telegram": "workspace:*",
+    "@oinko/mcp-higgsfield": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.11"
+  }
+}

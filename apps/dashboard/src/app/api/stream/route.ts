@@ -1,3 +1,4 @@
+import { authenticated } from '@/server/auth/auth';
 import { telemetryWatermark } from '@/server/repositories/watermark-repository';
 
 // node:sqlite nao existe no runtime edge.
@@ -18,6 +19,7 @@ const HEARTBEAT_MS = 15_000;
  * segundo, refaria a pagina inteira no vazio a maior parte do tempo.
  */
 export function GET(request: Request): Response {
+  if (!authenticated(request.headers)) return new Response('Não autorizado.', { status: 401 });
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

@@ -18,8 +18,8 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Telemetria do agente',
-  description: 'O que aconteceu em cada resposta: entradas, saidas, custo real e tempo.',
+  title: 'Oinko — Bots e telemetria',
+  description: 'Configure seus bots, conecte canais e acompanhe cada resposta.',
   robots: { index: false, follow: false },
 };
 

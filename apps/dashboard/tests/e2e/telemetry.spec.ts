@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './auth';
 
 test.describe('inspecao de telemetria', () => {
   test('lista as conversas com custo real e tempo', async ({ page }) => {
@@ -37,7 +37,7 @@ test.describe('inspecao de telemetria', () => {
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
 
     await expect(page.getByText('Pessoa')).toBeVisible();
-    await expect(page.getByText('Agente')).toBeVisible();
+    await expect(page.getByText('Agente', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: /chamada 1/ })).toBeVisible();
   });
 

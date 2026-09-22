@@ -1,3 +1,4 @@
+import { authenticated } from '@/server/auth/auth';
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { authorizeUrl, createPkce, createState, registerClient } from '@/server/higgsfield/oauth';
@@ -16,6 +17,7 @@ const STATE_TTL_SECONDS = 600;
  * nao na URL, porque e ele que prova que quem volta com o code e quem comecou.
  */
 export async function GET(request: Request): Promise<Response> {
+  if (!authenticated(request.headers)) return new Response('Não autorizado.', { status: 401 });
   const origin = new URL(request.url).origin;
   const redirectUri = `${origin}/api/auth/higgsfield/callback`;
 

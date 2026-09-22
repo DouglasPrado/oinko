@@ -11,7 +11,7 @@
     "build:packages": "pnpm -r --filter './packages/**' build",
     "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
     "test": "pnpm build:packages && pnpm -r --if-present test",
-    "test:coverage": "pnpm build:packages && pnpm --filter @oinko/core test:coverage && pnpm -r --filter './apps/*' --filter './packages/mcps/*' --if-present test",
+    "test:coverage": "pnpm build:packages && pnpm --filter @oinko/core test:coverage && pnpm -r --filter './apps/*' --filter './packages/mcps/*' --if-present test && pnpm --filter @oinko/bots test",
     "test:watch": "pnpm --filter @oinko/core test:watch",
     "test:live": "pnpm --filter @oinko/core test:live",
     "test:mutation": "pnpm --filter @oinko/core test:mutation",
@@ -33,7 +33,8 @@
     "docs:api:check": "typedoc --treatWarningsAsErrors --emit none",
     "lint:apps": "pnpm -r --filter './apps/*' lint",
     "typecheck:apps": "pnpm -r --filter './apps/*' typecheck",
-    "build:apps": "pnpm -r --filter './apps/*' build"
+    "build:apps": "pnpm -r --filter './apps/*' build",
+    "bot": "pnpm --filter @oinko/bots cli"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",

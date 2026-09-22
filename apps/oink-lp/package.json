@@ -21,7 +21,8 @@
     "@oinko/agent-runtime": "workspace:*",
     "@oinko/channel-cli": "workspace:*",
     "@oinko/channel-telegram": "workspace:*",
-    "@oinko/mcp-higgsfield": "workspace:*"
+    "@oinko/mcp-higgsfield": "workspace:*",
+    "@oinko/bots": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

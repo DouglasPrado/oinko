@@ -1,47 +1,47 @@
-# Dashboard de telemetria
+# Dashboard Oinko
 
-WebUI somente-leitura sobre o banco de telemetria do `@oinko/core`. Mostra, dentro de uma
-conversa, o que entrou e saiu de cada chamada de LLM, as chamadas de ferramenta, a entrada e a
-saida do MCP, as decisoes do decider, o custo real cobrado pelo provedor e o tempo de cada etapa.
+Configuração e controle de bots, autorização Higgsfield e inspeção de telemetria.
 
-## Rodar
+## Iniciar
 
 ```bash
-# 1. gere dados (roda o Agent contra um provedor simulado)
-node scripts/seed-telemetry.mjs
-
-# 2. suba a interface
-pnpm dev     # http://127.0.0.1:3111
+pnpm --filter @oinko/dashboard dev
 ```
 
-Aponte `TELEMETRY_DB_PATH` no `.env.local` para o banco que o seu agente escreve.
+Abra `http://127.0.0.1:3111/login`. No primeiro acesso local, crie uma senha de pelo menos 12 caracteres. Entre em **Bots** para criar e editar agentes, habilitar CLI/Telegram/MCPs e iniciar, parar ou reiniciar cada processo. As credenciais não são devolvidas ao navegador depois de salvas.
 
-Para ver o agente de `apps/oink-lp` (CLI e Telegram), que já vem com a telemetria ligada:
+O Oink LP existente é importado sem mover seus dados. Novos bots usam o executor `@oinko/bots`, sem criar outra pasta de aplicação. Salvar uma edição não interrompe o bot: a tela indica que é preciso reiniciar para aplicar a revisão.
 
+## Rede e servidor
+
+Depois de configurar a senha localmente:
+
+```bash
+pnpm --filter @oinko/dashboard build
+pnpm --filter @oinko/dashboard start:network
 ```
+
+Esse comando escuta na rede, na porta 3111 (`PORT` pode alterar). O comando recusa iniciar antes da senha inicial existir. Em servidor público, configure HTTPS no proxy reverso. Páginas, APIs de dados, SSE e autorização Higgsfield exigem login. Esta versão tem um administrador; não inclui multiusuário/RBAC.
+
+O arquivo `.harness/dashboard-auth.json` contém hash scrypt e chave de sessão, com permissão 600. Preserve-o no backup junto com `.harness/bots.db`, `.harness/bots.key` e os dados dos bots. `OINKO_ROOT` permite escolher outro diretório de estado. A dashboard pode reiniciar sem encerrar os bots.
+
+## Telemetria
+
+A tela existente lê o SQLite definido em `TELEMETRY_DB_PATH` no `.env.local`. Para o Oink LP:
+
+```dotenv
 TELEMETRY_DB_PATH=../oink-lp/data/oink-lp/telemetry.db
 ```
 
-## Ligar a telemetria no agente
+Novos bots gravam `.harness/bots/<id>/telemetry.db`. O seletor de banco por bot na interface ainda não está implementado; ajuste `TELEMETRY_DB_PATH` e reinicie a dashboard para inspecionar outro banco. Custos continuam sendo os informados pelo provedor.
 
-```ts
-const agent = Agent.create({
-  apiKey: process.env.LLM_API_KEY,
-  telemetry: { dbPath: '.harness/telemetry.db', app: 'meu-bot' },
-});
+## Testes
+
+```bash
+pnpm --filter @oinko/dashboard test
+pnpm --filter @oinko/dashboard test:e2e
 ```
 
-Sem esse bloco nada e gravado e o agente se comporta exatamente como antes.
+Os testes de navegador criam cadastro, senha e telemetria em diretório temporário, usam o executor real com chave fictícia e não chamam provedores externos. O banco de telemetria é semeado com transporte simulado. Os dados do usuário não são usados nem apagados.
 
-## Custo
-
-O custo exibido e o que o provedor cobrou, lido do `usage.cost` que o OpenRouter devolve no
-ultimo chunk do stream. Quando o provedor nao informa, a interface escreve "provedor nao
-informou" — nunca estima e nunca mostra zero no lugar de desconhecido.
-
-## Convencoes
-
-Depois de rodar `shadcn add`, rode `pnpm format` na raiz: o `format:check` e o primeiro passo do
-CI e o CLI emite aspas duplas.
-
-A autorização Higgsfield usa `@oinko/mcp-higgsfield` e grava, por padrão, `../../.harness/credentials/higgsfield.json`. Configure `HIGGSFIELD_CREDENTIAL_PATH` para outra conta.
+[Escopo e arquitetura](../../docs/dashboard/PLAN.md)

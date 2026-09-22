@@ -1,5 +1,6 @@
+import { LogoutButton } from '@/components/shared/logout-button';
 import Link from 'next/link';
-import { Activity, Plug } from 'lucide-react';
+import { Activity, Plug, Bot } from 'lucide-react';
 import { navThreads, navExecutions } from '@/server/repositories/navigation-repository';
 import { LiveBadge } from '@/features/live/components/live-badge';
 import { formatDuration } from '@/lib/utils/format-duration';
@@ -45,6 +46,14 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
           <LiveBadge />
         </span>
       </div>
+
+      <Link
+        href="/bots"
+        className="flex items-center gap-2 border-b border-rule px-4 py-2 text-[0.8125rem] text-ink-muted hover:bg-paper"
+      >
+        <Bot className="size-3.5" aria-hidden />
+        Bots
+      </Link>
 
       <Link
         href="/integracoes"
@@ -117,6 +126,9 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
           );
         })}
       </ul>
+      <div className="mt-auto border-t border-rule p-4">
+        <LogoutButton />
+      </div>
     </nav>
   );
 }

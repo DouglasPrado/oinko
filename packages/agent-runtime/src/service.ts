@@ -12,6 +12,9 @@ import type { createAgentHost } from './host.js';
 
 export interface ServiceOptions {
   socketPath: string;
+  revision?: number;
+  connectionClaims?: string[];
+  onClose?: () => void;
   createHost(): ReturnType<typeof createAgentHost>;
   loadConnections(): Promise<Connections>;
   channels: Record<string, ChannelProvider>;
@@ -45,12 +48,21 @@ export async function startAgentService(options: ServiceOptions) {
       return send(response, 200, {
         agentId: host?.runtime.name,
         pid: process.pid,
+        revision: options.revision,
+        connectionClaims: options.connectionClaims,
         state: connections ? 'running' : 'starting',
         connections: connections?.status() ?? [],
       });
     }
     if (!connections || !host || controller.signal.aborted)
       return send(response, 503, { error: 'Agente ainda não está disponível.' });
+    if (request.method === 'POST' && request.url === '/stop') {
+      send(response, 200, { stopping: true });
+      setImmediate(() => {
+        void close();
+      });
+      return;
+    }
     if (request.method === 'POST' && request.url === '/reload') {
       if (reloading) return send(response, 409, { error: 'Reconfiguração em andamento.' });
       reloading = true;
@@ -125,12 +137,18 @@ export async function startAgentService(options: ServiceOptions) {
   async function close(): Promise<void> {
     closed ??= (async () => {
       controller.abort();
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => server.close(() => resolve()));
       try {
         await connections?.close();
       } finally {
-        await host?.close();
+        try {
+          await host?.close();
+        } finally {
+          // Keep the endpoint reserved while providers drain. A restart must
+          // not acquire the same channel before the previous worker releases it.
+          server.closeAllConnections();
+          await new Promise<void>((resolve) => server.close(() => resolve()));
+          options.onClose?.();
+        }
       }
     })();
     return closed;

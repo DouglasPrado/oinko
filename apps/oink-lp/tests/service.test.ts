@@ -14,6 +14,57 @@ import {
 } from '@oinko/agent-runtime';
 import { attachCli, cliChannel } from '@oinko/channel-cli';
 
+it('keeps its socket reserved until channel shutdown finishes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'oinko-shutdown-'));
+  const socketPath = join(dir, 'agent.sock');
+  let release!: () => void;
+  let aborted!: () => void;
+  const draining = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const stopping = new Promise<void>((resolve) => {
+    aborted = resolve;
+  });
+  const options: ServiceOptions = {
+    socketPath,
+    createHost: (() => ({
+      runtime: { name: 'test' },
+      close: async () => {},
+    })) as ServiceOptions['createHost'],
+    loadConnections: async () => ({
+      channels: [{ id: 'slow', type: 'slow', enabled: true, options: {} }],
+      mcps: [],
+    }),
+    channels: {
+      slow: async (_options, context) => {
+        context.ready();
+        await new Promise<void>((resolve) =>
+          context.signal.addEventListener(
+            'abort',
+            () => {
+              aborted();
+              resolve();
+            },
+            { once: true },
+          ),
+        );
+        await draining;
+      },
+    },
+  };
+  const service = await startAgentService(options);
+  try {
+    await controlRequest(socketPath, '/stop', {});
+    await stopping;
+    await expect(controlRequest(socketPath, '/status')).resolves.toHaveProperty('agentId', 'test');
+    await expect(startAgentService(options)).rejects.toThrow(/já está rodando/);
+  } finally {
+    release();
+    await service.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it('starts once, shares the agent between channels, reloads providers and survives CLI exit', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'oinko-service-'));
   const socketPath = join(dir, 'agent.sock');
