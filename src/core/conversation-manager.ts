@@ -40,7 +40,22 @@ export class ConversationManager {
    * Acquires mutex for a thread, executes fn, then releases.
    */
   async withThread<T>(threadId: string, fn: () => T | Promise<T>): Promise<T> {
-    // Wait for any existing lock on this thread
+    const release = await this.acquire(threadId);
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Takes the thread lock and hands back the release.
+   *
+   * `withThread` cannot wrap a generator: the turn yields events to the caller
+   * and only finishes when the caller stops iterating. Holding the lock across
+   * that requires acquiring and releasing by hand, in a `finally`.
+   */
+  async acquire(threadId: string): Promise<() => void> {
     while (this.locks.has(threadId)) {
       await this.locks.get(threadId);
     }
@@ -51,12 +66,13 @@ export class ConversationManager {
     });
     this.locks.set(threadId, lockPromise);
 
-    try {
-      return await fn();
-    } finally {
-      releaseLock!();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
       this.locks.delete(threadId);
-    }
+      releaseLock();
+    };
   }
 
   appendMessage(message: ChatMessage, threadId: string): void {

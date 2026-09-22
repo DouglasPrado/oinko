@@ -183,6 +183,16 @@ export class Agent {
    * Streaming API — primary interface. Returns AsyncIterableIterator<AgentEvent>.
    * Uses AsyncGenerator pattern: the react loop yields events directly.
    */
+  /**
+   * Streams one turn.
+   *
+   * The whole turn holds the thread lock, not just the write that records the
+   * user message. Two messages arriving together on the same thread — routine
+   * in any chat product — otherwise both landed in history before either was
+   * answered, and both calls to the model saw the same thing: the first
+   * question got no answer of its own, silently. Different threads still run
+   * side by side.
+   */
   async *stream(
     input: string | ContentPart[],
     options?: ChatOptions,
@@ -192,6 +202,20 @@ export class Agent {
     const threadId = options?.threadId ?? 'default';
     if (!validateThreadId(threadId))
       throw new Error(`Invalid threadId: ${JSON.stringify(threadId)}`);
+
+    const release = await this.conversations.acquire(threadId);
+    try {
+      yield* this.streamTurn(input, threadId, options);
+    } finally {
+      release();
+    }
+  }
+
+  private async *streamTurn(
+    input: string | ContentPart[],
+    threadId: string,
+    options?: ChatOptions,
+  ): AsyncIterableIterator<AgentEvent> {
     const requestedModel = options?.model ?? this.config.model;
 
     // Add user message
@@ -253,16 +277,16 @@ export class Agent {
       };
       return;
     }
-    await this.conversations.withThread(threadId, () => {
-      this.conversations.appendMessage(
-        {
-          role: 'user',
-          content: input,
-          createdAt: Date.now(),
-        },
-        threadId,
-      );
-    });
+    // Sem withThread: o turno inteiro ja detem o lock desta thread, e pedi-lo
+    // de novo aqui seria esperar por si mesmo.
+    this.conversations.appendMessage(
+      {
+        role: 'user',
+        content: input,
+        createdAt: Date.now(),
+      },
+      threadId,
+    );
 
     // Start memory relevance prefetch (non-blocking, thread-scoped)
     const memoryPrefetch = this.fileMemorySystem
