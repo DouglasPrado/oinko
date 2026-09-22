@@ -9,15 +9,22 @@ import type { Logger } from '../utils/logger.js';
  * and one retrying the same failing call exactly alike. The first is stopped
  * too early, the second runs to the limit burning tokens on a result nobody
  * will use.
+ *
+ * The clause about waiting is not decoration. A long-poll tool caps its own
+ * wait — the Higgsfield `jobs_wait` at 15 seconds — so anything slower than
+ * that cap forces the agent to call it again with identical arguments. Without
+ * the clause the judge read that as a stuck loop and cut the turn while the
+ * image was still rendering; the answer arrived at the provider and never
+ * reached the person who asked for it.
  */
 export const PROGRESS_QUESTION = {
   kind: 'bool',
   instructions:
     'These are the most recent turns of an agent working on a task. The agent is making progress toward answering, rather than repeating itself or retrying something that keeps failing.',
   criteria: {
-    true: 'Each turn adds something: new information, a different approach, a step completed.',
+    true: 'Each turn adds something: new information, a different approach, a step completed. Waiting on work that reports itself still running also counts — polling looks like repetition but is how waiting is spelled.',
     false:
-      'The same call or the same reasoning repeats with the same outcome, with no new ground covered.',
+      'The same call or the same reasoning repeats with the same outcome, and nothing it is waiting on is still running.',
   },
 } as const;
 

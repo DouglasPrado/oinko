@@ -85,3 +85,21 @@ describe('isLoopProductive', () => {
     expect(state).not.toContain('mensagem 10');
   });
 });
+
+describe('PROGRESS_QUESTION', () => {
+  /**
+   * Um teste de unidade nao alcanca o julgamento — quem responde e um modelo.
+   * O que ele guarda e a clausula, porque ela e o conserto de um caso real:
+   * duas chamadas identicas a `jobs_wait` (que se limita a 15s) faziam o juiz
+   * ver laco e cortar o turno com a imagem ainda renderizando.
+   *
+   * Medido contra o JEV real com a cauda daquele turno: sem a clausula,
+   * progressing=false a 0.90/0.91 — para; com ela, progressing=true — segue.
+   * O caso que o gate existe para pegar (a mesma chamada falhando tres vezes)
+   * continuou em progressing=false a 0.97 com os dois criterios.
+   */
+  it('trata espera por trabalho em andamento como progresso', () => {
+    expect(PROGRESS_QUESTION.criteria.true).toMatch(/still running/);
+    expect(PROGRESS_QUESTION.criteria.false).toMatch(/still running/);
+  });
+});
