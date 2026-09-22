@@ -264,10 +264,11 @@ export class Agent {
         type: 'warning',
         message: 'Turn refused: the message appears to target the agent instructions',
         code: 'jailbreak_blocked',
+        traceId: ctx.traceId,
       };
       const refusal = this.config.jailbreak.blockedMessage;
-      yield { type: 'text_delta', content: refusal };
-      yield { type: 'text_done', content: refusal };
+      yield { type: 'text_delta', content: refusal, traceId: ctx.traceId };
+      yield { type: 'text_done', content: refusal, traceId: ctx.traceId };
       yield {
         type: 'agent_end',
         traceId: ctx.traceId,
@@ -365,7 +366,19 @@ export class Agent {
       maxTokens: this.config.maxContextTokens,
       reserveTokens: this.config.reserveTokens,
       maxPinnedMessages: this.config.maxPinnedMessages,
+      // O modelo do turno, nao o pedido: o roteamento pode ter trocado por um
+      // mais barato, e e ele quem vai receber (ou nao conseguir ler) a imagem.
+      model,
     });
+
+    // Never silent: an image that reaches a text-only model arrives as a line
+    // of text, and the caller deserves to know why the answer ignores it.
+    if (contextResult.flattenedImageCount > 0) {
+      this.logger.warn('Images flattened to text — this model does not read them', {
+        images: contextResult.flattenedImageCount,
+        model,
+      });
+    }
 
     if (contextResult.droppedPinnedCount > 0) {
       this.logger.warn('Pinned messages dropped due to context budget', {
@@ -385,7 +398,11 @@ export class Agent {
     for (const inj of injections.filter(
       (i) => i.source.startsWith('skill:') && i.source !== 'skill:listing',
     )) {
-      yield { type: 'skill_activated', skillName: inj.source.replace('skill:', '') };
+      yield {
+        type: 'skill_activated',
+        skillName: inj.source.replace('skill:', ''),
+        traceId: ctx.traceId,
+      };
     }
 
     // Intercept events from the generator for persistence tracking
@@ -447,7 +464,10 @@ export class Agent {
           });
         }
 
-        yield event;
+        // Carimba o trace em tudo que vem do loop. O tipo declara traceId
+        // opcional para nao quebrar produtores existentes; em runtime nenhum
+        // evento sai daqui sem ele.
+        yield { ...event, traceId: ctx.traceId };
         result = await loopGen.next();
       }
       terminal = result.value;
@@ -467,6 +487,7 @@ export class Agent {
         type: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
         recoverable: false,
+        traceId: ctx.traceId,
       };
       yield {
         type: 'agent_end',
