@@ -3,13 +3,14 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createGrepTool } from '../../../../src/tools/builtin/grep.js';
+import { makeTempDir } from '../../../test-helpers.js';
 
 describe('builtin/grep', () => {
   let tempDir: string;
   const signal = new AbortController().signal;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'grep-tool-'));
+    tempDir = await makeTempDir('grep-tool-');
     await mkdir(join(tempDir, 'src'), { recursive: true });
     await writeFile(
       join(tempDir, 'src', 'index.ts'),

@@ -3,13 +3,14 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createFileWriteTool } from '../../../../src/tools/builtin/file-write.js';
+import { makeTempDir } from '../../../test-helpers.js';
 
 describe('builtin/file-write', () => {
   let tempDir: string;
   const signal = new AbortController().signal;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'fwrite-tool-'));
+    tempDir = await makeTempDir('fwrite-tool-');
   });
 
   afterEach(async () => {

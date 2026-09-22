@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { ToolExecutor } from '../../../../src/tools/tool-executor.js';
 import { builtinTools } from '../../../../src/tools/builtin/index.js';
 import { Agent } from '../../../../src/agent.js';
+import { makeTempDir } from '../../../test-helpers.js';
 
 describe('Builtin tools integration', () => {
   afterEach(() => {
@@ -15,7 +16,7 @@ describe('Builtin tools integration', () => {
     let workingDir: string;
 
     beforeEach(async () => {
-      workingDir = await mkdtemp(join(tmpdir(), 'builtin-all-'));
+      workingDir = await makeTempDir('builtin-all-');
       await writeFile(join(workingDir, 'file.txt'), 'hello');
     });
 
