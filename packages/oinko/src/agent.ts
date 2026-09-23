@@ -1448,7 +1448,9 @@ export class Agent {
     if (this.fileMemorySystem) {
       try {
         // Behavioral instructions (types, when to save, verification rules)
-        const instructions = this.fileMemorySystem.getMemoryInstructions();
+        // Checking a memory against the code only makes sense with tools that read it.
+        const codeTools = this.toolExecutor.listTools().some((t) => CODE_TOOL_NAMES.has(t.name));
+        const instructions = this.fileMemorySystem.getMemoryInstructions({ codeTools });
         const instrTokens = estimateTokens(instructions);
         injections.push({
           source: 'memory:instructions',
@@ -1520,6 +1522,9 @@ export class Agent {
     return { injections, skillToolNames };
   }
 }
+
+/** Builtin tools that read a codebase — what the memory drift checks rely on. */
+const CODE_TOOL_NAMES = new Set(['Read', 'Grep', 'Glob', 'Bash']);
 
 /** Classifica a procedencia de uma tool pelo nome com que foi registrada. */
 function toolOrigin(name: string | undefined): 'builtin' | 'skill' | 'mcp' | 'custom' {
