@@ -1,4 +1,4 @@
-import type { Agent, ContentPart } from '@oinko/core';
+import { SensitiveDataError, type Agent, type ContentPart } from '@oinko/core';
 
 export interface AudioInput {
   kind: 'audio';
@@ -17,6 +17,18 @@ export class TranscriptionError extends Error {
   }
 }
 
+const SENSITIVE_KIND_NAMES: Record<string, string> = {
+  cpf: 'CPF',
+  cnpj: 'CNPJ',
+  card: 'número de cartão',
+  credential: 'senha, token ou chave',
+};
+
+function sensitiveRefusal(error: SensitiveDataError): string {
+  const kinds = error.kinds.map((kind) => SENSITIVE_KIND_NAMES[kind] ?? kind).join(', ');
+  return `Não salvei: a memória nunca guarda ${kinds}. Envie de novo sem esse dado.`;
+}
+
 export interface ConversationRoute {
   channel: string;
   connectionId: string;
@@ -30,7 +42,7 @@ export function threadIdFor(agentId: string, route: ConversationRoute): string {
 type AgentPort = Pick<Agent, 'chat' | 'transcribe' | 'clearHistory' | 'remember' | 'getUsage'>;
 
 export const HELP =
-  'Agente: envie uma mensagem de texto.\n/reset — limpar histórico desta conversa\n/memory <texto> — guardar uma memória desta conversa\n/usage — tokens usados nesta execução do aplicativo\n/help — ajuda';
+  'Agente: envie uma mensagem de texto.\n/reset — limpar histórico desta conversa (inclusive o que a busca encontra)\n/memory <texto> — guardar uma memória desta conversa\n/usage — tokens usados nesta execução do aplicativo\n/help — ajuda';
 
 export class AgentRuntime {
   // The SDK has mutable tool/skill state. Serialize turns across adapters,
@@ -93,7 +105,14 @@ export class AgentRuntime {
     if (/^\/memory(?:\s|$)/.test(text)) {
       const memory = text.slice('/memory'.length).trim();
       if (!memory) return 'Uso: /memory <texto para lembrar>';
-      await this.agent.remember(memory, threadId);
+      try {
+        await this.agent.remember(memory, threadId);
+      } catch (error) {
+        // Memory never stores documents, card numbers or credentials: say so
+        // plainly — naming the kind, never echoing the value.
+        if (error instanceof SensitiveDataError) return sensitiveRefusal(error);
+        throw error;
+      }
       return 'Memória salva para esta conversa.';
     }
     return this.agent.chat(text, { threadId, signal });
