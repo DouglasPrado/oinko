@@ -17,6 +17,12 @@ export interface AgentHostConfig {
   capturePayloads: 'none' | 'hashed' | 'full';
   retentionDays: number;
   tools?: AgentTool[];
+  /**
+   * Lets the agent search this conversation's earlier messages. Scope is the
+   * turn's own thread: same person, same bot, same channel — nothing wider,
+   * since nothing here proves two channels belong to the same person.
+   */
+  conversationSearch?: boolean;
 }
 export function createAgentHost(config: AgentHostConfig) {
   const database = new SQLiteDatabase(join(config.dataDir, 'conversations.db'));
@@ -34,7 +40,10 @@ export function createAgentHost(config: AgentHostConfig) {
     }
     const agent = Agent.create({
       ...config.agent,
-      conversation: { store: new SQLiteConversationStore(database) },
+      conversation: {
+        store: new SQLiteConversationStore(database),
+        ...(config.conversationSearch && { search: { enabled: true } }),
+      },
       memory: { enabled: true, memoryDir: join(config.dataDir, 'memory'), ...config.agent.memory },
       knowledge: config.agent.knowledge ?? { enabled: false },
       telemetry: {

@@ -100,8 +100,11 @@ function toSafeIdentifier(raw: string, maxLen = 50): string {
   );
 }
 
+/** Room a server gets for the instructions it sends at handshake. */
+const MAX_SERVER_INSTRUCTIONS_CHARS = 4_000;
+
 /** Sanitizes untrusted MCP text (names/descriptions) before embedding in system prompts. */
-function sanitizeForPrompt(value: string): string {
+function sanitizeForPrompt(value: string, maxLength = 512): string {
   return (
     value
       // eslint-disable-next-line no-control-regex
@@ -110,8 +113,18 @@ function sanitizeForPrompt(value: string): string {
       .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
       .replace(/[\u{e0000}-\u{e007f}]/gu, '') // strip Unicode tag block (invisible in UIs)
       .replace(/\n{2,}/g, '\n') // collapse multiple newlines
-      .slice(0, 512)
+      .slice(0, maxLength)
   ); // cap length
+}
+
+/**
+ * What the server told its clients about using it, read from the handshake.
+ * Optional in the protocol, and in older SDKs the getter does not exist.
+ */
+function serverInstructions(client: MCPClient): string | undefined {
+  const raw = client.getInstructions?.();
+  if (typeof raw !== 'string' || raw.trim() === '') return undefined;
+  return sanitizeForPrompt(raw.trim(), MAX_SERVER_INSTRUCTIONS_CHARS);
 }
 
 export interface MCPHealthStatus {
@@ -141,6 +154,8 @@ interface MCPConnection {
 interface MCPClient {
   connect(transport: unknown): Promise<void>;
   close(): Promise<void>;
+  /** Instructions the server sent in `initialize`, if any. */
+  getInstructions?(): string | undefined;
   listTools(): Promise<{ tools: MCPToolDef[] }>;
   callTool(
     params: { name: string; arguments: unknown },
@@ -247,6 +262,7 @@ export class MCPAdapter {
       toolNames: agentTools.map((t) => t.name),
       connectedAt: Date.now(),
       status: 'connected',
+      instructions: serverInstructions(client),
     };
 
     // Health check timer
@@ -684,6 +700,8 @@ export class MCPAdapter {
           c.transport = transport;
           c.status = 'connected';
           c.lastError = undefined;
+          // A new handshake may bring updated instructions.
+          c.instructions = serverInstructions(c.client);
         } catch (error) {
           c.lastError = error instanceof Error ? error.message : String(error);
           this.attemptReconnect(name, attempt + 1);

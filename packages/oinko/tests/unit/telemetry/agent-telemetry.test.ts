@@ -114,6 +114,44 @@ describe('Agent telemetry', () => {
     expect(start.providerKind).toBe('openrouter');
   });
 
+  it('marks an injection the budget dropped as not applied', async () => {
+    mockProvider(WITH_COST);
+    const { sink, records } = collectingSink();
+    // ~200 tokens of system prompt in a 210-token budget: the environment block
+    // cannot fit, and the record has to say so instead of claiming it was sent.
+    const agent = Agent.create({
+      apiKey: 'sk-test-key-0123456789abcdef',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      telemetry: { sink },
+      systemPrompt: 'x'.repeat(800),
+      maxContextTokens: 210,
+      reserveTokens: 0,
+    });
+    for await (const _ of agent.stream('Hi')) {
+      /* drain */
+    }
+    await agent.destroy();
+
+    const start = records.find((record) => record.kind === 'execution_start');
+    if (start?.kind !== 'execution_start') throw new Error('no execution_start');
+    const environment = start.injections?.find((i) => i.source === 'environment');
+    expect(environment?.applied).toBe(false);
+    expect(start.systemPrompt).not.toContain('# Environment');
+  });
+
+  it('marks an injection that fit as applied', async () => {
+    mockProvider(WITH_COST);
+    const { sink, records } = collectingSink();
+
+    await runTurn(sink);
+
+    const start = records.find((record) => record.kind === 'execution_start');
+    if (start?.kind !== 'execution_start') throw new Error('no execution_start');
+    const environment = start.injections?.find((i) => i.source === 'environment');
+    expect(environment?.applied).toBe(true);
+  });
+
   it('records the cost the provider actually charged', async () => {
     mockProvider(WITH_COST);
     const { sink, records } = collectingSink();

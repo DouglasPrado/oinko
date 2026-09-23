@@ -47,12 +47,22 @@ export async function autocompact(
   // Within the early region, split into pinned (kept verbatim, in place) and
   // compactable (summarized). The relative order of pinned messages to each
   // other is preserved; they are emitted at the top of the early slot.
-  const earlyPinned = earlyNonSystem.filter(
-    (m) => (m as unknown as Record<string, unknown>)._pinned === true,
+  //
+  // A pinned `tool` result is worthless without the assistant that issued its
+  // call — normalization drops the orphan — so that assistant is kept too.
+  // Its other calls, whose results get summarized, are stripped downstream.
+  const isPinned = (m: LLMMessage): boolean =>
+    (m as unknown as Record<string, unknown>)._pinned === true;
+  const pinnedToolCallIds = new Set(
+    earlyNonSystem
+      .filter((m) => m.role === 'tool' && isPinned(m) && m.tool_call_id)
+      .map((m) => m.tool_call_id!),
   );
-  const toCompact = earlyNonSystem.filter(
-    (m) => (m as unknown as Record<string, unknown>)._pinned !== true,
-  );
+  const keep = (m: LLMMessage): boolean =>
+    isPinned(m) ||
+    (m.role === 'assistant' && !!m.tool_calls?.some((tc) => pinnedToolCallIds.has(tc.id)));
+  const earlyPinned = earlyNonSystem.filter(keep);
+  const toCompact = earlyNonSystem.filter((m) => !keep(m));
 
   if (toCompact.length === 0) return null;
 

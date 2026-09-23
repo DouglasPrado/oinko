@@ -1,8 +1,10 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
+import type { ConversationSearchScope } from '../contracts/entities/conversation-search.js';
 import type { Decider } from '../contracts/entities/decider.js';
 import type { TelemetrySink } from '../contracts/entities/telemetry.js';
+import { isValidTimeZone } from '../utils/local-date.js';
 
 /**
  * Telemetria de execucao.
@@ -77,6 +79,13 @@ const MemoryConfigSchema = z.object({
   extractionInterval: z.number().int().positive().default(10),
   /** Confidence floor for a decider verdict on whether a turn is worth remembering. */
   minConfidence: z.number().min(0).max(1).default(0.7),
+  /**
+   * LGPD sensitive categories (art. 5, II — health, religion, political
+   * opinion...) stated by the user. 'omit' keeps them out of memory; 'allow'
+   * saves them as stated. CPF, card numbers and credentials are never saved
+   * either way — that floor is enforced in code, not by the prompt.
+   */
+  sensitiveData: z.enum(['omit', 'allow']).default('omit'),
 });
 
 /** Knowledge/RAG subsystem configuration */
@@ -132,6 +141,17 @@ export const AgentConfigSchema = z.object({
     .custom<(request: Request) => Promise<Response>>((v) => typeof v === 'function')
     .optional(),
   systemPrompt: z.string().optional(),
+  /**
+   * IANA time zone for the date and time the model is told ("America/Sao_Paulo").
+   * Defaults to the host's. UTC would make it tomorrow every evening in Brazil.
+   */
+  timezone: z.string().refine(isValidTimeZone, 'Unknown IANA time zone').optional(),
+  /**
+   * Adds a baseline for how to respond (effort proportional to the ask, one
+   * clarifying question at most, minimal formatting, faithful reporting).
+   * Off by default: the persona belongs to the operator's systemPrompt.
+   */
+  behaviorPrompt: z.boolean().default(false),
 
   // Subsystem configs
   memory: MemoryConfigSchema.optional(),
@@ -144,6 +164,23 @@ export const AgentConfigSchema = z.object({
   conversation: z
     .object({
       store: z.custom<ConversationStore>().optional(),
+      /**
+       * Lets the model search earlier messages that fell out of its context
+       * (ConversationSearch tool). Off by default: reading old conversations
+       * is a new use of personal data, and turning it on is the operator's call.
+       * Requires a store that implements `searchMessages` — both built-in ones do.
+       */
+      search: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** Threads a turn may read, from its own. Default: only its own. */
+          scope: z.custom<ConversationSearchScope>((v) => typeof v === 'function').optional(),
+          maxResults: z.number().int().min(1).max(10).default(5),
+          maxPages: z.number().int().min(1).max(5).default(3),
+          snippetChars: z.number().int().min(80).max(600).default(240),
+          maxCallsPerTurn: z.number().int().min(1).max(10).default(4),
+        })
+        .optional(),
     })
     .optional(),
 

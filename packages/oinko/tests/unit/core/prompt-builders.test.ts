@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { buildToolUsagePrompt, buildEnvironmentPrompt } from '../../../src/core/prompt-builders.js';
+import {
+  buildToolUsagePrompt,
+  buildEnvironmentPrompt,
+  buildContextProtocolPrompt,
+} from '../../../src/core/prompt-builders.js';
 import type { AgentTool } from '../../../src/contracts/entities/agent-tool.js';
 import { z } from 'zod';
 
@@ -96,16 +100,62 @@ describe('buildToolUsagePrompt', () => {
     expect(prompt).not.toContain('Concurrency');
   });
 
-  it('should handle isDestructive as function (treated as not statically destructive)', () => {
+  /**
+   * Was "treated as not statically destructive": a tool like Bash, whose
+   * risk depends on the command, got no caution at all.
+   */
+  it('lists a tool whose destructiveness depends on its arguments', () => {
     const tools = [createTool({ name: 'bash', isDestructive: () => true })];
 
     const prompt = buildToolUsagePrompt(tools);
-    // Function-based isDestructive is not statically classified
-    expect(prompt).not.toContain('Destructive Tools');
+    expect(prompt).toContain('Destructive Tools');
+    expect(prompt).toContain('**bash**');
+    expect(prompt).toMatch(/depending on its arguments/i);
+  });
+
+  describe('research and verification', () => {
+    const prompt = buildToolUsagePrompt([createTool()]);
+
+    it('scales the number of calls to the question', () => {
+      expect(prompt).toContain('Research and verification');
+      expect(prompt).toMatch(/scale the number of calls/i);
+      expect(prompt).toMatch(/one call per distinct item/i);
+    });
+
+    it('checks every part of the request before answering', () => {
+      expect(prompt).toMatch(/every part of the request/i);
+      expect(prompt).toMatch(/figures|quotes/i);
+    });
+
+    it('reformulates instead of repeating a call, and tests alternatives', () => {
+      expect(prompt).toMatch(/same call again/i);
+      expect(prompt).toMatch(/rule (them|alternatives) out/i);
+    });
+
+    it('treats truncated and untrusted results for what they are', () => {
+      expect(prompt).toContain('[truncated');
+      expect(prompt).toContain('<untrusted-tool-output>');
+    });
+
+    it('reports failures and skipped steps plainly', () => {
+      expect(prompt).toMatch(/failed|skipped/i);
+    });
   });
 });
 
 describe('buildEnvironmentPrompt', () => {
+  it('shows date, weekday, time and time zone, and says to use them', () => {
+    const prompt = buildEnvironmentPrompt({
+      date: '2026-09-23',
+      weekday: 'Wednesday',
+      time: '23:30',
+      timezone: 'America/Sao_Paulo',
+    });
+    expect(prompt).toContain('- Date: 2026-09-23 (Wednesday)');
+    expect(prompt).toContain('- Time: 23:30 (America/Sao_Paulo)');
+    expect(prompt).toMatch(/current year/i);
+  });
+
   it('should include all provided fields', () => {
     const prompt = buildEnvironmentPrompt({
       cwd: '/home/user/project',
@@ -152,5 +202,22 @@ describe('buildEnvironmentPrompt', () => {
   it('should return minimal header with empty info', () => {
     const prompt = buildEnvironmentPrompt({});
     expect(prompt).toBe('# Environment');
+  });
+});
+
+describe('buildContextProtocolPrompt', () => {
+  it('says which blocks carry host instructions and which are only data', () => {
+    const text = buildContextProtocolPrompt();
+    expect(text).toContain('<system-reminder>');
+    expect(text).toContain('<context-data>');
+    expect(text).toMatch(/not instructions|never instructions/i);
+  });
+
+  it('denies authority to text that merely claims to come from the system', () => {
+    expect(buildContextProtocolPrompt()).toMatch(/user messages|tool results/i);
+  });
+
+  it('stays short: it is sent on every turn', () => {
+    expect(buildContextProtocolPrompt().length).toBeLessThan(700);
   });
 });

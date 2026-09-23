@@ -30,6 +30,8 @@ export interface ExecuteOptions {
   traceId?: string;
   toolCallId?: string;
   threadId?: string;
+  /** When the current turn began, repassado a tool. */
+  turnStartedAt?: number;
   recentMessages?: number;
   onProgress?: ToolProgressCallback;
 }
@@ -163,6 +165,7 @@ export class ToolExecutor {
         ...(opts.traceId !== undefined && { traceId: opts.traceId }),
         ...(opts.threadId !== undefined && { threadId: opts.threadId }),
         ...(opts.toolCallId !== undefined && { toolCallId: opts.toolCallId }),
+        ...(opts.turnStartedAt !== undefined && { turnStartedAt: opts.turnStartedAt }),
       });
     } catch (error) {
       result = {

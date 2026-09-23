@@ -11,14 +11,19 @@
 | Ameaca | Categoria (STRIDE) | Impacto | Mitigacao |
 |--------|---------------------|---------|-----------|
 | API key do OpenRouter exposta em logs ou eventos | Information Disclosure | Alto — acesso não autorizado à conta OpenRouter, custos financeiros | API key nunca incluída em AgentEvents, logs ou mensagens de erro. Mascarada em qualquer output |
-| Injeção de prompt via tool results | Tampering | Alto — LLM manipulado para executar ações não intencionadas | Tool results são strings, não instruções. ContextBuilder não interpreta tool results como system prompts |
+| Injeção de prompt via tool results | Tampering | Alto — LLM manipulado para executar ações não intencionadas | Tool results vão como `role: "tool"`, nunca como system. Tools com `untrustedOutput` (WebFetch, MCP, ConversationSearch) passam por triagem quando há `decider`; o conteúdo suspeito vai em `<untrusted-tool-output>`, que o próprio conteúdo não consegue fechar (`neutralizeControlTags`) |
 | Tool maliciosa registrada pelo consumidor | Elevation of Privilege | Alto — tool pode acessar filesystem, rede ou executar código arbitrário | `beforeToolCall` hook permite bloqueio. Documentar que tools executam no mesmo processo — consumidor responsável por sandboxing |
 | MCP server comprometido retorna dados maliciosos | Tampering / Spoofing | Alto — tool results manipulados, tools com nomes enganosos | `isolateErrors: true` por padrão. Timeout por tool. Consumidor valida quais servers conectar |
 | Consumo descontrolado de tokens (runaway cost) | Denial of Service | Alto — fatura inesperada no OpenRouter | CostPolicy com maxTokensPerExecution e maxTokensPerSession. maxToolCallsPerExecution previne loops |
 | Dados sensíveis persistidos em memórias sem criptografia | Information Disclosure | Médio — arquivo SQLite legível por qualquer processo com acesso ao filesystem | SQLite em `.harness/data.db` com permissões de arquivo do OS. Consumidor responsável por criptografia de disco se necessário |
-| Memory extraction extrai PII de conversas | Information Disclosure | Médio — PII do usuário final persistida em SQLite local | Consumidor pode desabilitar memory (`memory: false`) ou usar extractionRate: 0. Documentar risco |
+| Memory extraction extrai PII de conversas | Information Disclosure | Médio — PII do usuário final persistida em arquivos de memória | Piso determinístico (`findNeverStore`): CPF e CNPJ (com dígito verificador), cartão (Luhn) e credenciais são recusados em `memory_write`/`memory_edit` e em `remember()` (`SensitiveDataError`). Categorias do art. 5º, II da LGPD ficam fora por padrão (`memory.sensitiveData: 'omit'`). Arquivos em `0600`. Desligar: `memory.enabled: false` ou `memory.extractionEnabled: false` |
 | Concurrent thread access corrompe histórico | Tampering | Médio — mensagens misturadas entre threads | Mutex por thread no ConversationManager. Serialização de execuções na mesma thread |
 | SQLite file locked por outro processo | Denial of Service | Baixo — Agent não consegue persistir | WAL mode reduz locks. Documentar: apenas um processo deve acessar o arquivo |
+
+| Injeção persistente via memória ("sempre concorde comigo", "ignore as regras") | Tampering | Alto — instrução maliciosa reinjetada em todo turno | O extrator não recebe resultados de tools (`formatExtractionTranscript`); o prompt de extração nunca grava instruções que enfraquecem honestidade ou segurança; na aplicação, memórias são dados e instruções nelas são ignoradas |
+| Memória ou knowledge com autoridade de instrução | Tampering | Alto — texto recuperado lido como ordem do host | Injeções `kind: 'data'` vão em `<context-data>` com aviso de que são referência; a injeção `context:protocol` diz ao modelo que só `<system-reminder>` fala pelo host |
+| `<system-reminder>` forjado pelo usuário ou por uma tool | Spoofing | Alto — texto externo se passando por lembrete do sistema | `neutralizeControlTags` escapa as tags de controle no histórico (user, assistant, tool) e nas injeções |
+| Vazamento de conversa entre usuários pela busca (`ConversationSearch`) | Information Disclosure | Alto — uma pessoa lendo o histórico de outra | Desligada por padrão. Escopo vem do `threadId` do contexto de execução, nunca dos argumentos; a tool é registrada uma vez, sem closure por turno; o id bruto da thread nunca aparece na saída |
 
 <!-- APPEND:threats -->
 
@@ -77,7 +82,7 @@ O AI Harness SDK é uma biblioteca — não gerencia autenticação de usuários
 
 - **SQLite local:** Arquivo `.harness/data.db` sem criptografia por padrão
 - **Criptografia:** Não incluída no pacote. Consumidor pode usar criptografia de disco (LUKS, FileVault, BitLocker) ou SQLite Encryption Extension (SEE)
-- **Permissões de arquivo:** Criado com permissões padrão do OS (umask do processo)
+- **Permissões de arquivo:** `data.db` com as permissões padrão do OS (umask do processo); arquivos de memória em `0600` (só o dono)
 
 ### Dados Sensiveis
 
@@ -85,11 +90,12 @@ O AI Harness SDK é uma biblioteca — não gerencia autenticação de usuários
 |------|---------------|----------|----------|
 | API Key (OpenRouter) | Credencial | Nunca logada, nunca em eventos, apenas em Authorization header | Em memória apenas (não persistida) |
 | Conteúdo de conversas | Potencialmente PII | Persistido em SQLite local (conversations table) | Controlado pelo consumidor (clearThread, destroy) |
-| Memórias extraídas | Potencialmente PII | Persistido em SQLite local (memories table) | Decay automático + limpeza por minConfidence |
+| Memórias extraídas | Potencialmente PII | Arquivos `.md` em `memoryDir`, modo `0600`. CPF, CNPJ, cartão e credenciais recusados; categorias LGPD art. 5º, II omitidas por padrão | Até o usuário pedir para esquecer ou o arquivo ser apagado |
+| Índice de busca de conversas (`conversations_fts`) | Potencialmente PII | Só texto de user/assistant; sem saídas de tools nem imagens | Acompanha o histórico: o trigger de delete remove do índice, com `secure-delete` |
 | Embeddings | Representação vetorial | Persistido como BLOB em SQLite | Junto com o documento/memória associado |
 | Tool arguments e results | Variável | Em memória durante execução, persistido no histórico | Controlado pelo consumidor |
 
-- **Mascaramento:** Não aplicado automaticamente. Consumidor responsável por sanitizar PII antes de enviar ao Agent
+- **Mascaramento:** A telemetria mascara credenciais e também CPF, CNPJ e números de cartão (`redactSecrets`). Fora da telemetria e da memória, o consumidor continua responsável por sanitizar PII antes de enviar ao Agent
 - **Política de descarte:** `agent.destroy()` fecha conexões. Consumidor pode deletar `data.db` para limpeza completa
 
 ---
@@ -103,7 +109,7 @@ Checklist adaptado do **OWASP Top 10** para contexto de biblioteca (não aplica�
 | Item | Status | Observacoes |
 |------|--------|-------------|
 | Prevenção de Injection (SQL) | Aplicado | `node:sqlite` usa prepared statements nativamente. Nenhum SQL construído por concatenação |
-| Prevenção de Injection (Prompt) | Parcial | Tool results vão como role:"tool", não como system. Consumidor responsável por sanitizar inputs |
+| Prevenção de Injection (Prompt) | Parcial | Tool results como `role: "tool"`; dados recuperados em `<context-data>`; tags de controle neutralizadas; triagem de `untrustedOutput` só com `decider`. Consumidor responsável por sanitizar inputs |
 | Validação de entrada | Aplicado | Todas as configurações validadas via Zod. Args de tools validados via Zod antes de execução |
 | Exposição de dados sensíveis | Aplicado | API key nunca em logs/eventos. Dados em SQLite sem criptografia (responsabilidade do consumidor) |
 | Controle de acesso | Parcial | beforeToolCall hook disponível. Sem sistema de permissões built-in para tools |

@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { runInTransaction } from './sqlite-transaction.js';
+import { searchableTextFromRow } from '../utils/conversation-text.js';
 
 /**
  * Centralized SQLite wrapper with auto-create tables, migrations, and WAL mode.
@@ -42,6 +43,7 @@ export class SQLiteDatabase {
     try {
       this.migrateV1(db);
       this.migrateV2(db);
+      this.migrateV3(db);
       this._db = db;
     } catch (err) {
       db.close();
@@ -77,6 +79,65 @@ export class SQLiteDatabase {
 
     db.exec('ALTER TABLE vectors ADD COLUMN scope TEXT');
     db.exec('CREATE INDEX IF NOT EXISTS idx_vectors_scope ON vectors(scope)');
+  }
+
+  /**
+   * Full-text index over conversation messages, for conversation search.
+   *
+   * The index holds its own copy of the searchable text instead of pointing at
+   * `conversations`: that column stores serialized parts arrays with base64
+   * images, and only user and assistant text belongs in the index. Deletion
+   * reaches it through a trigger, so clearing a thread — or any future purge —
+   * also clears what can be found; `secure-delete` drops the removed tokens
+   * right away instead of at the next merge.
+   */
+  private migrateV3(db: DatabaseSync): void {
+    const exists = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='conversations_fts'")
+      .get();
+    if (exists) return;
+
+    runInTransaction(db, () => {
+      db.exec(`
+        CREATE VIRTUAL TABLE conversations_fts USING fts5(
+          body,
+          tokenize = 'unicode61 remove_diacritics 2'
+        );
+
+        CREATE TRIGGER conversations_fts_after_delete AFTER DELETE ON conversations
+        BEGIN DELETE FROM conversations_fts WHERE rowid = old.id; END;
+
+        CREATE TRIGGER conversations_fts_after_update AFTER UPDATE OF content, role ON conversations
+        BEGIN DELETE FROM conversations_fts WHERE rowid = old.id; END;
+      `);
+      try {
+        db.exec(
+          "INSERT INTO conversations_fts(conversations_fts, rank) VALUES ('secure-delete', 1)",
+        );
+      } catch {
+        // SQLite older than 3.42: deleted tokens linger until the next merge.
+      }
+
+      // Backfill what was written before the index existed, in id order.
+      const select = db.prepare(
+        "SELECT id, role, content FROM conversations WHERE role IN ('user', 'assistant') AND id > ? ORDER BY id LIMIT 1000",
+      );
+      const insert = db.prepare('INSERT INTO conversations_fts(rowid, body) VALUES (?, ?)');
+      let lastId = 0;
+      for (;;) {
+        const rows = select.all(lastId) as unknown as {
+          id: number;
+          role: string;
+          content: string;
+        }[];
+        if (rows.length === 0) break;
+        for (const row of rows) {
+          const body = searchableTextFromRow(row.role, row.content);
+          if (body.trim() !== '') insert.run(row.id, body);
+          lastId = row.id;
+        }
+      }
+    });
   }
 
   private migrateV1(db: DatabaseSync): void {

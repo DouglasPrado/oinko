@@ -55,6 +55,8 @@ export class StreamingToolExecutor {
     private readonly traceId?: string,
     /** Conversa corrente. Uma tool que guarda estado por conversa precisa dela. */
     private readonly threadId?: string,
+    /** Inicio do turno corrente, para tools que leem o historico. */
+    private readonly turnStartedAt?: number,
   ) {
     this.executor = executor;
     this.signal = signal;
@@ -224,6 +226,7 @@ export class StreamingToolExecutor {
         signal: this.signal,
         ...(this.traceId !== undefined && { traceId: this.traceId }),
         ...(this.threadId !== undefined && { threadId: this.threadId }),
+        ...(this.turnStartedAt !== undefined && { turnStartedAt: this.turnStartedAt }),
         toolCallId: tracked.id,
         recentMessages: this.recentMessages,
         onProgress,

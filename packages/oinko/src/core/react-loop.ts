@@ -80,6 +80,8 @@ export interface ReactLoopConfig {
   traceId?: string;
   /** Conversa corrente. Repassada as tools que guardam estado por conversa. */
   threadId?: string;
+  /** Inicio do turno (epoch ms). Repassado as tools que leem o historico. */
+  turnStartedAt?: number;
 }
 
 /** O que uma chamada de LLM deixa para a telemetria. */
@@ -154,7 +156,10 @@ export async function* executeReactLoop(
   let state: LoopState = createInitialState([...initialMessages]);
 
   while (true) {
-    const { messages, turnCount, consecutiveErrors } = state;
+    const { turnCount, consecutiveErrors } = state;
+    // Rebound when autocompact succeeds, so every later iteration builds on
+    // the summary instead of summarizing the same history all over again.
+    let messages = state.messages;
 
     // --- Check abort ---
     if (signal?.aborted) {
@@ -259,6 +264,7 @@ export async function* executeReactLoop(
       });
       if (autoResult) {
         compactedMessages = autoResult.messages;
+        messages = autoResult.messages;
         yield { type: 'compaction', strategy: 'autocompact', tokensFreed: autoResult.tokensFreed };
       }
     }
@@ -281,6 +287,7 @@ export async function* executeReactLoop(
       messages.length,
       config.traceId,
       config.threadId,
+      config.turnStartedAt,
     );
     const effectiveMaxTokens = state.maxOutputTokensOverride ?? maxOutputTokens;
 
@@ -621,7 +628,7 @@ export async function* executeReactLoop(
       if (classified instanceof PromptTooLongError && !state.hasAttemptedCompaction) {
         if (maxContextTokens) {
           // Use original messages from state (not compactedMessages which may already be compacted)
-          const compactResult = await autocompact([...messages], client, {
+          const compactResult = await autocompact([...state.messages], client, {
             maxContextTokens,
             compactionThreshold: 0.1, // Force compaction
             tailProtection: DEFAULT_TAIL_PROTECTION,

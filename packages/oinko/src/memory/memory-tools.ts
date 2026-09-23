@@ -21,6 +21,7 @@ import {
   validateMemoryPathResolved,
   validateThreadId,
 } from './memory-paths.js';
+import { findNeverStore, describeSensitiveKinds } from '../utils/sensitive-data.js';
 
 const THREADS_DIR = 'threads';
 
@@ -72,6 +73,24 @@ function validateFilename(filename: string): string | null {
     return 'Cannot access MEMORY.md directly — it is managed automatically';
   if (!filename.endsWith('.md')) return 'Filename must end with .md';
   return null;
+}
+
+/** Memory files hold what users said about themselves: owner-only. */
+const MEMORY_FILE_MODE = 0o600;
+
+/**
+ * Refusal for content memory never stores. Names the kind, never the value —
+ * the tool result goes back into a model context and to telemetry.
+ */
+function neverStoreRefusal(
+  ...texts: (string | undefined)[]
+): { content: string; isError: true } | undefined {
+  const findings = texts.flatMap((text) => (text ? findNeverStore(text) : []));
+  if (findings.length === 0) return undefined;
+  return {
+    content: `Not saved: the content contains ${describeSensitiveKinds(findings)}, which memory never stores. Write it again without that detail and keep the rest.`,
+    isError: true,
+  };
 }
 
 /**
@@ -153,6 +172,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
     }),
     execute: async (rawArgs) => {
       const args = rawArgs as { name: string; description: string; type: string; content: string };
+      const refusal = neverStoreRefusal(args.name, args.description, args.content);
+      if (refusal) return refusal;
       const filename = sanitizeFilename(args.name);
 
       await mkdir(dir, { recursive: true });
@@ -170,7 +191,7 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
         '',
       ].join('\n');
 
-      await writeFile(safePath, fileContent, 'utf-8');
+      await writeFile(safePath, fileContent, { encoding: 'utf-8', mode: MEMORY_FILE_MODE });
       await addToIndex(dir, filename, args.description);
       return `Memory saved: ${filename}`;
     },
@@ -195,6 +216,8 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
       };
       const err = validateFilename(args.filename);
       if (err) return { content: err, isError: true };
+      const refusal = neverStoreRefusal(args.name, args.description, args.content);
+      if (refusal) return refusal;
 
       const filePath = await safeJoinResolved(args.filename);
       if (!filePath) return { content: 'Invalid path', isError: true };
@@ -223,7 +246,7 @@ export function createMemoryTools(memoryDir: string, threadId?: string): AgentTo
         '',
       ].join('\n');
 
-      await writeFile(filePath, fileContent, 'utf-8');
+      await writeFile(filePath, fileContent, { encoding: 'utf-8', mode: MEMORY_FILE_MODE });
       return `Memory updated: ${args.filename}`;
     },
   };

@@ -13,6 +13,13 @@ export type {
 export type { AgentSkill, SkillMatchContext, SkillPromptContext } from './agent-skill.js';
 export type { VectorStore, ConversationStore } from './stores.js';
 export type {
+  ConversationSearchQuery,
+  ConversationSearchHit,
+  ConversationSearchPage,
+  ConversationSearchRole,
+  ConversationSearchScope,
+} from './conversation-search.js';
+export type {
   Decider,
   Decision,
   Question,

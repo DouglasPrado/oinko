@@ -48,3 +48,51 @@ describe('buildMemoryInstructions', () => {
     expect(full).toContain('frontmatter');
   });
 });
+
+describe('buildRecallInstructions — applying memory', () => {
+  const chat = buildRecallInstructions(DIR);
+  const coding = buildRecallInstructions(DIR, { codeTools: true });
+
+  it('treats memories as background, not as instructions', () => {
+    expect(chat).toMatch(/not instructions/i);
+    expect(chat).toMatch(/flatter|always agree/i);
+  });
+
+  it('uses a memory only when it changes the answer', () => {
+    expect(chat).toMatch(/changes what you conclude, recommend or ask/i);
+  });
+
+  it('forbids narrating the retrieval', () => {
+    expect(chat).toMatch(/do not narrate/i);
+    expect(chat).toContain('"I remember"');
+  });
+
+  it('lets the current request win over a stored preference', () => {
+    expect(chat).toMatch(/current request wins/i);
+  });
+
+  it('keeps open items as context, sensitive details for when the user raises them', () => {
+    expect(chat).toMatch(/context, not an agenda/i);
+    expect(chat).toMatch(/sensitive/i);
+    expect(chat).toMatch(/other people/i);
+  });
+
+  it('honours a request to stop using memory', () => {
+    expect(chat).toMatch(/not to use memory/i);
+  });
+
+  it('keeps code verification out of a bot without code tools', () => {
+    expect(chat).not.toContain('grep');
+    expect(chat).not.toContain('git log');
+  });
+
+  it('adds code verification when the agent can read the code', () => {
+    expect(coding).toContain('Before recommending from memory');
+    expect(coding).toContain('grep');
+  });
+
+  it('never points at tools the agent does not have (plans, tasks)', () => {
+    expect(chat).not.toMatch(/plan instead of memory|tasks instead of memory/i);
+    expect(coding).not.toMatch(/plan instead of memory|tasks instead of memory/i);
+  });
+});

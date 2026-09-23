@@ -99,6 +99,7 @@ const initial: BotDefinition = {
   systemPrompt: '',
   cli: true,
   programming: false,
+  conversationSearch: false,
   telegram: { enabled: false, allowedUserIds: [], allowAllPrivateChats: false },
   higgsfield: false,
   telemetry: { enabled: true, capture: 'full', retentionDays: 30 },

@@ -19,6 +19,10 @@
 | ExecutionContext | Contexto de rastreamento com traceId unico por execucao chat/stream | Context de request HTTP | Observabilidade, tracing |
 | MCP | Model Context Protocol — protocolo para conectar tools externas via stdio ou SSE | RPC / gRPC (MCP e especifico para tools de LLM) | MCPAdapter |
 | Embedding | Representacao vetorial de texto para busca por similaridade semantica | Encoding / tokenizacao | EmbeddingService, VectorStore |
+| ContextInjection (instruction / data) | Bloco que entra na mensagem system. `instruction` e orientacao do host (em `<system-reminder>`); `data` e material recuperado no turno — knowledge, memorias — enviado em `<context-data>` como referencia, nunca como ordem | Mensagem do historico (injecao e reconstruida a cada turno) | ContextBuilder, Agent |
+| Tag de controle | Tag que o harness usa para marcar a origem de um bloco (`system-reminder`, `context-data`, `untrusted-tool-output`, `past_conversation_results`). Texto vindo de usuario, tool, memoria ou documento nunca abre nem fecha uma (`neutralizeControlTags`) | Markup comum (HTML, markdown) | prompt-safety, ContextBuilder |
+| Never-store | Dados que a memoria nunca grava, nem a pedido: CPF, CNPJ, cartao, credenciais (piso deterministico, `findNeverStore`). As categorias sensiveis da LGPD (art. 5, II) dependem de `memory.sensitiveData` | PII em geral (nome, cidade, preferencias podem ser memoria) | Memory, telemetria |
+| ConversationSearch | Tool que busca mensagens antigas de user/assistant que sairam do contexto, no escopo da propria thread por padrao, com a origem de cada trecho (USER vs ASSISTANT) | Memory (a busca le o historico literal; memory guarda fatos extraidos) | ConversationStore.searchMessages, conversations_fts |
 
 <!-- APPEND:termos -->
 
