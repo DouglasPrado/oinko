@@ -145,6 +145,12 @@ export const AgentConfigSchema = z.object({
    * Defaults to the host's. UTC would make it tomorrow every evening in Brazil.
    */
   timezone: z.string().refine(isValidTimeZone, 'Unknown IANA time zone').optional(),
+  /**
+   * Adds a baseline for how to respond (effort proportional to the ask, one
+   * clarifying question at most, minimal formatting, faithful reporting).
+   * Off by default: the persona belongs to the operator's systemPrompt.
+   */
+  behaviorPrompt: z.boolean().default(false),
 
   // Subsystem configs
   memory: MemoryConfigSchema.optional(),
