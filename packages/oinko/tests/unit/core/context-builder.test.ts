@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildContext, type ContextInjection } from '../../../src/core/context-builder.js';
 import type { ChatMessage } from '../../../src/contracts/entities/chat-message.js';
+import { normalizeMessagesForAPI } from '../../../src/core/message-normalize.js';
 import type { ContentPart } from '../../../src/contracts/entities/content-part.js';
 
 function msg(role: ChatMessage['role'], content: string, pinned = false): ChatMessage {
@@ -296,6 +297,80 @@ describe('buildContext', () => {
     expect(llmPinned).toBeDefined();
     expect((llmPinned as unknown as Record<string, unknown>)._pinned).toBe(true);
     expect((llmUnpinned as unknown as Record<string, unknown>)._pinned).toBeUndefined();
+  });
+});
+
+/**
+ * A pinned skill result used to be floated above the history, landing before
+ * the assistant that issued its call; normalization then dropped it as an
+ * orphan and the skill vanished from every turn after the first.
+ */
+describe('buildContext with a pinned tool result', () => {
+  function skillTurn(): ChatMessage[] {
+    const now = Date.now();
+    return [
+      { role: 'user', content: 'review this', createdAt: now },
+      {
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'tc-skill', type: 'function', function: { name: 'Skill', arguments: '{}' } },
+        ],
+        createdAt: now + 1,
+      },
+      {
+        role: 'tool',
+        content: 'SKILL-BODY',
+        toolCallId: 'tc-skill',
+        pinned: true,
+        createdAt: now + 2,
+      },
+      { role: 'assistant', content: 'Feito', createdAt: now + 3 },
+    ];
+  }
+
+  it('keeps the call and its result adjacent, in chronological order', () => {
+    const history = [...skillTurn(), msg('user', 'and now?')];
+    const result = buildContext({
+      systemPrompt: 'sys',
+      injections: [],
+      history,
+      maxTokens: 10_000,
+      reserveTokens: 100,
+      maxPinnedMessages: 20,
+    });
+
+    const normalized = normalizeMessagesForAPI(result.messages);
+    expect(normalized.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+      'user',
+    ]);
+    expect(normalized.find((m) => m.role === 'tool')?.content).toBe('SKILL-BODY');
+  });
+
+  it('holds on to the pair when the budget cuts older history', () => {
+    const filler = Array.from({ length: 20 }, (_, i) =>
+      msg(i % 2 === 0 ? 'user' : 'assistant', `filler ${i} ${'z'.repeat(80)}`),
+    );
+    const history = [...skillTurn(), ...filler, msg('user', 'latest')];
+    const result = buildContext({
+      injections: [],
+      history,
+      maxTokens: 200,
+      reserveTokens: 0,
+      maxPinnedMessages: 20,
+    });
+
+    expect(result.droppedPinnedCount).toBe(0);
+    const normalized = normalizeMessagesForAPI(result.messages);
+    const toolIdx = normalized.findIndex((m) => m.role === 'tool');
+    expect(normalized[toolIdx]?.content).toBe('SKILL-BODY');
+    expect(normalized[toolIdx - 1]?.tool_calls?.[0]?.id).toBe('tc-skill');
+    expect(normalized.at(-1)?.content).toBe('latest');
   });
 });
 

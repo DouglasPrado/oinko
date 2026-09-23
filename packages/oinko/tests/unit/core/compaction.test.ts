@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { microcompact } from '../../../src/core/compaction/microcompact.js';
 import { autocompact } from '../../../src/core/compaction/autocompact.js';
+import { normalizeMessagesForAPI } from '../../../src/core/message-normalize.js';
 import type { LLMMessage } from '../../../src/llm/message-types.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
 import { LLMClient as RealLLMClient } from '../../../src/llm/llm-client.js';
@@ -269,5 +270,51 @@ describe('autocompact with images', () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+describe('autocompact with a pinned tool result', () => {
+  const summarizer = (): LLMClient =>
+    ({ chat: vi.fn().mockResolvedValue({ content: 'Summary.' }) }) as unknown as LLMClient;
+
+  it('keeps the assistant that issued the pinned call, right before its result', async () => {
+    // A skill loaded early: the tool result is pinned, its assistant is not.
+    // Summarizing the assistant away leaves the result without its call, and
+    // normalization then drops the skill instructions altogether.
+    const messages: LLMMessage[] = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'use the review skill ' + 'x'.repeat(2000) },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { id: 'tc-skill', type: 'function', function: { name: 'Skill', arguments: '{}' } },
+        ],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'tc-skill',
+        content: 'SKILL-BODY',
+        _pinned: true,
+      } as LLMMessage,
+      { role: 'assistant', content: 'done ' + 'y'.repeat(2000) },
+      { role: 'user', content: 'next' },
+      { role: 'assistant', content: 'ok' },
+    ];
+
+    const result = await autocompact(messages, summarizer(), {
+      maxContextTokens: 500,
+      compactionThreshold: 0.5,
+      tailProtection: 2,
+    });
+
+    expect(result).not.toBeNull();
+    const normalized = normalizeMessagesForAPI(result!.messages);
+    const toolIdx = normalized.findIndex((m) => m.role === 'tool');
+    expect(toolIdx).toBeGreaterThan(0);
+    expect(normalized[toolIdx]!.content).toBe('SKILL-BODY');
+    const parent = normalized[toolIdx - 1]!;
+    expect(parent.role).toBe('assistant');
+    expect(parent.tool_calls?.map((tc) => tc.id)).toEqual(['tc-skill']);
   });
 });

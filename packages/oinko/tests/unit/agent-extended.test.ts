@@ -247,4 +247,65 @@ describe('Agent — extended API (divergence fixes)', () => {
     // Skill tool results MUST be saved as pinned so they survive compaction in resumed sessions
     expect(toolResult!.pinned).toBe(true);
   });
+
+  it('still sends the pinned skill result on the next turn, right after its call', async () => {
+    const sse = (frames: string[]) =>
+      new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(new TextEncoder().encode(frames.join('')));
+            c.close();
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    const callSkill = [
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"tc-skill-1","type":"function","function":{"name":"Skill","arguments":"{\\"skill\\":\\"test-skill\\"}"}}]},"index":0}]}\n\n',
+      'data: {"choices":[{"finish_reason":"tool_calls","index":0}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}\n\n',
+    ];
+    const answer = (text: string) => [
+      `data: {"choices":[{"delta":{"content":"${text}"},"index":0}]}\n\n`,
+      'data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":20,"completion_tokens":2,"total_tokens":22}}\n\n',
+    ];
+
+    const bodies: {
+      messages: {
+        role: string;
+        content?: unknown;
+        tool_call_id?: string;
+        tool_calls?: { id: string }[];
+      }[];
+    }[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const urlStr = typeof url === 'string' ? url : url.toString();
+      if (urlStr.includes('/embeddings')) {
+        return new Response(JSON.stringify({ data: [{ embedding: [0.1] }] }), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body));
+      if (body.stream !== true) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: '{}' } }] }), {
+          status: 200,
+        });
+      }
+      bodies.push(body);
+      return sse(bodies.length === 1 ? callSkill : answer(bodies.length === 2 ? 'Done' : 'Again'));
+    });
+
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+    });
+    agent.addSkill({ name: 'test-skill', description: 'test', instructions: 'SKILL-MARKER' });
+
+    await agent.chat('invoke skill');
+    await agent.chat('and now?');
+
+    const nextTurn = bodies[2]!.messages;
+    const toolIdx = nextTurn.findIndex((m) => m.role === 'tool' && m.tool_call_id === 'tc-skill-1');
+    expect(toolIdx).toBeGreaterThan(0);
+    expect(String(nextTurn[toolIdx]!.content)).toContain('SKILL-MARKER');
+    expect(nextTurn[toolIdx - 1]!.tool_calls?.map((tc) => tc.id)).toContain('tc-skill-1');
+    await agent.destroy();
+  });
 });

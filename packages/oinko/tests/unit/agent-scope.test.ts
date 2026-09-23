@@ -130,3 +130,61 @@ describe('Agent — escopo obrigatorio de memoria e consumo por thread', () => {
     expect(agente.getHistory('thread-a')).toEqual([]);
   });
 });
+
+/**
+ * Uma memoria exibida uma vez era excluida da selecao seguinte — para nao
+ * pagar de novo por ela —, mas as injecoes nao ficam no historico. No segundo
+ * turno sobrava so a linha do indice, e o corpo da memoria sumia.
+ */
+describe('Agent — memoria relevante continua no contexto da thread', () => {
+  const raizes: string[] = [];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const raiz of raizes.splice(0)) rmSync(raiz, { recursive: true, force: true });
+  });
+
+  it('mantem a memoria no system do turno seguinte, sem seleciona-la de novo', async () => {
+    const raiz = mkdtempSync(join(tmpdir(), 'harness-carregada-'));
+    raizes.push(raiz);
+
+    const systems: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        stream?: boolean;
+        messages: { role: string; content: string }[];
+      };
+      if (body.stream === true) systems.push(body.messages[0]!.content);
+      return respostaSse(1);
+    });
+
+    const decide = vi.fn(async (_situation: string, questions: Record<string, unknown>) =>
+      Object.fromEntries(
+        Object.keys(questions).map((k) => [k, { value: k.startsWith('m'), confidence: 0.9 }]),
+      ),
+    );
+    const agente = Agent.create({
+      apiKey: 'chave-de-teste',
+      memory: { enabled: true, memoryDir: join(raiz, 'memoria'), extractionEnabled: false },
+      knowledge: { enabled: false },
+      dbPath: join(raiz, 'agent.db'),
+      decider: { decide } as never,
+    });
+
+    try {
+      // O marcador fica depois do caractere 100: fora da descricao do indice.
+      await agente.remember(`${'contexto '.repeat(15)} MARCA-ZETA-42`, 'thread-a');
+
+      await consumir(agente, 'qual e a marca?', 'thread-a');
+      await consumir(agente, 'e depois disso?', 'thread-a');
+
+      expect(systems).toHaveLength(2);
+      expect(systems[0]).toContain('MARCA-ZETA-42');
+      expect(systems[1]).toContain('MARCA-ZETA-42');
+      const selecoes = decide.mock.calls.filter(([, questions]) => 'm0' in questions);
+      expect(selecoes).toHaveLength(1);
+    } finally {
+      await agente.destroy();
+    }
+  });
+});

@@ -424,3 +424,66 @@ describe('executeReactLoop', () => {
     expect(warnings).toHaveLength(1);
   });
 });
+
+describe('executeReactLoop — autocompact across iterations', () => {
+  it('summarizes once and carries the compacted history into later iterations', async () => {
+    const done = (finishReason: 'tool_calls' | 'stop') => ({
+      type: 'done' as const,
+      finishReason,
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    });
+    const summarize = vi.fn().mockResolvedValue({ content: 'RESUMO' });
+    const client = {
+      ...createMockClient([
+        [{ type: 'tool_call', id: 'c1', name: 'noop', arguments: '{}' }, done('tool_calls')],
+        [{ type: 'tool_call', id: 'c2', name: 'noop', arguments: '{}' }, done('tool_calls')],
+        [{ type: 'content', data: 'fim' }, done('stop')],
+      ]),
+      chat: summarize,
+    } as unknown as LLMClient;
+
+    const executor = new ToolExecutor();
+    executor.register({
+      name: 'noop',
+      description: 'does nothing',
+      parameters: z.object({}),
+      execute: async () => 'ok',
+    });
+
+    const big = 'palavra '.repeat(150); // ~300 tokens each
+    const initial: LLMMessage[] = [
+      { role: 'user', content: `ORIGINAL-A ${big}` },
+      { role: 'assistant', content: `ORIGINAL-B ${big}` },
+      { role: 'user', content: `ORIGINAL-C ${big}` },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'short' },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'go' },
+    ];
+
+    const { events, terminal } = await consumeLoop(
+      executeReactLoop(initial, {
+        client,
+        toolExecutor: executor,
+        model: 'test',
+        maxIterations: 10,
+        maxConsecutiveErrors: 3,
+        onToolError: 'continue',
+        maxContextTokens: 1000,
+      }),
+    );
+
+    expect(terminal.reason).toBe('stop');
+    expect(summarize).toHaveBeenCalledTimes(1);
+    const autocompactEvents = events.filter(
+      (e) => e.type === 'compaction' && (e as { strategy?: string }).strategy === 'autocompact',
+    );
+    expect(autocompactEvents).toHaveLength(1);
+
+    // The third request is built on the summary, not on the original bulk.
+    const calls = (client.streamChat as ReturnType<typeof vi.fn>).mock.calls;
+    const third = JSON.stringify(calls[2]![0]);
+    expect(third).toContain('RESUMO');
+    expect(third).not.toContain('ORIGINAL-A');
+  });
+});

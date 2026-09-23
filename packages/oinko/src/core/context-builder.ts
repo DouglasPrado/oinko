@@ -76,36 +76,41 @@ export function buildContext(options: {
     return chatMessageToLLM(msg, keepImages);
   };
 
-  // 3. History — pinned messages always included, then recent messages
-  const pinned = history.filter((m) => m.pinned).slice(0, maxPinnedMessages);
-  const unpinned = history.filter((m) => !m.pinned);
+  // 3. History — pinned messages reserved first, then recent ones fill the
+  // rest. Selection is by budget; emission keeps the original order, because
+  // a pinned `tool` result floated above its assistant is an orphan that
+  // normalization drops — which is how a loaded skill used to vanish.
+  const cost = (i: number): number => estimateContentTokens(history[i]!.content);
+  const pinnedIdx = history.flatMap((m, i) => (m.pinned ? [i] : [])).slice(0, maxPinnedMessages);
+  const reserved = new Set(pinnedIdx);
+  const included = new Set<number>();
 
-  // Include pinned first. Track how many did not fit so the caller can surface
-  // a warning instead of silently losing critical context.
+  // Track how many pinned did not fit so the caller can surface a warning
+  // instead of silently losing critical context.
   let droppedPinnedCount = 0;
-  for (const msg of pinned) {
-    const tokens = estimateContentTokens(msg.content);
+  for (const i of pinnedIdx) {
+    const parent = parentToolCallIndex(history, i);
+    const group = [i, ...(parent !== undefined ? [parent] : [])].filter((k) => !included.has(k));
+    const tokens = group.reduce((sum, k) => sum + cost(k), 0);
     if (used + tokens <= budget) {
-      messages.push(toLLM(msg));
+      for (const k of group) included.add(k);
       used += tokens;
     } else {
       droppedPinnedCount++;
     }
   }
 
-  // Include unpinned from most recent, fill remaining budget
-  const unpinnedReversed = [...unpinned].reverse();
-  const unpinnedToInclude: LLMMessage[] = [];
-  for (const msg of unpinnedReversed) {
-    const tokens = estimateContentTokens(msg.content);
-    if (used + tokens <= budget) {
-      unpinnedToInclude.unshift(toLLM(msg));
-      used += tokens;
-    } else {
-      break;
-    }
+  // Unpinned from most recent, until the budget runs out.
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (included.has(i) || reserved.has(i)) continue;
+    if (used + cost(i) > budget) break;
+    included.add(i);
+    used += cost(i);
   }
-  messages.push(...unpinnedToInclude);
+
+  history.forEach((m, i) => {
+    if (included.has(i)) messages.push(toLLM(m));
+  });
 
   // 4. Merge consecutive same-role messages (API constraint: no consecutive user/user)
   const merged = mergeConsecutiveMessages(messages);
@@ -117,6 +122,17 @@ export function buildContext(options: {
     droppedPinnedCount,
     flattenedImageCount,
   };
+}
+
+/** Index of the assistant message that issued the call answered at `i`, if any. */
+function parentToolCallIndex(history: readonly ChatMessage[], i: number): number | undefined {
+  const callId = history[i]!.toolCallId;
+  if (history[i]!.role !== 'tool' || !callId) return undefined;
+  for (let k = i - 1; k >= 0; k--) {
+    const m = history[k]!;
+    if (m.role === 'assistant' && m.toolCalls?.some((tc) => tc.id === callId)) return k;
+  }
+  return undefined;
 }
 
 /**
