@@ -19,6 +19,14 @@ A lista de bots separa **Canais** (CLI e Telegram) de **MCPs** (Higgsfield, Oink
 
 Cada bot roda em um processo independente. A dashboard pode ser fechada ou reiniciada sem desligá-lo. O socket local impede duas instâncias no mesmo diretório de dados; uma operação de controle por vez e a verificação do token Telegram evitam partidas concorrentes conflitantes. Falhas de conexão aparecem na tela sem devolver credenciais.
 
+O socket dos bots usa `/tmp` em Unix, com usuário e diretório de dados na identidade, independentemente de `TMPDIR`. Assim um cliente MCP e a dashboard encontram o mesmo processo. Ao atualizar de uma versão anterior, encerre os bots antes de trocar o executor e reinicie os clientes.
+
+### Decisor e roteamento
+
+`intelligence` é uma configuração opcional por bot: `enabled` conecta o Jev da TypeSafe, `fastModel` define o modelo para turnos simples e `minConfidence` define o limiar (padrão 0,85). Ausente ou desabilitada, mantém o comportamento anterior. Sem `fastModel`, o Jev participa das outras decisões, mas não troca o modelo. Com roteamento, ambos os modelos usam o mesmo provedor LLM do bot; para OpenRouter, use os IDs completos do catálogo. O modelo principal permanece como fallback quando o decisor falha ou não tem confiança suficiente.
+
+A credencial `typesafeKey` é independente da chave do OpenRouter, cifrada no cadastro e exposta apenas pelo indicador `hasTypesafeKey`. Um bot com Jev habilitado sem essa credencial recusa iniciar com erro explícito. O runner monta `JevDecider` do SDK com timeout de 15 segundos; o SDK registra suas decisões e falhas na telemetria da execução. A configuração e a chave podem ser atualizadas pelo MCP administrativo; a dashboard preserva essa configuração ao editar outros campos. Não há ativação implícita por variável de ambiente.
+
 ## Dados e migração
 
 O cadastro fica em `.harness/bots.db`, separado dos bancos do SDK. Segredos são cifrados com AES-256-GCM; a chave local fica em `.harness/bots.key`, com permissão 600. API e formulário retornam apenas indicadores de credenciais configuradas. Atualizações verificam a revisão para evitar sobrescrever uma edição concorrente.

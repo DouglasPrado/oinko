@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { request } from 'node:http';
 
@@ -7,7 +6,7 @@ export function serviceSocketPath(dataDir: string): string {
   const key = createHash('sha256').update(resolve(dataDir)).digest('hex').slice(0, 20);
   return process.platform === 'win32'
     ? `\\\\.\\pipe\\oinko-${key}`
-    : join(tmpdir(), `oinko-${process.getuid?.() ?? 'user'}-${key}.sock`);
+    : join('/tmp', `oinko-${process.getuid?.() ?? 'user'}-${key}.sock`);
 }
 export async function controlRequest<T = unknown>(
   socketPath: string,

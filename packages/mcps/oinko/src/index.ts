@@ -12,6 +12,7 @@ import { Id, ProjectSchema, TaskSchema } from '@oinko/workspaces/contracts';
 import { GUIDE } from './guide.js';
 import { PrepareSchema, prepareProject } from './prepare.js';
 import { inspect, logs, status, waitJob, type RunnerConnection } from './service.js';
+import { BotQuery, BotUpdate, queryBots, updateBot } from './bots.js';
 
 const icon = {
   src: `data:image/png;base64,${readFileSync(new URL('../assets/icon.png', import.meta.url)).toString('base64')}`,
@@ -81,6 +82,19 @@ export function createOinkoServer(options: { root?: string; client?: RunnerConne
     .nonnegative()
     .describe('Revisão atual retornada por oinko_status; 0 para criar.');
   const location = { taskId: Id, repositoryId: Id };
+  tool(
+    'oinko_bots',
+    'Consulta os bots da dashboard, suas configurações públicas, revisão e conexões. Use botId para consultar apenas um. Nunca retorna tokens salvos.',
+    BotQuery.shape,
+    ({ botId }) => queryBots(options.root, botId),
+    true,
+  );
+  tool(
+    'oinko_update_bot',
+    'Atualiza um bot existente: modelo, provedor (baseUrl), instruções, Jev/roteamento (intelligence), canais, MCPs e credenciais opcionais. Consulte oinko_bots e envie a revisão atual. Preserva campos omitidos. Salva sem reiniciar: restart_required exige reinício pela dashboard/CLI; next_start aplica na próxima partida.',
+    BotUpdate.shape,
+    (args) => updateBot(options.root, args),
+  );
   tool(
     'oinko_status',
     'Consulta projetos, ambientes, worktrees, jobs e URLs. O estado ready confirma uma prévia disponível.',

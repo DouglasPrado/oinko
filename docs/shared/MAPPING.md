@@ -103,3 +103,7 @@ Navegação da dashboard: `docs/dashboard/PLAN.md` → `apps/dashboard/src/compo
 | `shared/glossary.md` | Todos | Termos unicos do dominio |
 | `shared/event-mapping.md` | Backend 12 ↔ Frontend 05/06/08 | Eventos → estado e fluxos do frontend |
 | `shared/error-ux-mapping.md` | Backend 09 ↔ Frontend 11/12 | Erros → resposta visual |
+
+Administração de bots pelo MCP: `docs/blueprint/25-oinko-mcp.md` → `packages/mcps/oinko/src/bots.ts`; regressões de patch, revisão, credenciais e processo ativo em `packages/mcps/oinko/tests/bots.test.ts`.
+
+Jev nos bots: `docs/dashboard/PLAN.md` → schema/store/runner de `packages/bots`; `tests/intelligence.test.ts` verifica roteamento OpenRouter, credenciais separadas, fallback e registro na telemetria.

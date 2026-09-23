@@ -1,6 +1,6 @@
 export const GUIDE = `# Oinko: GitHub → sandbox → prévia
 
-Esta conexão local administra o mesmo Oinko da dashboard. Consulte oinko_status primeiro.
+Esta conexão local administra o mesmo Oinko da dashboard. Para projetos, consulte oinko_status primeiro.
 1. Receba a URL raiz do GitHub (ou owner/repo) e a referência desejada. Use oinko_prepare_project.
 2. Se houver job, acompanhe oinko_job até succeeded; queued/running não significam pronto.
    Se a tarefa já estiver creating, consulte oinko_status. Uma repetição reutiliza o cadastro.
@@ -31,4 +31,26 @@ automaticamente. Importações locais usam o snapshot importado. Credenciais pes
 não são encaminhadas para repositórios privados. Repositório privado requer acesso previamente
 configurado no mecanismo suportado pelo Oinko ou um clone local. Docker precisa estar disponível.
 Inspecione falhas de espaço e recursos sem apagar imagens/volumes de outros projetos.
+
+## Bots
+
+Use oinko_bots para consultar todos os bots ou um botId, com revisão, configuração e estado.
+Use oinko_update_bot para alterar somente os campos solicitados (changes), informando botId e
+a revisão consultada. Modelo e baseUrl precisam corresponder ao provedor; no OpenRouter, use
+o identificador completo do catálogo, como minimax/minimax-m3. Confirme disponibilidade atual
+antes de anunciar um modelo como o mais recente. A chave da API fica no cadastro de cada bot;
+trocar o .env do checkout não atualiza automaticamente as credenciais dos bots existentes.
+intelligence configura o Jev: enabled, fastModel opcional e minConfidence (0..1). Envie o objeto
+completo; null remove a configuração. Jev usa credentials.typesafeKey, independente da chave LLM.
+Sem fastModel não há troca de modelo; sem confiança suficiente, permanece o modelo principal.
+Campos omitidos e tokens existentes são preservados. Telegram e telemetria recebem merge;
+arrays como mcps e allowedUserIds são substituídos por completo, então preserve os demais itens.
+null limpa um campo opcional. O ID não pode ser alterado. Revisão vencida exige nova consulta.
+Credenciais são somente de escrita; nunca peça para o usuário publicá-las na conversa.
+Prefira o formulário da dashboard: argumentos MCP podem aparecer no histórico do cliente.
+Salvar não interrompe a conversa nem reinicia o bot que está executando esta ferramenta.
+activation=restart_required indica que a nova revisão só entra em uso após Reiniciar na
+dashboard ou pnpm bot restart <id>; next_start aplica quando um bot parado for iniciado.
+unknown significa que não foi possível confirmar o processo. Não anuncie configuração salva
+como ativa enquanto needsRestart estiver true. Não remova conexões ou permissões não solicitadas.
 `;
