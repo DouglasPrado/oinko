@@ -433,6 +433,10 @@ export class Agent {
       });
     }
 
+    // buildContext returns the very objects it kept, so identity tells which
+    // injections the budget let through.
+    const appliedInjections = new Set(contextResult.injections);
+
     // Snapshot memory dir time for mutual exclusion with extraction
     const turnStartMs = Date.now();
 
@@ -463,15 +467,16 @@ export class Agent {
         source: injection.source,
         priority: injection.priority,
         tokens: injection.tokens,
-        applied: true,
+        applied: appliedInjections.has(injection),
         content: injection.content,
       })),
       contextTokens: contextResult.totalTokens,
       startedAt: ctx.startedAt,
     });
 
-    // Emit skill_activated events for matched skills
-    for (const inj of injections.filter(
+    // Emit skill_activated events for matched skills — only those that made it
+    // into the prompt: a skill the budget dropped was never active.
+    for (const inj of contextResult.injections.filter(
       (i) => i.source.startsWith('skill:') && i.source !== 'skill:listing',
     )) {
       yield {
@@ -1279,6 +1284,9 @@ export class Agent {
   /** Timeout for memory relevance prefetch (ms). */
   private static readonly MEMORY_PREFETCH_TIMEOUT = 5_000;
 
+  /** Memories kept in context once surfaced in a thread (the selector picks up to 5 per turn). */
+  private static readonly MAX_CARRIED_MEMORIES = 10;
+
   /**
    * Start memory relevance selection asynchronously.
    * Returns a promise that resolves with relevant MemoryFiles.
@@ -1447,30 +1455,45 @@ export class Agent {
 
         // LLM-selected relevant memories (from prefetch — already running in parallel)
         const relevant = memoryPrefetch ? await memoryPrefetch : [];
-        if (relevant.length > 0) {
-          const content = relevant
-            .map((m) => {
-              const freshness = memoryFreshnessNote(m.mtimeMs);
-              const header = m.name ?? m.filename;
-              return `- ${header}:${freshness ? ` ${freshness}` : ''} ${m.content}`;
-            })
-            .join('\n');
-          const tokens = estimateTokens(content);
-          injections.push({
-            source: 'memory:relevant',
-            priority: 4,
-            content: `Relevant memories:\n${content}`,
-            tokens,
-          });
 
-          // Track surfaced filenames per-thread to avoid re-injection in subsequent turns
-          if (!this.surfacedMemoriesByThread.has(threadId)) {
-            this.surfacedMemoriesByThread.set(threadId, new Set<string>());
-          }
-          const threadSurfaced = this.surfacedMemoriesByThread.get(threadId)!;
-          for (const m of relevant) {
-            threadSurfaced.add(m.filename);
-          }
+        // Surfaced memories are excluded from the next selection so they are
+        // not paid for twice — but injections are rebuilt every turn, so
+        // excluding them also meant losing them. They are carried instead:
+        // re-read from disk (an edit shows, a deletion drops them), most
+        // recent first, capped so a long thread cannot grow without bound.
+        const surfaced = this.surfacedMemoriesByThread.get(threadId) ?? new Set<string>();
+        this.surfacedMemoriesByThread.set(threadId, surfaced);
+        for (const m of relevant) {
+          surfaced.delete(m.filename);
+          surfaced.add(m.filename);
+        }
+        while (surfaced.size > Agent.MAX_CARRIED_MEMORIES) {
+          surfaced.delete(surfaced.values().next().value!);
+        }
+
+        const fresh = new Set(relevant.map((m) => m.filename));
+        const carried: MemoryFile[] = [];
+        for (const filename of [...surfaced].filter((f) => !fresh.has(f)).reverse()) {
+          const memory =
+            (await this.fileMemorySystem.readMemory(filename, threadId)) ??
+            (await this.fileMemorySystem.readMemory(filename));
+          if (memory) carried.push(memory);
+          else surfaced.delete(filename);
+        }
+
+        if (relevant.length > 0) {
+          injections.push(memoryBlock('memory:relevant', 'Relevant memories:', relevant));
+        }
+        // Same priority, pushed after: under a tight budget the carried block
+        // goes before the memories picked for this very question.
+        if (carried.length > 0) {
+          injections.push(
+            memoryBlock(
+              'memory:carried',
+              'Memories already relevant in this conversation:',
+              carried,
+            ),
+          );
         }
       } catch {
         // Memory recall failed — continue without it
@@ -1495,4 +1518,21 @@ function systemPromptOf(
 ): string | undefined {
   const system = messages.find((message) => message.role === 'system');
   return typeof system?.content === 'string' ? system.content : undefined;
+}
+
+/** One memory injection: a heading, then each memory with its freshness note. */
+function memoryBlock(
+  source: string,
+  heading: string,
+  memories: readonly MemoryFile[],
+): ContextInjection {
+  const lines = memories
+    .map((m) => {
+      const freshness = memoryFreshnessNote(m.mtimeMs);
+      const header = m.name ?? m.filename;
+      return `- ${header}:${freshness ? ` ${freshness}` : ''} ${m.content}`;
+    })
+    .join('\n');
+  const content = `${heading}\n${lines}`;
+  return { source, priority: 4, content, tokens: estimateTokens(content) };
 }
