@@ -18,7 +18,7 @@ import { SkillManager } from './skills/skill-manager.js';
 import { createSkillTool, SKILL_TOOL_NAME, buildSkillToolPrompt } from './tools/skill-tool.js';
 import { FileMemorySystem } from './memory/file-memory-system.js';
 import { validateThreadId } from './memory/memory-paths.js';
-import { extractMemories } from './memory/memory-extractor.js';
+import { extractMemories, formatExtractionTranscript } from './memory/memory-extractor.js';
 import { shouldExtractWithDecider } from './memory/extraction-gate.js';
 import { shouldRetrieveKnowledge } from './knowledge/retrieval-gate.js';
 import { memoryFreshnessNote } from './memory/memory-age.js';
@@ -774,6 +774,7 @@ export class Agent {
       const conversations = this.conversations;
       const forkFn = this.fork.bind(this);
       const extractionDecider = decider;
+      const sensitiveData = this.config.memory?.sensitiveData ?? 'omit';
       const gateConfig = {
         samplingRate: this.config.memory?.samplingRate,
         extractionInterval: this.config.memory?.extractionInterval,
@@ -800,14 +801,12 @@ export class Agent {
             return;
           }
           const history = conversations.getHistory(threadId);
-          const recentMessages = history.slice(-10);
-          const conversationText = recentMessages
-            .map((m) => {
-              const text = typeof m.content === 'string' ? m.content : '[multimodal]';
-              return `${m.role}: ${text}`;
-            })
-            .join('\n');
-          await extractMemories(conversationText, memSystem, forkFn, { threadId, logger });
+          const conversationText = formatExtractionTranscript(history.slice(-10));
+          await extractMemories(conversationText, memSystem, forkFn, {
+            threadId,
+            logger,
+            sensitiveData,
+          });
         } catch (err) {
           logger.debug('Memory extraction failed', { error: String(err) });
         }

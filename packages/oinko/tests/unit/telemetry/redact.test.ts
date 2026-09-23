@@ -130,3 +130,22 @@ describe('redactSecrets', () => {
     });
   });
 });
+
+describe('redactSecrets — personal identifiers (LGPD)', () => {
+  it('masks a CPF, a CNPJ and a card number wherever they appear', () => {
+    const out = redactSecrets({
+      injections: [{ content: 'memória: CPF 529.982.247-25, empresa 11.222.333/0001-81' }],
+      userInput: 'paga no 4111 1111 1111 1111',
+    });
+    expect(out).not.toContain('529.982.247-25');
+    expect(out).not.toContain('11.222.333/0001-81');
+    expect(out).not.toContain('4111 1111 1111 1111');
+    expect(out).toContain(REDACTED);
+  });
+
+  it('leaves token counts and ordinary numbers alone', () => {
+    const out = redactSecrets({ total_tokens: 52998224725, note: 'pedido 12345' });
+    expect(out).toContain('52998224725');
+    expect(out).toContain('pedido 12345');
+  });
+});

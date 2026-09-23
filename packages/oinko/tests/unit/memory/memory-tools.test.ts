@@ -127,6 +127,80 @@ describe('memory-tools', () => {
     });
   });
 
+  describe('never-store data (LGPD)', () => {
+    const asResult = (r: unknown) =>
+      typeof r === 'string'
+        ? { content: r, isError: false }
+        : (r as { content: string; isError?: boolean });
+
+    it('refuses to write a CPF, says what it was, and does not echo it', async () => {
+      const tool = findTool(tools, 'memory_write');
+      const result = asResult(
+        await tool.execute(
+          {
+            name: 'User Docs',
+            description: 'Identity',
+            type: 'user',
+            content: 'O CPF do usuário é 529.982.247-25 e ele mora em Campinas.',
+          },
+          signal,
+        ),
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain('CPF');
+      expect(result.content).not.toContain('529.982.247-25');
+      await expect(access(join(tempDir, 'user-docs.md'))).rejects.toThrow();
+    });
+
+    it('checks the description too — it goes into the always-loaded index', async () => {
+      const tool = findTool(tools, 'memory_write');
+      const result = asResult(
+        await tool.execute(
+          { name: 'Card', description: 'cartão 4111 1111 1111 1111', type: 'user', content: 'x' },
+          signal,
+        ),
+      );
+      expect(result.isError).toBe(true);
+    });
+
+    it('refuses an edit that adds a card number', async () => {
+      await writeFile(
+        join(tempDir, 'billing.md'),
+        [
+          '---',
+          'name: Billing',
+          'description: Billing',
+          'type: user',
+          '---',
+          '',
+          'Pays monthly.',
+        ].join('\n'),
+      );
+      const tool = findTool(tools, 'memory_edit');
+      const result = asResult(
+        await tool.execute(
+          { filename: 'billing.md', content: 'Pays with 4111 1111 1111 1111.' },
+          signal,
+        ),
+      );
+
+      expect(result.isError).toBe(true);
+      expect(await readFile(join(tempDir, 'billing.md'), 'utf-8')).toContain('Pays monthly.');
+    });
+
+    it('writes memory files readable by the owner only', async () => {
+      const tool = findTool(tools, 'memory_write');
+      await tool.execute(
+        { name: 'Pref', description: 'Tone', type: 'feedback', content: 'Prefers short answers.' },
+        signal,
+      );
+      const { stat } = await import('node:fs/promises');
+      const mode = (await stat(join(tempDir, 'pref.md'))).mode & 0o777;
+      expect(mode).toBe(0o600);
+    });
+  });
+
   describe('memory_edit', () => {
     it('updates content of existing memory file', async () => {
       await writeFile(

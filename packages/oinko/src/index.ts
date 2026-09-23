@@ -191,6 +191,9 @@ export { CostEnricher } from './telemetry/cost-enricher.js';
 export type { CostEnricherOptions } from './telemetry/cost-enricher.js';
 export type { GenerationStats } from './llm/llm-client.js';
 export { GenerationNotReadyError } from './llm/errors.js';
+export { SensitiveDataError } from './memory/errors.js';
+export { findNeverStore, maskPersonalIdentifiers } from './utils/sensitive-data.js';
+export type { SensitiveKind, SensitiveFinding } from './utils/sensitive-data.js';
 export type { DecisionTraceContext } from './telemetry/decision-bridge.js';
 export type { PurgeOptions, PurgeResult } from './telemetry/purge.js';
 export type {

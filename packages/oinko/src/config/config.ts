@@ -77,6 +77,13 @@ const MemoryConfigSchema = z.object({
   extractionInterval: z.number().int().positive().default(10),
   /** Confidence floor for a decider verdict on whether a turn is worth remembering. */
   minConfidence: z.number().min(0).max(1).default(0.7),
+  /**
+   * LGPD sensitive categories (art. 5, II — health, religion, political
+   * opinion...) stated by the user. 'omit' keeps them out of memory; 'allow'
+   * saves them as stated. CPF, card numbers and credentials are never saved
+   * either way — that floor is enforced in code, not by the prompt.
+   */
+  sensitiveData: z.enum(['omit', 'allow']).default('omit'),
 });
 
 /** Knowledge/RAG subsystem configuration */

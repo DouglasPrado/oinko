@@ -1,4 +1,5 @@
 import { truncateMiddle } from '../utils/truncate.js';
+import { SECRET_PATTERNS, maskPersonalIdentifiers } from '../utils/sensitive-data.js';
 
 /** Marker written in place of anything that was scrubbed. */
 export const REDACTED = '[redacted]';
@@ -36,17 +37,6 @@ const SENSITIVE_KEYS = new Set([
   'xapikey',
 ]);
 
-/**
- * Shapes that identify a credential inside free text. Bearer comes first so it
- * swallows the whole header value rather than leaving the scheme behind.
- */
-const SECRET_PATTERNS: readonly RegExp[] = [
-  /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
-  /\bsk-[A-Za-z0-9_-]{16,}/g,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g,
-];
-
 export interface RedactOptions {
   /**
    * Literal values to scrub verbatim — typically the agent's own `apiKey`,
@@ -65,7 +55,9 @@ function redactText(text: string, secrets: readonly string[]): string {
   let out = text;
   for (const secret of secrets) out = out.split(secret).join(REDACTED);
   for (const pattern of SECRET_PATTERNS) out = out.replace(pattern, REDACTED);
-  return out;
+  // A prompt carries whatever the user typed and every memory injected into
+  // it — CPF, CNPJ and card numbers have no business in the telemetry store.
+  return maskPersonalIdentifiers(out, REDACTED);
 }
 
 function walk(value: unknown, secrets: readonly string[], seen: Set<object>): unknown {
