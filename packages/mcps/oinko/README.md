@@ -2,6 +2,8 @@
 
 Servidor MCP local chamado **oinko** para preparar projetos a partir do GitHub e manipular sandboxes, worktrees, builds e prévias. Usa o mesmo gerenciador e os mesmos dados da dashboard. Não é necessário criar outro bot nem manter a dashboard aberta.
 
+O servidor anuncia o símbolo do Oinko em PNG de 128×128, com fundo transparente, no campo `serverInfo.icons` do handshake. A imagem de `assets/icon.png` vai embutida como data URI, sem depender de um site externo. Clientes que exibem ícones MCP podem usá-la; a dashboard usa a mesma imagem na conexão `oinko`.
+
 ## Preparar e conectar
 
 Requisitos: este checkout do monorepo, Node 22.5+ (use `.nvmrc`), pnpm e Docker. O servidor usa stdio; o aplicativo cliente inicia e encerra o processo MCP quando necessário.

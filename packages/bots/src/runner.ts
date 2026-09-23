@@ -50,13 +50,16 @@ export async function runBot(store: BotStore, id: string, onClose: () => void) {
       id: mcp.id,
       type: 'mcp',
       enabled: mcp.enabled,
-      options: {
-        transport: 'http',
-        url: mcp.url,
-        ...(secrets.mcpTokens?.[mcp.id]
-          ? { headers: { Authorization: `Bearer ${secrets.mcpTokens[mcp.id]}` } }
-          : {}),
-      },
+      options:
+        mcp.transport === 'stdio'
+          ? { transport: 'stdio', command: mcp.command, args: mcp.args }
+          : {
+              transport: 'http',
+              url: mcp.url,
+              ...(secrets.mcpTokens?.[mcp.id]
+                ? { headers: { Authorization: `Bearer ${secrets.mcpTokens[mcp.id]}` } }
+                : {}),
+            },
     });
   return startAgentService({
     socketPath: serviceSocketPath(paths.dataDir),

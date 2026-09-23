@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { OinkoIcon } from '@/components/shared/oinko-icon';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Card,
@@ -400,7 +401,7 @@ function BotEditor({
             </p>
           )}
           {definition.mcps.map((mcp, index) => {
-            const update = (patch: Partial<typeof mcp>) =>
+            const update = (patch: { id?: string; enabled?: boolean; url?: string }) =>
               change(
                 'mcps',
                 definition.mcps.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)),
@@ -415,37 +416,52 @@ function BotEditor({
                     onChange={(event) => update({ id: event.target.value })}
                   />
                 </Field>
-                <Field label={`URL do MCP ${index + 1}`}>
-                  <input
-                    required
-                    type="url"
-                    className={inputStyle}
-                    value={mcp.url}
-                    onChange={(event) => update({ url: event.target.value })}
-                    placeholder="https://…/mcp"
-                  />
-                </Field>
-                <Field
-                  label={`Token do MCP ${index + 1}`}
-                  help={
-                    profile?.mcpCredentials.includes(mcp.id)
-                      ? 'Token configurado. Deixe em branco para manter.'
-                      : 'Opcional, enviado como Bearer.'
-                  }
-                >
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    className={inputStyle}
-                    value={secrets.mcpTokens?.[mcp.id] ?? ''}
-                    onChange={(event) =>
-                      setSecrets((value) => ({
-                        ...value,
-                        mcpTokens: { ...value.mcpTokens, [mcp.id]: event.target.value },
-                      }))
+                {mcp.transport === 'stdio' ? (
+                  <Field
+                    label={`Conexão local do MCP ${index + 1}`}
+                    help="Gerenciada na configuração local do bot."
+                  >
+                    <input
+                      readOnly
+                      className={inputStyle}
+                      value={[mcp.command, ...mcp.args].join(' ')}
+                    />
+                  </Field>
+                ) : (
+                  <Field label={`URL do MCP ${index + 1}`}>
+                    <input
+                      required
+                      type="url"
+                      className={inputStyle}
+                      value={mcp.url}
+                      onChange={(event) => update({ url: event.target.value })}
+                      placeholder="https://…/mcp"
+                    />
+                  </Field>
+                )}
+                {mcp.transport !== 'stdio' && (
+                  <Field
+                    label={`Token do MCP ${index + 1}`}
+                    help={
+                      profile?.mcpCredentials.includes(mcp.id)
+                        ? 'Token configurado. Deixe em branco para manter.'
+                        : 'Opcional, enviado como Bearer.'
                     }
-                  />
-                </Field>
+                  >
+                    <input
+                      type="password"
+                      autoComplete="new-password"
+                      className={inputStyle}
+                      value={secrets.mcpTokens?.[mcp.id] ?? ''}
+                      onChange={(event) =>
+                        setSecrets((value) => ({
+                          ...value,
+                          mcpTokens: { ...value.mcpTokens, [mcp.id]: event.target.value },
+                        }))
+                      }
+                    />
+                  </Field>
+                )}
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-sm">
                     <input
@@ -742,46 +758,58 @@ export function BotConsole({ botId }: { botId?: string }) {
                     {bot.systemPrompt}
                   </p>
                   <Separator />
-                  <div>
-                    <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      Conexões
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {bot.status.connections.length ? (
-                        bot.status.connections.map((connection) => (
-                          <Badge
-                            variant="outline"
-                            key={`${connection.kind}-${connection.id}`}
-                            className={
-                              connection.state === 'error'
-                                ? 'text-destructive'
-                                : connection.state === 'connected'
-                                  ? 'text-ok'
-                                  : ''
-                            }
-                          >
-                            <span className="size-1.5 rounded-full bg-current" />
-                            {connection.type === 'cli' ? 'CLI' : connection.id} ·{' '}
-                            {connection.state === 'connected'
-                              ? 'conectado'
-                              : connection.state === 'error'
-                                ? 'falha na conexão'
-                                : 'conectando'}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-sm text-muted-foreground">
-                          {[
-                            bot.cli && 'CLI',
-                            bot.telegram.enabled && 'Telegram',
-                            bot.higgsfield && 'Higgsfield',
-                            ...bot.mcps.filter((m) => m.enabled).map((m) => m.id),
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || 'Nenhuma conexão habilitada'}
-                        </span>
-                      )}
-                    </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {(['channel', 'mcp'] as const).map((kind) => (
+                      <section key={kind} aria-label={kind === 'channel' ? 'Canais' : 'MCPs'}>
+                        <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          {kind === 'channel' ? 'Canais' : 'MCPs'}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {bot.status.connections.some((connection) => connection.kind === kind) ? (
+                            bot.status.connections
+                              .filter((connection) => connection.kind === kind)
+                              .map((connection) => (
+                                <Badge
+                                  variant="outline"
+                                  key={`${connection.kind}-${connection.id}`}
+                                  className={
+                                    connection.state === 'error'
+                                      ? 'text-destructive'
+                                      : connection.state === 'connected'
+                                        ? 'text-ok'
+                                        : ''
+                                  }
+                                >
+                                  {connection.kind === 'mcp' && connection.id === 'oinko' ? (
+                                    <OinkoIcon />
+                                  ) : (
+                                    <span className="size-1.5 rounded-full bg-current" />
+                                  )}
+                                  {connection.type === 'cli' ? 'CLI' : connection.id} ·{' '}
+                                  {connection.state === 'connected'
+                                    ? 'conectado'
+                                    : connection.state === 'error'
+                                      ? 'falha na conexão'
+                                      : 'conectando'}
+                                </Badge>
+                              ))
+                          ) : (
+                            <span className="text-sm text-muted-foreground">
+                              {[
+                                kind === 'channel' && bot.cli && 'CLI',
+                                kind === 'channel' && bot.telegram.enabled && 'Telegram',
+                                kind === 'mcp' && bot.higgsfield && 'Higgsfield',
+                                ...bot.mcps
+                                  .filter((m) => kind === 'mcp' && m.enabled)
+                                  .map((m) => m.id),
+                              ]
+                                .filter(Boolean)
+                                .join(' · ') || (kind === 'channel' ? 'Sem canais' : 'Sem MCPs')}
+                            </span>
+                          )}
+                        </div>
+                      </section>
+                    ))}
                   </div>
                   {(bot.status.needsRestart || !bot.hasApiKey) && (
                     <Alert>

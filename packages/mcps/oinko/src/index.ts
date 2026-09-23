@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { EnvironmentClient } from '@oinko/environments/client';
@@ -12,10 +13,19 @@ import { GUIDE } from './guide.js';
 import { PrepareSchema, prepareProject } from './prepare.js';
 import { inspect, logs, status, waitJob, type RunnerConnection } from './service.js';
 
+const icon = {
+  src: `data:image/png;base64,${readFileSync(new URL('../assets/icon.png', import.meta.url)).toString('base64')}`,
+  mimeType: 'image/png',
+  sizes: ['128x128'],
+};
+
 export function createOinkoServer(options: { root?: string; client?: RunnerConnection }) {
   if (!options.client && !options.root) throw new Error('Informe a raiz de dados Oinko.');
   const client = options.client ?? new EnvironmentClient(options.root!);
-  const server = new McpServer({ name: 'oinko', version: '0.1.0' }, { instructions: GUIDE });
+  const server = new McpServer(
+    { name: 'oinko', version: '0.1.0', icons: [icon] },
+    { instructions: GUIDE },
+  );
   function tool<S extends z.ZodRawShape>(
     name: string,
     description: string,

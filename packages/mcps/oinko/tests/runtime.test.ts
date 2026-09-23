@@ -156,6 +156,7 @@ it('prints a ready-to-use connection without starting a runner', () => {
 it('shares one runner across clients with different TMPDIR values and keeps it alive after disconnect', async () => {
   const f = await fixture();
   expect(f.client.getServerVersion()?.name).toBe('oinko');
+  expect(f.client.getServerVersion()?.icons?.[0]?.mimeType).toBe('image/png');
   expect((await f.client.listTools()).tools.length).toBe(15);
   const state = await call<RunnerState>(f.client, 'oinko_status');
   expect(state.projects).toEqual([]);

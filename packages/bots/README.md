@@ -34,4 +34,6 @@ Todos os bots gravam histórico, memória e telemetria em `.harness/bots/<id>`. 
 
 ## Extensão
 
+Conexões locais também podem ser salvas em `mcps` pelo `BotStore`, com `{ id: 'oinko', transport: 'stdio', command: '/caminho/node', args: ['/caminho/oinko/packages/mcps/oinko/dist/cli.js', '--root', '/caminho/oinko'], enabled: true }`. Use caminhos absolutos e preserve a revisão ao salvar. Reinicie o bot para aplicar. O subprocesso pertence ao ciclo de vida do bot e herda o ambiente padrão do transporte MCP; não há shell ou configuração de variáveis adicionais. Não coloque credenciais nos argumentos. A dashboard mostra a conexão local, mantém seus campos ao salvar e permite desabilitar ou remover.
+
 O pacote compõe os adaptadores de `packages/channels` e `packages/mcps`. Hoje a interface oferece CLI, Telegram, Higgsfield e MCP HTTP. Um tipo novo de canal é implementado e registrado uma vez no executor. Ferramentas e skills específicas podem continuar sendo compostas por código com o núcleo e o runtime.

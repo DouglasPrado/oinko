@@ -15,6 +15,7 @@ Disponibilizar um servidor MCP local chamado `oinko`, em `packages/mcps/oinko`, 
 ## Contrato e organização
 
 - Transporte MCP stdio, SDK oficial já utilizado no monorepo. stdout exclusivo do protocolo; diagnósticos no stderr.
+- Identidade visual: símbolo Oinko em PNG transparente de 128×128, incluído no pacote e anunciado em `serverInfo.icons` como data URI conforme o [contrato de ícones MCP](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2025-11-25/basic/index.mdx#icons). A dashboard usa a mesma imagem na conexão.
 - A raiz de dados é definida na inicialização (`--root` ou `OINKO_ROOT`), não por argumentos de ferramentas. O padrão é a raiz deste checkout.
 - Ferramentas para estado, preparação por GitHub, configuração de projeto/ambiente/rede, criação de tarefa, controle do sandbox, início/parada de prévia, acompanhamento de job, logs, inspeção, leitura/escrita e execução dentro do sandbox.
 - Resource `oinko://guide` e prompt `disponibilizar-sandbox` orientam a sequência e os limites. As respostas incluem conteúdo estruturado e erros MCP, sem transformar job aceito em operação concluída.

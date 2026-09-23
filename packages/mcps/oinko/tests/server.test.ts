@@ -77,6 +77,9 @@ async function fixture() {
 it('exposes MCP tools, a guide and a prompt with a real protocol client', async () => {
   const { client } = await fixture();
   expect(client.getServerVersion()?.name).toBe('oinko');
+  const icon = client.getServerVersion()?.icons?.[0];
+  expect(icon).toMatchObject({ mimeType: 'image/png', sizes: ['128x128'] });
+  expect(icon?.src).toMatch(/^data:image\/png;base64,/);
   const tools = await client.listTools();
   expect(tools.tools.map((tool) => tool.name)).toEqual(
     expect.arrayContaining([

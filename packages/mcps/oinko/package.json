@@ -15,6 +15,7 @@
     "oinko-mcp": "dist/cli.js"
   },
   "files": [
+    "assets",
     "dist",
     "README.md"
   ],

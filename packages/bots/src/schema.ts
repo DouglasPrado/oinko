@@ -5,6 +5,19 @@ const HttpUrl = z.url().refine((value) => {
   const url = new URL(value);
   return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
 }, 'Use uma URL HTTP ou HTTPS sem credenciais.');
+const McpFields = {
+  id: BotId.refine((id) => id !== 'higgsfield', 'ID reservado.'),
+  enabled: z.boolean().default(true),
+};
+const McpConnection = z.union([
+  z.strictObject({ ...McpFields, transport: z.literal('http').optional(), url: HttpUrl }),
+  z.strictObject({
+    ...McpFields,
+    transport: z.literal('stdio'),
+    command: z.string().trim().min(1).max(4096),
+    args: z.array(z.string().max(10_000)).max(100).default([]),
+  }),
+]);
 export const BotDefinitionSchema = z
   .object({
     id: BotId,
@@ -33,16 +46,7 @@ export const BotDefinitionSchema = z
         retentionDays: z.number().int().positive().default(30),
       })
       .default({ enabled: true, capture: 'full', retentionDays: 30 }),
-    mcps: z
-      .array(
-        z.object({
-          id: BotId.refine((id) => id !== 'higgsfield', 'ID reservado.'),
-          url: HttpUrl,
-          enabled: z.boolean().default(true),
-        }),
-      )
-      .max(20)
-      .default([]),
+    mcps: z.array(McpConnection).max(20).default([]),
     transcriptionModel: z.string().trim().min(1).optional(),
     transcriptionBaseUrl: HttpUrl.optional(),
   })

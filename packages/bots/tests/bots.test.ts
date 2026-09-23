@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, expect, it } from 'vitest';
 import { BotStore, BotManager } from '../src/index.js';
 import { BotDefinitionSchema } from '../src/schema.js';
@@ -24,6 +25,90 @@ const definition = {
   telegram: { enabled: false, allowedUserIds: [] },
   mcps: [],
 };
+
+it('preserves local MCP commands and legacy HTTP connections across dashboard edits', () => {
+  const store = new BotStore(root());
+  const mcps = [
+    { id: 'remote', url: 'https://example.com/mcp', enabled: true },
+    {
+      id: 'oinko',
+      transport: 'stdio',
+      command: process.execPath,
+      args: ['server.js'],
+      enabled: true,
+    },
+  ];
+  try {
+    const saved = store.save({ ...definition, mcps }, { mcpTokens: { remote: 'secret' } }, 0);
+    expect(saved.mcps).toEqual(mcps);
+    store.save({ ...saved, name: 'Edited', mcps: saved.mcps }, {}, saved.revision);
+    expect(store.get('support').mcps).toEqual(mcps);
+    expect(store.runtime('support').secrets.mcpTokens?.remote).toBe('secret');
+  } finally {
+    store.close();
+  }
+});
+
+it.each([
+  { transport: 'stdio', command: ' ' },
+  { transport: 'stdio', url: 'https://example.com/mcp' },
+  { transport: 'stdio', command: 'node', url: 'https://example.com/mcp' },
+  { transport: 'http', command: 'node', url: 'https://example.com/mcp' },
+  { transport: 'unknown', url: 'https://example.com/mcp' },
+])('rejects incomplete or ambiguous MCP transport: %j', (mcp) => {
+  expect(
+    BotDefinitionSchema.safeParse({ ...definition, mcps: [{ id: 'test', ...mcp }] }).success,
+  ).toBe(false);
+});
+
+it('connects the real Oinko MCP through the bot worker and disconnects it when disabled', async () => {
+  const dir = root();
+  const store = new BotStore(dir);
+  const manager = new BotManager(store, {
+    workerPath: new URL('../dist/worker.js', import.meta.url),
+  });
+  try {
+    store.save(
+      {
+        ...definition,
+        mcps: [
+          {
+            id: 'oinko',
+            transport: 'stdio',
+            command: process.execPath,
+            args: [
+              fileURLToPath(new URL('../../mcps/oinko/dist/cli.js', import.meta.url)),
+              '--root',
+              dir,
+            ],
+          },
+        ],
+      },
+      { apiKey: 'fake-key' },
+      0,
+    );
+    await manager.start('support');
+    expect((await manager.status('support')).connections).toContainEqual({
+      id: 'oinko',
+      type: 'mcp',
+      kind: 'mcp',
+      state: 'connected',
+    });
+    const saved = store.get('support');
+    store.save(
+      { ...saved, mcps: saved.mcps.map((mcp) => ({ ...mcp, enabled: false })) },
+      {},
+      saved.revision,
+    );
+    await manager.restart('support');
+    expect(
+      (await manager.status('support')).connections.some((entry) => entry.id === 'oinko'),
+    ).toBe(false);
+  } finally {
+    if (store.has('support')) await manager.stop('support');
+    store.close();
+  }
+}, 30_000);
 
 it('keeps conversation search off unless the operator turns it on', () => {
   // Reading old conversations is a new use of personal data: never a silent default.
