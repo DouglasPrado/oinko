@@ -1,4 +1,13 @@
-import { mkdtempSync, mkdirSync, symlinkSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  symlinkSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
@@ -93,6 +102,34 @@ it('stores secrets encrypted and returns only their names, preserving them on or
       Buffer.from('private-database-secret'),
     ),
   ).toBe(false);
+});
+
+it('refuses a symlink as the encryption key without changing the target', () => {
+  const dir = root();
+  const outside = join(root(), 'unrelated-key');
+  const bytes = Buffer.alloc(32, 7);
+  writeFileSync(outside, bytes, { mode: 0o644 });
+  mkdirSync(join(dir, '.harness'));
+  symlinkSync(outside, join(dir, '.harness/environments.key'));
+  expect(() => new EnvironmentStore(dir)).toThrow();
+  expect(readFileSync(outside)).toEqual(bytes);
+  expect(statSync(outside).mode & 0o777).toBe(0o644);
+});
+
+it('keeps the same key when reopening and refuses to replace a missing key for existing data', () => {
+  const dir = root();
+  let store = new EnvironmentStore(dir);
+  store.saveEnvironment({ id: 'app', name: 'App' }, { TOKEN: 'retained-secret' }, 0);
+  store.close();
+  const keyPath = join(dir, '.harness/environments.key');
+  const key = readFileSync(keyPath);
+  store = new EnvironmentStore(dir);
+  expect(store.secrets('app').TOKEN).toBe('retained-secret');
+  store.close();
+  expect(readFileSync(keyPath)).toEqual(key);
+  expect(statSync(keyPath).mode & 0o777).toBe(0o600);
+  rmSync(keyPath);
+  expect(() => new EnvironmentStore(dir)).toThrow(/Restaure o backup/);
 });
 
 it('recovers encrypted runtime configuration larger than a single secret', () => {

@@ -21,7 +21,7 @@ Verificação local em 22/09/2026, macOS arm64, Node 22.23.0, Docker 29.7.2 e Co
 ## Checks do repositório
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm format:check` e `git diff --check`: aprovados.
-- `pnpm test`: 1.569 testes aprovados; 6 ignorados nessa execução, incluindo testes Docker/Railpack executados separadamente e um teste anteriormente ignorado no núcleo.
+- `pnpm test`: 1.569 testes aprovados; 6 ignorados nessa execução, incluindo testes Docker/Railpack executados separadamente e um teste anteriormente ignorado no núcleo. A revisão posterior acrescentou dois testes da chave de criptografia, aprovados junto com a suíte de ambientes.
 - `pnpm test:coverage`: aprovado; statements do núcleo 92,04%, branches 83,85%, funções 92,76%, linhas 94,03%. Os testes adicionais de disponibilidade do Docker foram executados na suíte final.
 - Docker: três cenários de ambientes aprovados; cenário do bot programador aprovado. Railpack: um build/HTTP real aprovado.
 - `pnpm lint:dup`, `pnpm lint:deadcode`, `pnpm size`, `pnpm docs:api:check`, `pnpm validate:publish`: aprovados. A duplicação detectada no núcleo permanece abaixo do limite existente.
@@ -29,9 +29,21 @@ Verificação local em 22/09/2026, macOS arm64, Node 22.23.0, Docker 29.7.2 e Co
 
 Logs completos locais: `.harness/verification/`. Comandos reproduzíveis: [guia operacional](../../packages/environments/README.md).
 
+## Revisão da análise de segurança
+
+O alerta de concorrência na chave levou à publicação atômica do arquivo completo e à leitura, validação e ajuste de permissões pelo mesmo descritor, recusando symlinks. Os testes comprovam a recusa de um link externo, a preservação da chave ao reabrir e a falha explícita se uma chave existente for perdida.
+
+Três fluxos sinalizados pelo CodeQL foram inspecionados no SARIF e classificados individualmente como comportamento intencional, sem desabilitar regras ou a análise:
+
+- [Alerta 24](https://github.com/DouglasPrado/oinko/security/code-scanning/24): o exemplo de ingestão lê documentos da pasta configurada e os envia explicitamente à API de embeddings escolhida pelo administrador. O envio é a finalidade dessa operação.
+- [Alerta 31](https://github.com/DouglasPrado/oinko/security/code-scanning/31): resposta de erro do socket Unix local pode compor o arquivo fixo `runner-error.log`, restrito ao usuário; não controla seu caminho nem é executada.
+- [Alerta 32](https://github.com/DouglasPrado/oinko/security/code-scanning/32): download intencional do Railpack 0.39.0, de uma URL HTTPS fixa do projeto oficial, com SHA-256 validado antes da gravação no diretório privado de ferramentas.
+
 ## Instância local atualizada
 
 A dashboard foi reiniciada na porta 3111, ligada à rede local. O login existente foi aceito e `/bots`, `/projetos`, `/ambientes`, `/previas` e a telemetria responderam HTTP 200. O cliente da dashboard iniciou o gerenciador real sob demanda e consultou seu estado pelo socket privado.
+
+Uma prévia temporária adicional respondeu HTTP 200 pelo hostname `web-fa39a2fc4ccf.192.168.3.126.sslip.io`, com Traefik publicado em `0.0.0.0` e acesso pelo endereço LAN. O fixture e seus recursos Docker foram removidos após a prova.
 
 Nenhum projeto de teste foi adicionado ao cadastro do usuário. O Oink LP continua com programação desativada; habilitar a capacidade e escolher projetos são decisões do administrador na dashboard. Dados de testes usam raízes temporárias e são removidos pela suíte. Não houve envio de mensagem ao Telegram.
 

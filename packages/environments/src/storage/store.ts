@@ -1,5 +1,18 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fchmodSync,
+  fstatSync,
+  linkSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { LocalDatabase, WorkspaceError } from '@oinko/workspaces';
@@ -18,25 +31,54 @@ interface StoredEnvironment {
   definition: Environment;
   encrypted: string;
 }
+
+function readKey(path: string): Buffer {
+  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const stat = fstatSync(descriptor);
+    if (!stat.isFile() || stat.size !== 32)
+      throw new WorkspaceError('Chave de ambientes inválida.');
+    const key = readFileSync(descriptor);
+    if (key.length !== 32) throw new WorkspaceError('Chave de ambientes inválida.');
+    fchmodSync(descriptor, 0o600);
+    return key;
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
+function encryptionKey(directory: string): Buffer {
+  const path = join(directory, 'environments.key');
+  try {
+    return readKey(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  if (existsSync(join(directory, 'environments.db')))
+    throw new WorkspaceError('Chave de ambientes ausente. Restaure o backup da chave.');
+  const temporary = mkdtempSync(join(directory, '.key-'));
+  try {
+    const candidate = join(temporary, 'key');
+    writeFileSync(candidate, randomBytes(32), { mode: 0o600, flag: 'wx' });
+    // Publish complete bytes atomically. A competing initializer keeps its winning key.
+    try {
+      linkSync(candidate, path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+  return readKey(path);
+}
+
 export class EnvironmentStore {
   private readonly db: LocalDatabase;
   private readonly key: Buffer;
   constructor(readonly root: string) {
     const dir = join(root, '.harness');
     mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const keyPath = join(dir, 'environments.key');
-    if (!existsSync(keyPath)) {
-      if (existsSync(join(dir, 'environments.db')))
-        throw new WorkspaceError('Chave de ambientes ausente. Restaure o backup da chave.');
-      try {
-        writeFileSync(keyPath, randomBytes(32), { mode: 0o600, flag: 'wx' });
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-      }
-    }
-    this.key = readFileSync(keyPath);
-    if (this.key.length !== 32) throw new WorkspaceError('Chave de ambientes inválida.');
-    chmodSync(keyPath, 0o600);
+    this.key = encryptionKey(dir);
     this.db = new LocalDatabase(join(dir, 'environments.db'));
   }
   private decode(encrypted: string): Record<string, string> {
