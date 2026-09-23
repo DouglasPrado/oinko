@@ -63,6 +63,7 @@ const initial: BotDefinition = {
   model: '',
   systemPrompt: '',
   cli: true,
+  programming: false,
   telegram: { enabled: false, allowedUserIds: [], allowAllPrivateChats: false },
   higgsfield: false,
   telemetry: { enabled: true, capture: 'full', retentionDays: 30 },
@@ -244,6 +245,21 @@ function BotEditor({
               </Field>
             </div>
           </div>
+        </section>
+        <section className="space-y-4 border border-rule bg-surface p-5">
+          <h3 className="font-medium">Programação</h3>
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={definition.programming}
+              onChange={(event) => change('programming', event.target.checked)}
+            />
+            Trabalhar com código em ambientes Docker
+          </label>
+          <p className="text-xs leading-5 text-ink-muted">
+            Habilita arquivos, terminal, Git e prévias. Em Projetos, escolha quais repositórios este
+            bot pode acessar. Reinicie o bot para aplicar.
+          </p>
         </section>
         <section className="space-y-5 border border-rule bg-surface p-5">
           <div>

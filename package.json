@@ -8,10 +8,10 @@
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
-    "build:packages": "pnpm -r --filter './packages/**' build",
+    "build:packages": "pnpm -r --filter './packages/**' build && pnpm --filter @oinko/environment-runner build",
     "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
     "test": "pnpm build:packages && pnpm -r --if-present test",
-    "test:coverage": "pnpm build:packages && pnpm --filter @oinko/core test:coverage && pnpm -r --filter './apps/*' --filter './packages/mcps/*' --if-present test && pnpm --filter @oinko/bots test",
+    "test:coverage": "pnpm build:packages && pnpm --filter @oinko/core test:coverage && pnpm -r --filter './apps/*' --filter './packages/**' --filter '!@oinko/core' --if-present test",
     "test:watch": "pnpm --filter @oinko/core test:watch",
     "test:live": "pnpm --filter @oinko/core test:live",
     "test:mutation": "pnpm --filter @oinko/core test:mutation",

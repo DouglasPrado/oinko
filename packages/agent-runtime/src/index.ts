@@ -101,6 +101,7 @@ export class AgentRuntime {
 }
 
 export { createAgentHost, type AgentHostConfig } from './host.js';
+export type { AgentTool } from '@oinko/core';
 
 export * from './connections.js';
 export * from './control.js';

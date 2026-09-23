@@ -63,6 +63,20 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
         Integracoes
       </Link>
 
+      {[
+        ['/projetos', 'Projetos'],
+        ['/ambientes', 'Ambientes'],
+        ['/previas', 'Prévias'],
+      ].map(([href, label]) => (
+        <Link
+          key={href}
+          href={href!}
+          className="border-b border-rule px-4 py-2 text-[0.8125rem] text-ink-muted hover:bg-paper"
+        >
+          {label}
+        </Link>
+      ))}
+
       {threads.length === 0 ? (
         <p className="px-4 py-4 text-[0.8125rem] text-ink-muted">Nenhuma conversa gravada ainda.</p>
       ) : null}

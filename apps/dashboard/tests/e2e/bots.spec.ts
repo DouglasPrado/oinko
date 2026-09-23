@@ -1,4 +1,5 @@
 import { test, expect, PASSWORD } from './auth';
+import type { BotProfile } from '@oinko/bots/schema';
 
 test('saves open Telegram access and can restore the user restriction', async ({ page }) => {
   await page.goto('/bots');
@@ -14,9 +15,9 @@ test('saves open Telegram access and can restore the user restriction', async ({
   await page.getByRole('button', { name: 'Salvar bot' }).click();
   const card = page.getByRole('article', { name: 'Acesso Telegram' });
   await expect(card).toBeVisible();
-  let bots = await (await page.request.get('/api/bots')).json();
+  let bots = (await (await page.request.get('/api/bots')).json()) as BotProfile[];
   expect(
-    bots.find((bot: { id: string }) => bot.id === 'acesso-telegram').telegram.allowAllPrivateChats,
+    bots.find((bot: { id: string }) => bot.id === 'acesso-telegram')!.telegram.allowAllPrivateChats,
   ).toBe(true);
   await card.getByRole('button', { name: 'Configurar' }).click();
   await expect(
@@ -28,8 +29,8 @@ test('saves open Telegram access and can restore the user restriction', async ({
   await page.getByLabel('Usuários autorizados', { exact: true }).fill('42');
   await page.getByRole('button', { name: 'Salvar bot' }).click();
   await expect(card).toBeVisible();
-  bots = await (await page.request.get('/api/bots')).json();
-  expect(bots.find((bot: { id: string }) => bot.id === 'acesso-telegram').telegram).toMatchObject({
+  bots = (await (await page.request.get('/api/bots')).json()) as BotProfile[];
+  expect(bots.find((bot: { id: string }) => bot.id === 'acesso-telegram')!.telegram).toMatchObject({
     allowAllPrivateChats: false,
     allowedUserIds: ['42'],
   });

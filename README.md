@@ -5,11 +5,14 @@ Monorepo de agentes, canais e integrações. O núcleo Oinko é independente das
 ```text
 apps/
   oink-lp/                 agente para landing pages
-  dashboard/               configuração de bots, telemetria e autorização Higgsfield
+  dashboard/               bots, projetos, ambientes, prévias e telemetria
+  environment-runner/      gerenciador local de Docker, builds e prévias
 packages/
   oinko/                   @oinko/core — modelos, ferramentas, memória e MCP genérico
   agent-runtime/           @oinko/agent-runtime — conversas, comandos e lifecycle
   bots/                    @oinko/bots — cadastro e executor comum dos bots
+  workspaces/              @oinko/workspaces — projetos, repositórios e worktrees
+  environments/            @oinko/environments — sandbox, builders, Compose e Traefik
   channels/
     cli/                   @oinko/channel-cli
     telegram/              @oinko/channel-telegram — texto, imagens e áudio
@@ -44,6 +47,8 @@ pnpm bot stop meu-bot
 O Oink LP existente é importado uma única vez, preservando configurações e caminhos de dados. Após a importação, as alterações são feitas na dashboard. A chave cifrada local e o cadastro ficam em `.harness`, fora do Git. [Executor e armazenamento](packages/bots/README.md).
 
 Para acesso pela rede, configure primeiro a senha no computador e use `pnpm --filter @oinko/dashboard start:network` após o build. A dashboard exige login; os bots continuam rodando quando ela fecha.
+
+Para programação, configure **Ambientes**, cadastre **Projetos** e autorize os bots. Cada tarefa cria worktrees próprias. Dockerfile, Railpack e imagens prontas podem ser combinados por serviço; Compose organiza a aplicação e Traefik fornece as prévias. O gerenciador também continua funcionando quando a dashboard fecha. [Guia de ambientes e acesso pelo celular](packages/environments/README.md).
 
 ## Dependências e responsabilidades
 

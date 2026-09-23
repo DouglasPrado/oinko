@@ -2,7 +2,12 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ['@oinko/bots', '@oinko/agent-runtime'],
+  serverExternalPackages: [
+    '@oinko/bots',
+    '@oinko/agent-runtime',
+    '@oinko/workspaces',
+    '@oinko/environments',
+  ],
   // O repo ja tem CLAUDE.md proprio na raiz, com as regras que valem aqui.
   // Um arquivo gerado por framework ao lado dele so cria duas fontes de verdade.
   agentRules: false,

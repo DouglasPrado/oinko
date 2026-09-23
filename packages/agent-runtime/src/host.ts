@@ -5,6 +5,7 @@ import {
   SQLiteConversationStore,
   TelemetryDatabase,
   type AgentConfigInput,
+  type AgentTool,
 } from '@oinko/core';
 import { AgentRuntime } from './index.js';
 export interface AgentHostConfig {
@@ -15,6 +16,7 @@ export interface AgentHostConfig {
   telemetryEnabled: boolean;
   capturePayloads: 'none' | 'hashed' | 'full';
   retentionDays: number;
+  tools?: AgentTool[];
 }
 export function createAgentHost(config: AgentHostConfig) {
   const database = new SQLiteDatabase(join(config.dataDir, 'conversations.db'));
@@ -50,7 +52,7 @@ export function createAgentHost(config: AgentHostConfig) {
       },
       logLevel: 'warn',
     });
-    // Register shared tools, skills and MCP integrations here, once per agent.
+    for (const tool of config.tools ?? []) agent.addTool(tool);
     const runtime = new AgentRuntime(config.id, agent);
     return {
       agent,

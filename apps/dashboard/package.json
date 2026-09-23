@@ -19,6 +19,8 @@
     "dev:network": "node scripts/network.mjs dev"
   },
   "dependencies": {
+    "@oinko/workspaces": "workspace:*",
+    "@oinko/environments": "workspace:*",
     "@tanstack/react-query": "5.103.2",
     "lucide-react": "1.47.0",
     "next": "16.3.5",

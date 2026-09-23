@@ -13,6 +13,7 @@ export const BotDefinitionSchema = z
     systemPrompt: z.string().trim().min(1).max(100_000),
     baseUrl: HttpUrl.optional(),
     cli: z.boolean().default(true),
+    programming: z.boolean().default(false),
     telegram: z
       .object({
         enabled: z.boolean(),

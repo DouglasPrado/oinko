@@ -15,7 +15,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  use: { baseURL: BASE_URL, trace: 'on-first-retry' },
+  use: { baseURL: BASE_URL, trace: 'on-first-retry', actionTimeout: 20_000 },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     // build && start, nunca dev: a compilacao sob demanda do dev torna a

@@ -35,6 +35,7 @@
     "cli": "node dist/cli.js"
   },
   "dependencies": {
+    "@oinko/environments": "workspace:*",
     "@oinko/agent-runtime": "workspace:*",
     "@oinko/channel-cli": "workspace:*",
     "@oinko/channel-telegram": "workspace:*",

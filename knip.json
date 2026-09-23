@@ -1,6 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
+    "apps/environment-runner": {
+      "entry": ["src/main.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/environments": {
+      "entry": ["src/index.ts", "src/client/index.ts", "src/contracts/index.ts"],
+      "project": ["src/**/*.ts", "tests/**/*.ts"]
+    },
     "apps/dashboard": {
       "entry": [
         "src/app/**/{page,layout,route,error,global-error,not-found,loading}.{ts,tsx}",

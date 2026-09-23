@@ -11,6 +11,7 @@ import { telegramChannel } from '@oinko/channel-telegram';
 import { higgsfieldMcp, HIGGSFIELD_INSTRUCTIONS } from '@oinko/mcp-higgsfield';
 import { BotError } from './schema.js';
 import type { BotStore } from './store.js';
+import { programmingTools, PROGRAMMING_INSTRUCTIONS } from './programming-tools.js';
 
 export async function runBot(store: BotStore, id: string, onClose: () => void) {
   const { definition: bot, secrets, paths, revision } = store.runtime(id);
@@ -72,11 +73,15 @@ export async function runBot(store: BotStore, id: string, onClose: () => void) {
         telemetryEnabled: bot.telemetry.enabled,
         capturePayloads: bot.telemetry.capture,
         retentionDays: bot.telemetry.retentionDays,
+        tools: bot.programming ? programmingTools(store.root, bot.id) : [],
         agent: {
           apiKey: secrets.apiKey!,
           model: bot.model,
           baseUrl: bot.baseUrl,
-          systemPrompt: bot.systemPrompt + (bot.higgsfield ? HIGGSFIELD_INSTRUCTIONS : ''),
+          systemPrompt:
+            bot.systemPrompt +
+            (bot.higgsfield ? HIGGSFIELD_INSTRUCTIONS : '') +
+            (bot.programming ? PROGRAMMING_INSTRUCTIONS : ''),
           transcription: {
             apiKey: secrets.transcriptionKey,
             baseUrl: bot.transcriptionBaseUrl,

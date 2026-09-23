@@ -26,6 +26,8 @@ Blueprint Tecnico (docs/blueprint/)     ← FONTE PRIMARIA
 
 ## Mapeamento Blueprint → Backend
 
+Projetos e ambientes: `docs/blueprint/24-workspaces-environments.md` → `packages/workspaces`, `packages/environments`, `apps/environment-runner`, ferramentas em `packages/bots/src/programming-tools.ts` e telas `apps/dashboard/src/features/{projects,environments}`. Decisão: `docs/adr/adr-008-local-environments.md`. Operação: `packages/environments/README.md`. Evidências: `docs/dashboard/ENVIRONMENTS-DELIVERY.md`.
+
 | Blueprint | Backend | O que flui |
 | --- | --- | --- |
 | 00-context.md | 13-integrations.md | Sistemas externos → clients de API |
