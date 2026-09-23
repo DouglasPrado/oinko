@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { BotStore, BotManager } from '../src/index.js';
+import { BotDefinitionSchema } from '../src/schema.js';
 import { runBotCommand } from '../src/commands.js';
 
 const roots: string[] = [];
@@ -23,6 +24,14 @@ const definition = {
   telegram: { enabled: false, allowedUserIds: [] },
   mcps: [],
 };
+
+it('keeps conversation search off unless the operator turns it on', () => {
+  // Reading old conversations is a new use of personal data: never a silent default.
+  expect(BotDefinitionSchema.parse(definition).conversationSearch).toBe(false);
+  expect(
+    BotDefinitionSchema.parse({ ...definition, conversationSearch: true }).conversationSearch,
+  ).toBe(true);
+});
 
 it('requires explicit opt-in to allow Telegram private chats without an allowlist', () => {
   const store = new BotStore(root());

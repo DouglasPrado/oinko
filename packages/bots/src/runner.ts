@@ -74,6 +74,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void) {
         capturePayloads: bot.telemetry.capture,
         retentionDays: bot.telemetry.retentionDays,
         tools: bot.programming ? programmingTools(store.root, bot.id) : [],
+        conversationSearch: bot.conversationSearch,
         agent: {
           apiKey: secrets.apiKey!,
           model: bot.model,

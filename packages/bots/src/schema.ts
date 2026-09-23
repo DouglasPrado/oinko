@@ -14,6 +14,8 @@ export const BotDefinitionSchema = z
     baseUrl: HttpUrl.optional(),
     cli: z.boolean().default(true),
     programming: z.boolean().default(false),
+    /** Lets the bot search earlier messages of the same conversation. */
+    conversationSearch: z.boolean().default(false),
     telegram: z
       .object({
         enabled: z.boolean(),
