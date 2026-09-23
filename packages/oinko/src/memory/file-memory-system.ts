@@ -19,6 +19,8 @@
  */
 
 import { readFile, writeFile, unlink, stat, readdir, mkdir } from 'node:fs/promises';
+import { findNeverStore } from '../utils/sensitive-data.js';
+import { SensitiveDataError } from './errors.js';
 import { join } from 'node:path';
 import type { LLMClient } from '../llm/llm-client.js';
 import type { Logger } from '../utils/logger.js';
@@ -129,6 +131,10 @@ export class FileMemorySystem {
    * When threadId is provided, saves to the thread subdirectory.
    */
   async saveMemory(input: SaveMemoryInput, threadId?: string): Promise<string> {
+    // Checked before anything touches the disk: a refused memory leaves no file.
+    const findings = [input.name, input.description, input.content].flatMap(findNeverStore);
+    if (findings.length > 0) throw new SensitiveDataError(findings.map((f) => f.kind));
+
     await this.ensureThreadDir(threadId);
 
     const dir = this.resolveDir(threadId);
@@ -151,7 +157,8 @@ export class FileMemorySystem {
       '',
     ].join('\n');
 
-    await writeFile(filePath, fileContent, 'utf-8');
+    // Owner-only: these files hold what people said about themselves.
+    await writeFile(filePath, fileContent, { encoding: 'utf-8', mode: 0o600 });
     await this.addToIndex(filename, input.description, threadId);
 
     this.logger.debug('Memory saved', {
