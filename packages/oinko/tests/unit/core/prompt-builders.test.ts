@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { buildToolUsagePrompt, buildEnvironmentPrompt } from '../../../src/core/prompt-builders.js';
+import {
+  buildToolUsagePrompt,
+  buildEnvironmentPrompt,
+  buildContextProtocolPrompt,
+} from '../../../src/core/prompt-builders.js';
 import type { AgentTool } from '../../../src/contracts/entities/agent-tool.js';
 import { z } from 'zod';
 
@@ -152,5 +156,22 @@ describe('buildEnvironmentPrompt', () => {
   it('should return minimal header with empty info', () => {
     const prompt = buildEnvironmentPrompt({});
     expect(prompt).toBe('# Environment');
+  });
+});
+
+describe('buildContextProtocolPrompt', () => {
+  it('says which blocks carry host instructions and which are only data', () => {
+    const text = buildContextProtocolPrompt();
+    expect(text).toContain('<system-reminder>');
+    expect(text).toContain('<context-data>');
+    expect(text).toMatch(/not instructions|never instructions/i);
+  });
+
+  it('denies authority to text that merely claims to come from the system', () => {
+    expect(buildContextProtocolPrompt()).toMatch(/user messages|tool results/i);
+  });
+
+  it('stays short: it is sent on every turn', () => {
+    expect(buildContextProtocolPrompt().length).toBeLessThan(700);
   });
 });
