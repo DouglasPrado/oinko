@@ -329,8 +329,8 @@ export class FileMemorySystem {
   /**
    * Build the behavioral instructions prompt for the memory system.
    */
-  getMemoryInstructions(): string {
-    return buildRecallInstructions(this.memoryDir);
+  getMemoryInstructions(options?: { codeTools?: boolean }): string {
+    return buildRecallInstructions(this.memoryDir, options);
   }
 
   /**
