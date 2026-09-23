@@ -12,6 +12,7 @@ A dashboard cadastra projetos Git (incluindo monorepos e conjuntos de repositór
 
 - Project: nome, repositórios Git, ambientes vinculados e bots autorizados. Pode ser criado antes dos ambientes. O primeiro ambiente torna-se o padrão das ferramentas do sandbox (`environmentId`); configurações adicionais vivem em `environmentIds`. Dados antigos continuam válidos. A mesma definição pode ser reutilizada deliberadamente.
 - Repository: origem Git e referência inicial. Cada clone gerenciado permanece no workspace do projeto, separado do checkout original.
+- Ao criar uma worktree de origem HTTPS, o gerenciador busca a referência configurada no remoto e usa o commit retornado. `HEAD` acompanha a branch padrão remota; branches, tags e commits fixados respeitam a seleção. Falhas de atualização interrompem a criação, sem usar uma base antiga silenciosamente. Worktrees existentes e suas alterações permanecem intactas. Origens locais mantêm o snapshot do clone importado.
 - Task: trabalho associado ao projeto e a uma branch/worktree em cada repositório envolvido.
 - Environment: ferramentas do container de programação, CPU/memória/rede e serviços da aplicação.
 - Service: origem do código, contexto de build, builder, comandos, porta, verificação de disponibilidade, variáveis e dependências.

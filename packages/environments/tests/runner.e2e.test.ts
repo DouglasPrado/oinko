@@ -501,7 +501,7 @@ describe.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
       expect((await environmentRequest<{ ready: boolean }>(f.root, '/health')).ready).toBe(true);
     });
 
-    it('clones an HTTPS repository inside the sandbox and reports a missing Git ref honestly', async () => {
+    it('refreshes HTTPS task bases inside the sandbox and reports a missing Git ref honestly', async () => {
       await f.configure();
       await f.client.command({
         action: 'saveProject',
@@ -525,6 +525,28 @@ describe.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
           })
         ).text,
       ).toContain('Hello World');
+      const remoteHead = await f.coder.command<{ stdout: string }>({
+        action: 'shell',
+        taskId: 'remote-task',
+        repositoryId: 'app',
+        command: 'git rev-parse HEAD',
+      });
+      const stale = await f.coder.command<{ exitCode: number }>({
+        action: 'shell',
+        taskId: 'remote-task',
+        repositoryId: 'app',
+        command:
+          'git -C /workspace/repositories/app update-ref refs/heads/stale HEAD~1 && git -C /workspace/repositories/app symbolic-ref HEAD refs/heads/stale',
+      });
+      expect(stale.exitCode).toBe(0);
+      await f.task('remote-next', 'remote');
+      const refreshed = await f.coder.command<{ stdout: string }>({
+        action: 'shell',
+        taskId: 'remote-next',
+        repositoryId: 'app',
+        command: 'git rev-parse HEAD',
+      });
+      expect(refreshed.stdout).toBe(remoteHead.stdout);
       await f.client.command({
         action: 'saveProject',
         definition: {
