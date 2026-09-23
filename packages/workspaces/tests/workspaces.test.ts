@@ -1,8 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { once } from 'node:events';
+import { Worker } from 'node:worker_threads';
 import { afterEach, expect, it } from 'vitest';
 import { ProjectSchema, TaskSchema, WorkspaceStore } from '../src/index.js';
+import { LocalDatabase } from '../src/storage/database.js';
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -70,5 +73,32 @@ it('persists revisions and enforces bot authorization independently of caller to
     expect(reopened.projects()[0]?.name).toBe('Loja');
   } finally {
     reopened.close();
+  }
+});
+
+it('waits for a concurrent initializer before enabling WAL', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'oinko-database-lock-'));
+  roots.push(root);
+  const path = join(root, 'state.db');
+  const worker = new Worker(
+    `const { DatabaseSync } = require('node:sqlite');
+     const { parentPort, workerData } = require('node:worker_threads');
+     const db = new DatabaseSync(workerData);
+     db.exec('CREATE TABLE blocker (id INTEGER); BEGIN EXCLUSIVE');
+     parentPort.postMessage('locked');
+     setTimeout(() => { db.exec('COMMIT'); db.close(); }, 300);`,
+    { eval: true, workerData: path },
+  );
+  const finished = once(worker, 'exit');
+  try {
+    await once(worker, 'message');
+    const db = new LocalDatabase(path);
+    try {
+      expect(db.list('project')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await finished;
   }
 });

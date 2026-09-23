@@ -21,7 +21,7 @@ Verificação local em 22/09/2026, macOS arm64, Node 22.23.0, Docker 29.7.2 e Co
 ## Checks do repositório
 
 - `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm format:check` e `git diff --check`: aprovados.
-- `pnpm test`: 1.569 testes aprovados; 6 ignorados nessa execução, incluindo testes Docker/Railpack executados separadamente e um teste anteriormente ignorado no núcleo. A revisão posterior acrescentou dois testes da chave de criptografia, aprovados junto com a suíte de ambientes.
+- `pnpm test`: 1.569 testes aprovados; 6 ignorados nessa execução, incluindo testes Docker/Railpack executados separadamente e um teste anteriormente ignorado no núcleo. A revisão posterior acrescentou dois testes da chave de criptografia e um teste de inicialização concorrente do banco, aprovados junto com as suítes de ambientes e workspaces.
 - `pnpm test:coverage`: aprovado; statements do núcleo 92,04%, branches 83,85%, funções 92,76%, linhas 94,03%. Os testes adicionais de disponibilidade do Docker foram executados na suíte final.
 - Docker: três cenários de ambientes aprovados; cenário do bot programador aprovado. Railpack: um build/HTTP real aprovado.
 - `pnpm lint:dup`, `pnpm lint:deadcode`, `pnpm size`, `pnpm docs:api:check`, `pnpm validate:publish`: aprovados. A duplicação detectada no núcleo permanece abaixo do limite existente.
@@ -33,9 +33,11 @@ Logs completos locais: `.harness/verification/`. Comandos reproduzíveis: [guia 
 
 O alerta de concorrência na chave levou à publicação atômica do arquivo completo e à leitura, validação e ajuste de permissões pelo mesmo descritor, recusando symlinks. Os testes comprovam a recusa de um link externo, a preservação da chave ao reabrir e a falha explícita se uma chave existente for perdida.
 
+A espera por bloqueios do SQLite agora é configurada antes de ativar WAL. Um teste mantém o banco bloqueado em outra thread e comprova que a abertura aguarda sua liberação. Uma execução adicional com oito processos simultâneos abriu o cadastro e confirmou a mesma chave em todos.
+
 Três fluxos sinalizados pelo CodeQL foram inspecionados no SARIF e classificados individualmente como comportamento intencional, sem desabilitar regras ou a análise:
 
-- [Alerta 24](https://github.com/DouglasPrado/oinko/security/code-scanning/24): o exemplo de ingestão lê documentos da pasta configurada e os envia explicitamente à API de embeddings escolhida pelo administrador. O envio é a finalidade dessa operação.
+- [Alerta 24](https://github.com/DouglasPrado/oinko/security/code-scanning/24): o exemplo de ingestão lê os documentos informados nos argumentos do comando e os envia explicitamente à API de embeddings escolhida pelo administrador. O envio é a finalidade dessa operação.
 - [Alerta 31](https://github.com/DouglasPrado/oinko/security/code-scanning/31): resposta de erro do socket Unix local pode compor o arquivo fixo `runner-error.log`, restrito ao usuário; não controla seu caminho nem é executada.
 - [Alerta 32](https://github.com/DouglasPrado/oinko/security/code-scanning/32): download intencional do Railpack 0.39.0, de uma URL HTTPS fixa do projeto oficial, com SHA-256 validado antes da gravação no diretório privado de ferramentas.
 

@@ -8,10 +8,15 @@ export class LocalDatabase {
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
-    chmodSync(path, 0o600);
-    this.db.exec(
-      'PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS documents (kind TEXT NOT NULL, id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(kind,id));',
-    );
+    try {
+      chmodSync(path, 0o600);
+      this.db.exec(
+        'PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS documents (kind TEXT NOT NULL, id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(kind,id));',
+      );
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
   get<T>(kind: string, id: string): Saved<T> | undefined {
     const row = this.db
