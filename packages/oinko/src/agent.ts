@@ -21,7 +21,6 @@ import { validateThreadId } from './memory/memory-paths.js';
 import { extractMemories, formatExtractionTranscript } from './memory/memory-extractor.js';
 import { shouldExtractWithDecider } from './memory/extraction-gate.js';
 import { shouldRetrieveKnowledge } from './knowledge/retrieval-gate.js';
-import { memoryFreshnessNote } from './memory/memory-age.js';
 import { KnowledgeManager } from './knowledge/knowledge-manager.js';
 import { EmbeddingService } from './knowledge/embedding-service.js';
 import { SQLiteDatabase } from './storage/sqlite-database.js';
@@ -38,6 +37,7 @@ import { ConversationManager } from './core/conversation-manager.js';
 import { createExecutionContext } from './core/execution-context.js';
 import { buildContext } from './core/context-builder.js';
 import { executeReactLoop } from './core/react-loop.js';
+import { buildMemoryInjections } from './core/memory-injections.js';
 import { createLogger, type Logger } from './utils/logger.js';
 import { runTurnEndHooks, type TurnEndHook } from './core/turn-end-hooks.js';
 import { estimateTokens } from './utils/token-counter.js';
@@ -360,7 +360,9 @@ export class Agent {
     }
     // Sem withThread: o turno inteiro ja detem o lock desta thread, e pedi-lo
     // de novo aqui seria esperar por si mesmo.
-    this.conversations.appendMessage(
+    // What this turn wrote starts here: the tools that read history cut at
+    // this stamp, which the manager keeps strictly after every earlier message.
+    const turnStartedAt = this.conversations.appendMessage(
       {
         role: 'user',
         content: input,
@@ -567,7 +569,7 @@ export class Agent {
       ...(decider !== undefined && { decider }),
       traceId: ctx.traceId,
       threadId,
-      turnStartedAt: ctx.startedAt,
+      turnStartedAt,
       progressCheckInterval: this.config.progressCheckInterval,
       logger: this.logger,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,
@@ -1352,9 +1354,6 @@ export class Agent {
   /** Timeout for memory relevance prefetch (ms). */
   private static readonly MEMORY_PREFETCH_TIMEOUT = 5_000;
 
-  /** Memories kept in context once surfaced in a thread (the selector picks up to 5 per turn). */
-  private static readonly MAX_CARRIED_MEMORIES = 10;
-
   /**
    * Start memory relevance selection asynchronously.
    * Returns a promise that resolves with relevant MemoryFiles.
@@ -1529,45 +1528,18 @@ export class Agent {
         // LLM-selected relevant memories (from prefetch — already running in parallel)
         const relevant = memoryPrefetch ? await memoryPrefetch : [];
 
-        // Surfaced memories are excluded from the next selection so they are
-        // not paid for twice — but injections are rebuilt every turn, so
-        // excluding them also meant losing them. They are carried instead:
-        // re-read from disk (an edit shows, a deletion drops them), most
-        // recent first, capped so a long thread cannot grow without bound.
         const surfaced = this.surfacedMemoriesByThread.get(threadId) ?? new Set<string>();
         this.surfacedMemoriesByThread.set(threadId, surfaced);
-        for (const m of relevant) {
-          surfaced.delete(m.filename);
-          surfaced.add(m.filename);
-        }
-        while (surfaced.size > Agent.MAX_CARRIED_MEMORIES) {
-          surfaced.delete(surfaced.values().next().value!);
-        }
-
-        const fresh = new Set(relevant.map((m) => m.filename));
-        const carried: MemoryFile[] = [];
-        for (const filename of [...surfaced].filter((f) => !fresh.has(f)).reverse()) {
-          const memory =
-            (await this.fileMemorySystem.readMemory(filename, threadId)) ??
-            (await this.fileMemorySystem.readMemory(filename));
-          if (memory) carried.push(memory);
-          else surfaced.delete(filename);
-        }
-
-        if (relevant.length > 0) {
-          injections.push(memoryBlock('memory:relevant', 'Relevant memories:', relevant));
-        }
-        // Same priority, pushed after: under a tight budget the carried block
-        // goes before the memories picked for this very question.
-        if (carried.length > 0) {
-          injections.push(
-            memoryBlock(
-              'memory:carried',
-              'Memories already relevant in this conversation:',
-              carried,
-            ),
-          );
-        }
+        const memorySystem = this.fileMemorySystem;
+        injections.push(
+          ...(await buildMemoryInjections(
+            relevant,
+            surfaced,
+            async (filename) =>
+              (await memorySystem.readMemory(filename, threadId)) ??
+              (await memorySystem.readMemory(filename)),
+          )),
+        );
       } catch {
         // Memory recall failed — continue without it
       }
@@ -1594,21 +1566,4 @@ function systemPromptOf(
 ): string | undefined {
   const system = messages.find((message) => message.role === 'system');
   return typeof system?.content === 'string' ? system.content : undefined;
-}
-
-/** One memory injection: a heading, then each memory with its freshness note. */
-function memoryBlock(
-  source: string,
-  heading: string,
-  memories: readonly MemoryFile[],
-): ContextInjection {
-  const lines = memories
-    .map((m) => {
-      const freshness = memoryFreshnessNote(m.mtimeMs);
-      const header = m.name ?? m.filename;
-      return `- ${header}:${freshness ? ` ${freshness}` : ''} ${m.content}`;
-    })
-    .join('\n');
-  const content = `${heading}\n${lines}`;
-  return { source, priority: 4, content, tokens: estimateTokens(content), kind: 'data' };
 }

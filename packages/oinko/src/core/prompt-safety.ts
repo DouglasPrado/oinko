@@ -7,7 +7,7 @@
  * pass itself off as a system reminder or step out of the envelope that marks
  * it as data.
  */
-export const CONTROL_TAGS = [
+const CONTROL_TAGS = [
   'system-reminder',
   'context-data',
   'untrusted-tool-output',

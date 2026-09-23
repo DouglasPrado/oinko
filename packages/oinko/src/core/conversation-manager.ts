@@ -86,6 +86,8 @@ class InMemoryConversationStore implements ConversationStore {
 export class ConversationManager {
   private readonly store: ConversationStore;
   private readonly locks = new Map<string, Promise<void>>();
+  /** Last createdAt written per thread in this process. */
+  private readonly lastCreatedAt = new Map<string, number>();
 
   constructor(store?: ConversationStore) {
     this.store = store ?? new InMemoryConversationStore();
@@ -130,8 +132,25 @@ export class ConversationManager {
     };
   }
 
-  appendMessage(message: ChatMessage, threadId: string): void {
-    this.store.appendMessage(message, threadId);
+  /**
+   * Appends and returns the createdAt actually stored.
+   *
+   * Within a thread, createdAt only moves forward: a message stamped in the
+   * same millisecond as the previous one — or earlier — goes one past it.
+   * History is ordered by createdAt, and the cut that keeps the current turn
+   * out of a conversation search relies on everything before it being
+   * strictly earlier.
+   */
+  appendMessage(message: ChatMessage, threadId: string): number {
+    const last = this.lastCreatedAt.get(threadId);
+    const createdAt =
+      last !== undefined && message.createdAt <= last ? last + 1 : message.createdAt;
+    this.lastCreatedAt.set(threadId, createdAt);
+    this.store.appendMessage(
+      createdAt === message.createdAt ? message : { ...message, createdAt },
+      threadId,
+    );
+    return createdAt;
   }
 
   getHistory(threadId: string): ChatMessage[] {
@@ -143,6 +162,7 @@ export class ConversationManager {
   }
 
   clearThread(threadId: string): void {
+    this.lastCreatedAt.delete(threadId);
     this.store.clearThread(threadId);
   }
 

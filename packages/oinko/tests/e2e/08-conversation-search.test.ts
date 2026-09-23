@@ -78,6 +78,30 @@ describe('E2E 08 — conversation search', () => {
     expect(result).not.toContain('onde fica');
   });
 
+  it('still finds the previous message when the next turn starts in the same millisecond', async () => {
+    // A frozen clock puts every write in the same millisecond — what a fast
+    // host does by chance. The cut that keeps this turn out must not also
+    // swallow the message written just before it.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-23T12:00:00Z'));
+    tempDir = await mkdtemp(join(tmpdir(), 'harness-e2e-search-'));
+    const { chatRequests } = scriptFetch({
+      chat: [text('anotado'), search('c1', 'girassol'), text('achei')],
+    });
+    const agent = create(join(tempDir, 'agent.db'));
+    try {
+      await consumeStream(agent.stream('a senha é girassol', { threadId: 't1' }));
+      await consumeStream(agent.stream('qual a senha do girassol?', { threadId: 't1' }));
+    } finally {
+      await agent.destroy();
+      vi.useRealTimers();
+    }
+
+    const result = searchResult(chatRequests[2] as Body);
+    expect(result).toContain('a senha é girassol');
+    expect(result).not.toContain('qual a senha');
+  });
+
   it('keeps finding it after a restart, and stops after the thread is cleared', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'harness-e2e-search-'));
     const dbPath = join(tempDir, 'agent.db');
