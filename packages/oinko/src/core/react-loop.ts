@@ -80,6 +80,8 @@ export interface ReactLoopConfig {
   traceId?: string;
   /** Conversa corrente. Repassada as tools que guardam estado por conversa. */
   threadId?: string;
+  /** Inicio do turno (epoch ms). Repassado as tools que leem o historico. */
+  turnStartedAt?: number;
 }
 
 /** O que uma chamada de LLM deixa para a telemetria. */
@@ -285,6 +287,7 @@ export async function* executeReactLoop(
       messages.length,
       config.traceId,
       config.threadId,
+      config.turnStartedAt,
     );
     const effectiveMaxTokens = state.maxOutputTokensOverride ?? maxOutputTokens;
 

@@ -16,6 +16,11 @@ export interface ToolExecuteContext {
   traceId?: string;
   threadId?: string;
   toolCallId?: string;
+  /**
+   * When the current turn began (epoch ms). Lets a tool that reads history
+   * leave out what this very turn wrote — the question being asked, above all.
+   */
+  turnStartedAt?: number;
 }
 
 /** A tool that the Agent can invoke during the ReactLoop */

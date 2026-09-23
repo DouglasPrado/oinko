@@ -1,5 +1,6 @@
 import type { ChatMessage } from './chat-message.js';
 import type { KnowledgeChunk, RetrievedKnowledge } from './knowledge.js';
+import type { ConversationSearchPage, ConversationSearchQuery } from './conversation-search.js';
 
 /** Pluggable interface for vector storage (knowledge/RAG) */
 export interface VectorStore {
@@ -27,4 +28,13 @@ export interface ConversationStore {
   listThread(threadId: string): ChatMessage[];
   listPinned(threadId: string): ChatMessage[];
   clearThread(threadId: string): void;
+  /**
+   * Optional. Searches past messages inside `threadIds` and nowhere else; an
+   * empty list returns an empty page. Only user and assistant text is
+   * searchable. Required when `conversation.search` is enabled.
+   */
+  searchMessages?(
+    query: ConversationSearchQuery,
+    threadIds: readonly string[],
+  ): ConversationSearchPage;
 }

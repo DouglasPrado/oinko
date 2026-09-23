@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
+import type { ConversationSearchScope } from '../contracts/entities/conversation-search.js';
 import type { Decider } from '../contracts/entities/decider.js';
 import type { TelemetrySink } from '../contracts/entities/telemetry.js';
 import { isValidTimeZone } from '../utils/local-date.js';
@@ -163,6 +164,23 @@ export const AgentConfigSchema = z.object({
   conversation: z
     .object({
       store: z.custom<ConversationStore>().optional(),
+      /**
+       * Lets the model search earlier messages that fell out of its context
+       * (ConversationSearch tool). Off by default: reading old conversations
+       * is a new use of personal data, and turning it on is the operator's call.
+       * Requires a store that implements `searchMessages` — both built-in ones do.
+       */
+      search: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** Threads a turn may read, from its own. Default: only its own. */
+          scope: z.custom<ConversationSearchScope>((v) => typeof v === 'function').optional(),
+          maxResults: z.number().int().min(1).max(10).default(5),
+          maxPages: z.number().int().min(1).max(5).default(3),
+          snippetChars: z.number().int().min(80).max(600).default(240),
+          maxCallsPerTurn: z.number().int().min(1).max(10).default(4),
+        })
+        .optional(),
     })
     .optional(),
 

@@ -72,8 +72,11 @@ export {
   createBashTool,
   createWebFetchTool,
   createAskUserTool,
+  createConversationSearchTool,
+  CONVERSATION_SEARCH_TOOL_NAME,
+  CONVERSATION_SEARCH_GUIDANCE,
 } from './tools/builtin/index.js';
-export type { AskUserOptions } from './tools/builtin/index.js';
+export type { AskUserOptions, ConversationSearchToolOptions } from './tools/builtin/index.js';
 
 // SQL query tools
 export { createSqlTools } from './tools/sql/index.js';
