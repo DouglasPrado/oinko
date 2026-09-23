@@ -42,6 +42,7 @@ export default async function ExecutionPage({
 
   return (
     <Workbench
+      showConversations
       activeThreadId={decoded}
       activeTraceId={traceId}
       inspector={

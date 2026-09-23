@@ -46,7 +46,7 @@ export default async function ThreadsPage({
   );
 
   return (
-    <Workbench>
+    <Workbench showConversations>
       <header className="flex flex-wrap items-baseline gap-x-8 gap-y-3 border-b border-rule px-5 py-4">
         <div className="flex flex-col">
           <span className="text-[0.6875rem] text-ink-muted">

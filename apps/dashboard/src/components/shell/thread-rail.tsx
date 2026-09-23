@@ -1,6 +1,4 @@
-import { LogoutButton } from '@/components/shared/logout-button';
 import Link from 'next/link';
-import { Activity, Plug, Bot } from 'lucide-react';
 import { navThreads, navExecutions } from '@/server/repositories/navigation-repository';
 import { LiveBadge } from '@/features/live/components/live-badge';
 import { formatDuration } from '@/lib/utils/format-duration';
@@ -23,7 +21,7 @@ interface Props {
 /**
  * Barra lateral permanente: conversas e, sob a aberta, suas respostas.
  *
- * Fica montada em todas as telas de proposito. Inspecionar telemetria e pular
+ * Fica disponível nas telas de telemetria. Inspecionar telemetria e pular
  * de uma resposta para a vizinha o tempo todo — comparando tempo, custo e o
  * que mudou —, e uma navegacao que troca de pagina a cada passo perde
  * justamente esse contexto.
@@ -33,49 +31,13 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
   const executions = activeThreadId ? navExecutions(activeThreadId) : [];
 
   return (
-    <nav
-      aria-label="Conversas"
-      className="flex h-full w-full flex-col overflow-y-auto border-rule bg-surface lg:w-72 lg:border-r"
-    >
-      <div className="flex items-center gap-2 border-b border-rule px-4 py-3">
-        <Link href="/" className="flex items-center gap-2 text-sm font-medium">
-          <Activity className="size-4 text-time" aria-hidden />
-          Telemetria
-        </Link>
+    <nav aria-label="Conversas" className="min-w-0 py-3">
+      <div className="flex items-center gap-2 px-5 pb-2">
+        <h2 className="text-xs font-medium text-ink-muted">Conversas</h2>
         <span className="ml-auto">
           <LiveBadge />
         </span>
       </div>
-
-      <Link
-        href="/bots"
-        className="flex items-center gap-2 border-b border-rule px-4 py-2 text-[0.8125rem] text-ink-muted hover:bg-paper"
-      >
-        <Bot className="size-3.5" aria-hidden />
-        Bots
-      </Link>
-
-      <Link
-        href="/integracoes"
-        className="flex items-center gap-2 border-b border-rule px-4 py-2 text-[0.8125rem] text-ink-muted hover:bg-paper"
-      >
-        <Plug className="size-3.5" aria-hidden />
-        Integracoes
-      </Link>
-
-      {[
-        ['/projetos', 'Projetos'],
-        ['/ambientes', 'Ambientes'],
-        ['/previas', 'Prévias'],
-      ].map(([href, label]) => (
-        <Link
-          key={href}
-          href={href!}
-          className="border-b border-rule px-4 py-2 text-[0.8125rem] text-ink-muted hover:bg-paper"
-        >
-          {label}
-        </Link>
-      ))}
 
       {threads.length === 0 ? (
         <p className="px-4 py-4 text-[0.8125rem] text-ink-muted">Nenhuma conversa gravada ainda.</p>
@@ -95,7 +57,9 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
                   open && 'bg-paper font-medium',
                 )}
               >
-                <span className="truncate font-mono">{thread.threadId}</span>
+                <span className="min-w-0 flex-1 truncate font-mono" title={thread.threadId}>
+                  {thread.threadId}
+                </span>
                 <span className="tabular ml-auto shrink-0 text-xs text-ink-muted">
                   {thread.executionCount}
                 </span>
@@ -140,9 +104,6 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
           );
         })}
       </ul>
-      <div className="mt-auto border-t border-rule p-4">
-        <LogoutButton />
-      </div>
     </nav>
   );
 }

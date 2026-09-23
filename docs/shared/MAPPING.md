@@ -28,6 +28,8 @@ Blueprint Tecnico (docs/blueprint/)     ← FONTE PRIMARIA
 
 Projetos e ambientes: `docs/blueprint/24-workspaces-environments.md` → `packages/workspaces`, `packages/environments`, `apps/environment-runner`, ferramentas em `packages/bots/src/programming-tools.ts` e telas `apps/dashboard/src/features/{projects,environments}`. Decisão: `docs/adr/adr-008-local-environments.md`. Operação: `packages/environments/README.md`. Evidências: `docs/dashboard/ENVIRONMENTS-DELIVERY.md`.
 
+Navegação da dashboard: `docs/dashboard/PLAN.md` → `apps/dashboard/src/components/shell/{workbench,dashboard-shell,thread-rail}.tsx` e `components/shared/product-nav.tsx`. Regressões de navegação entre seções e menu móvel: `apps/dashboard/tests/e2e/navigation.spec.ts`.
+
 | Blueprint | Backend | O que flui |
 | --- | --- | --- |
 | 00-context.md | 13-integrations.md | Sistemas externos → clients de API |

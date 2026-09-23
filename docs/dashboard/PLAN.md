@@ -6,6 +6,8 @@
 
 Em `/bots`, a pessoa cria um bot, define nome, modelo, instruções, credenciais e conexões. Pode editar, iniciar, parar e reiniciar. Salvar não interrompe uma conversa: a tela sinaliza a revisão pendente, aplicada no próximo reinício. CLI, Telegram, Higgsfield e MCP HTTP são reutilizados, sem copiar uma aplicação por bot.
 
+A navegação principal é a mesma em Bots, Projetos, Ambientes, Prévias, Telemetria e Integrações. No desktop, fica em uma sidebar com a seção atual destacada, rolagem própria e saída no rodapé. No celular, o botão Menu revela os mesmos destinos e fecha ao navegar ou pressionar Escape. As conversas e respostas aparecem em uma seção separada dentro da sidebar da telemetria, inclusive no menu móvel.
+
 ## Responsabilidades
 
 - `@oinko/core`: agente, modelos, ferramentas, memória, MCP e telemetria.
