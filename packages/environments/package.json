@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:docker": "OINKO_DOCKER_TEST=1 vitest run tests/docker.test.ts"
+    "test:docker": "OINKO_DOCKER_TEST=1 vitest run tests/docker.test.ts tests/runner.e2e.test.ts tests/failures.e2e.test.ts"
   },
   "dependencies": {
     "@oinko/workspaces": "workspace:*",

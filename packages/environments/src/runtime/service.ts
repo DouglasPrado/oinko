@@ -37,6 +37,8 @@ export async function startEnvironmentService(root: string) {
       if (request.method !== 'POST' || request.url !== '/command')
         return send(404, { error: 'Operação desconhecida.' });
       let body = '';
+      // Decode incrementally: a multi-byte character may span incoming chunks.
+      request.setEncoding('utf8');
       for await (const chunk of request) {
         body += String(chunk);
         if (body.length > 1_000_000) return send(413, { error: 'Requisição muito grande.' });

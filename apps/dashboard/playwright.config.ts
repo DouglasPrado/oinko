@@ -24,6 +24,10 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 180_000,
-    env: { TELEMETRY_DB_PATH: join(testRoot, 'telemetry.db'), OINKO_ROOT: testRoot },
+    env: {
+      TELEMETRY_DB_PATH: join(testRoot, 'telemetry.db'),
+      OINKO_ROOT: testRoot,
+      OINKO_NEXT_DIST_DIR: '.next-e2e',
+    },
   },
 });

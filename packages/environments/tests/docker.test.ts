@@ -379,6 +379,20 @@ it.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
       }
       await runCommand('docker', ['rm', '-f', manager.router.name], { allowFailure: true });
       await sandbox.stop(project.id);
+      const images = (
+        await runCommand('docker', [
+          'image',
+          'ls',
+          '--format',
+          '{{.Repository}}:{{.Tag}}',
+          '--filter',
+          `reference=${sandbox.namespace}-*`,
+        ])
+      ).stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+      for (const image of images) await runCommand('docker', ['image', 'rm', image]);
       store.close();
       rmSync(root, { recursive: true, force: true });
     }

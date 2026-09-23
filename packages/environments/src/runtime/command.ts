@@ -60,13 +60,13 @@ export const runCommand: CommandRunner = (command, args, options = {}) =>
       signal.removeEventListener('abort', abort);
       if (force) clearTimeout(force);
     };
-    child.stdout.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (text: string) => {
       stdout = (stdout + text).slice(-1_000_000);
       options.onOutput?.(text);
     });
-    child.stderr.on('data', (chunk: Buffer) => {
-      const text = chunk.toString();
+    child.stderr.on('data', (text: string) => {
       stderr = (stderr + text).slice(-1_000_000);
       options.onOutput?.(text);
     });

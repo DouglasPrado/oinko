@@ -2,6 +2,8 @@
 
 Status: implementado e verificado localmente em 2026-09-22. Evidências por requisito e limites de validação em [ENVIRONMENTS-DELIVERY.md](../dashboard/ENVIRONMENTS-DELIVERY.md).
 
+Validação ampliada: matriz de casos de uso, falhas reais e comando reproduzível em [SANDBOX-E2E.md](../dashboard/SANDBOX-E2E.md).
+
 ## Resultado solicitado
 
 A dashboard cadastra projetos Git (incluindo monorepos e conjuntos de repositórios relacionados), configura o ambiente de programação do bot e sobe a aplicação a partir de uma worktree escolhida. Um novo bot reutiliza projetos autorizados. Docker executa o ambiente; Compose organiza serviços; Traefik fornece acesso às prévias. Dockerfile, Railpack e imagem pronta são os builders iniciais. Nixpacks e Cloud Native Buildpacks são extensões futuras do mesmo contrato, sem alegação de suporte já entregue.
