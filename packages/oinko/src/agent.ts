@@ -50,6 +50,7 @@ import {
 } from './core/prompt-builders.js';
 import { formatRetrievedKnowledge } from './knowledge/knowledge-format.js';
 import { localDateInfo, systemTimeZone } from './utils/local-date.js';
+import { DEFAULT_BEHAVIOR_PROMPT } from './core/behavior-prompt.js';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -381,6 +382,15 @@ export class Agent {
         priority: 10,
         content: toolContent,
         tokens: estimateTokens(toolContent),
+      });
+    }
+
+    if (this.config.behaviorPrompt) {
+      injections.push({
+        source: 'behavior',
+        priority: 10,
+        content: DEFAULT_BEHAVIOR_PROMPT,
+        tokens: estimateTokens(DEFAULT_BEHAVIOR_PROMPT),
       });
     }
 
