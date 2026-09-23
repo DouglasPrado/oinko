@@ -167,52 +167,6 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  apps/oink-lp:
-    dependencies:
-      '@oinko/agent-runtime':
-        specifier: workspace:*
-        version: link:../../packages/agent-runtime
-      '@oinko/bots':
-        specifier: workspace:*
-        version: link:../../packages/bots
-      '@oinko/channel-cli':
-        specifier: workspace:*
-        version: link:../../packages/channels/cli
-      '@oinko/channel-telegram':
-        specifier: workspace:*
-        version: link:../../packages/channels/telegram
-      '@oinko/mcp-higgsfield':
-        specifier: workspace:*
-        version: link:../../packages/mcps/higgsfield
-      zod:
-        specifier: ^4.4.3
-        version: 4.6.5
-    devDependencies:
-      '@eslint/js':
-        specifier: ^10.0.1
-        version: 10.0.1(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))
-      '@types/node':
-        specifier: ^25.6.0
-        version: 25.9.8
-      eslint:
-        specifier: ^10.3.0
-        version: 10.11.0(jiti@2.7.0)(supports-color@7.2.0)
-      globals:
-        specifier: ^15.15.0
-        version: 15.15.0
-      grammy:
-        specifier: ^1.30.0
-        version: 1.46.0(supports-color@7.2.0)
-      typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.59.2
-        version: 8.70.0(eslint@10.11.0(jiti@2.7.0)(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.11(@types/node@25.9.8)(@vitest/coverage-v8@4.1.11)(jsdom@27.4.0(supports-color@7.2.0))(vite@8.3.0(@types/node@25.9.8)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-
   examples/telegram-bot:
     dependencies:
       '@oinko/core':
@@ -256,6 +210,9 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.8)(@vitest/coverage-v8@4.1.11)(jsdom@27.4.0(supports-color@7.2.0))(vite@8.3.0(@types/node@25.9.8)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/bots:
     dependencies:
@@ -300,6 +257,9 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.8)(@vitest/coverage-v8@4.1.11)(jsdom@27.4.0(supports-color@7.2.0))(vite@8.3.0(@types/node@25.9.8)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/channels/telegram:
     dependencies:
@@ -319,6 +279,9 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.8)(@vitest/coverage-v8@4.1.11)(jsdom@27.4.0(supports-color@7.2.0))(vite@8.3.0(@types/node@25.9.8)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   packages/environments:
     dependencies:

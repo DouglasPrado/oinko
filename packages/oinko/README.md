@@ -11,7 +11,7 @@ npm install @oinko/core
 ## Quick Start
 
 For the Oink LP landing page agent with CLI and Telegram sharing one configuration,
-see [apps/oink-lp](../../apps/oink-lp/README.md).
+see [configurable bots](../bots/README.md).
 
 ```typescript
 import { Agent } from '@oinko/core';

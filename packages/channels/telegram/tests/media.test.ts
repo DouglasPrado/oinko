@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
 import { describe, expect, it, vi } from 'vitest';
-import { buildAgentInput, MAX_IMAGE_BYTES, MAX_AUDIO_BYTES } from '@oinko/channel-telegram';
+import { buildAgentInput, MAX_IMAGE_BYTES, MAX_AUDIO_BYTES } from '../src/index.js';
 import { AgentRuntime, threadIdFor } from '@oinko/agent-runtime';
 
 function context(message: object) {

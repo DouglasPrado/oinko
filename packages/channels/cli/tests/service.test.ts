@@ -12,7 +12,7 @@ import {
   type ChannelProvider,
   type Connections,
 } from '@oinko/agent-runtime';
-import { attachCli, cliChannel } from '@oinko/channel-cli';
+import { attachCli, cliChannel } from '../src/index.js';
 
 it('keeps its socket reserved until channel shutdown finishes', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'oinko-shutdown-'));

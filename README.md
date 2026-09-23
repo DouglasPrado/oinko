@@ -4,7 +4,6 @@ Monorepo de agentes, canais e integrações. O núcleo Oinko é independente das
 
 ```text
 apps/
-  oink-lp/                 agente para landing pages
   dashboard/               bots, projetos, ambientes, prévias e telemetria
   environment-runner/      gerenciador local de Docker, builds e prévias
 packages/
@@ -30,7 +29,6 @@ Node 22.13+ e pnpm 11 (versão fixada no `packageManager`).
 ```bash
 pnpm install
 pnpm build:packages
-pnpm --filter @oinko/oink-lp dev
 pnpm --filter @oinko/dashboard dev
 ```
 
@@ -44,7 +42,7 @@ pnpm bot restart meu-bot
 pnpm bot stop meu-bot
 ```
 
-O Oink LP existente é importado uma única vez, preservando configurações e caminhos de dados. Após a importação, as alterações são feitas na dashboard. A chave cifrada local e o cadastro ficam em `.harness`, fora do Git. [Executor e armazenamento](packages/bots/README.md).
+Todos os bots, incluindo o Oink LP, são configurações do executor compartilhado. O cadastro, a chave de cifragem e os dados ficam em `.harness`, fora do Git; cada bot mantém histórico, memória e telemetria em `.harness/bots/<id>`. [Executor e armazenamento](packages/bots/README.md).
 
 Para acesso pela rede, configure primeiro a senha no computador e use `pnpm --filter @oinko/dashboard start:network` após o build. A dashboard exige login; os bots continuam rodando quando ela fecha.
 
@@ -64,7 +62,7 @@ A dashboard autoriza a conta e os agentes consomem a credencial em `.harness/cre
 
 O pacote compartilha o formato de credencial, grava arquivos atomicamente com permissão 600 e serializa a renovação entre processos por arquivo. Se um processo morrer segurando o bloqueio, a próxima tentativa falha por timeout; após parar os consumidores, remova somente o diretório `<credencial>.lock` para liberar a renovação. Credenciais antigas dos exemplos não são versionadas nem apagadas.
 
-O Oink LP conecta Higgsfield ao iniciar quando a conexão está habilitada e a credencial está disponível. Ative ou desative pela configuração do bot na dashboard (`HIGGSFIELD=off` é respeitado na importação inicial). Depois da autorização inicial, reinicie o bot pela dashboard para carregar as ferramentas. As imagens recebidas podem ser preparadas como referência com `preparar_imagem_enviada`.
+Cada bot conecta Higgsfield ao iniciar quando a conexão está habilitada e a credencial está disponível. Ative ou desative pela configuração do bot na dashboard. Depois da autorização inicial, reinicie o bot pela dashboard para carregar as ferramentas. As imagens recebidas podem ser preparadas como referência com `preparar_imagem_enviada`.
 
 ## Verificação
 

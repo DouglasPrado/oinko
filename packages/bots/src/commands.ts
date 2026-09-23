@@ -2,28 +2,19 @@ import { attachCli } from '@oinko/channel-cli';
 import { BotStore } from './store.js';
 import { BotManager } from './manager.js';
 import { BotError } from './schema.js';
-import { importOinkLp } from './import-legacy.js';
 
 export async function runBotCommand(root: string, args: string[]) {
   const store = new BotStore(root);
   const manager = new BotManager(store, { workerPath: new URL('./worker.js', import.meta.url) });
   const [command = 'list', id] = args;
   try {
-    if (command === 'import-oink-lp') {
-      console.log(
-        importOinkLp(store)
-          ? 'Oink LP disponível no cadastro de bots.'
-          : 'Nenhuma configuração anterior encontrada.',
-      );
-      return;
-    }
     if (command === 'list') {
       console.log(JSON.stringify(await manager.list(), null, 2));
       return;
     }
     if (!id || args.length > 2)
       throw new BotError(
-        'Uso: pnpm bot list | start <id> | stop <id> | restart <id> | status <id> | chat <id> | import-oink-lp',
+        'Uso: pnpm bot list | start <id> | stop <id> | restart <id> | status <id> | chat <id>',
       );
     if (command === 'chat') {
       const controller = new AbortController();

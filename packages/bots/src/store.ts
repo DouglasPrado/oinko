@@ -109,12 +109,7 @@ export class BotStore {
       ({ id }) => this.get(id),
     );
   }
-  save(
-    input: unknown,
-    secretInput: unknown,
-    expectedRevision: number,
-    importedPaths?: Paths,
-  ): BotProfile {
+  save(input: unknown, secretInput: unknown, expectedRevision: number): BotProfile {
     const definition = BotDefinitionSchema.parse(input);
     const changes = BotSecretsSchema.parse(secretInput);
     this.db.exec('BEGIN IMMEDIATE');
@@ -131,8 +126,7 @@ export class BotStore {
       for (const id of Object.keys(secrets.mcpTokens))
         if (!definition.mcps.some((mcp) => mcp.id === id)) delete secrets.mcpTokens[id];
       const dataDir = join(this.root, '.harness', 'bots', definition.id);
-      const paths = current?.paths ??
-        importedPaths ?? { dataDir, telemetryDbPath: join(dataDir, 'telemetry.db') };
+      const paths = current?.paths ?? { dataDir, telemetryDbPath: join(dataDir, 'telemetry.db') };
       this.db
         .prepare(
           'INSERT INTO bots VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET config=excluded.config, secrets=excluded.secrets, revision=excluded.revision',

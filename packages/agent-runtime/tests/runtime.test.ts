@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentRuntime, threadIdFor } from '@oinko/agent-runtime';
-import { readConfig } from '../src/config.js';
+import { AgentRuntime, threadIdFor } from '../src/index.js';
 
 describe('multi-channel agent', () => {
   it('isolates agent, connection, channel and conversation without delimiter collisions', () => {
@@ -39,13 +38,6 @@ describe('multi-channel agent', () => {
     await runtime.handle(cli, '/memory prefiro português');
     expect(agent.remember).toHaveBeenCalledWith('prefiro português', threadIdFor('oinko', cli));
     expect(agent.chat).toHaveBeenCalledTimes(2);
-  });
-
-  it('configures the agent independently of channel credentials', () => {
-    const env = { HIGGSFIELD: 'off', LLM_API_KEY: 'test', AGENT_MODEL: 'test-model' };
-    expect(readConfig(env).AGENT_ID).toBe('oink-lp');
-    expect(readConfig(env)).not.toHaveProperty('mode');
-    expect(() => readConfig({ ...env, LLM_API_KEY: '' })).toThrow(/LLM_API_KEY/);
   });
 
   it('orders commands after active turns and recovers the queue after errors', async () => {

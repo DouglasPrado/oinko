@@ -3,8 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createAgent } from '../src/agent-factory.js';
-import { readConfig } from '../src/config.js';
+import { createAgentHost, type AgentHostConfig } from '../src/index.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -18,14 +17,17 @@ it('persists history across restarts and keeps Telegram separate from CLI', asyn
       { headers: { 'Content-Type': 'text/event-stream' } },
     );
   });
-  const config = readConfig({
-    HIGGSFIELD: 'off',
-    LLM_API_KEY: 'fake',
-    AGENT_MODEL: 'test',
-    AGENT_DATA_DIR: directory,
-  });
+  const config: AgentHostConfig = {
+    id: 'assistant',
+    dataDir: directory,
+    agent: { apiKey: 'fake', model: 'test' },
+    telemetryDbPath: join(directory, 'telemetry.db'),
+    telemetryEnabled: true,
+    capturePayloads: 'full',
+    retentionDays: 30,
+  };
   const route = { channel: 'cli' as const, connectionId: 'local', conversationId: '42' };
-  let app = createAgent(config);
+  let app = createAgentHost(config);
   try {
     const telemetry = new DatabaseSync(join(config.dataDir, 'telemetry.db'), { readOnly: true });
     try {
@@ -37,7 +39,7 @@ it('persists history across restarts and keeps Telegram separate from CLI', asyn
     }
     await app.runtime.handle(route, 'marcador exclusivo CLI');
     await app.close();
-    app = createAgent(config);
+    app = createAgentHost(config);
     await app.runtime.handle(route, 'continuação');
     expect(requests.at(-1)).toContain('marcador exclusivo CLI');
     await app.runtime.handle({ ...route, channel: 'telegram' }, 'outra conversa');
@@ -46,14 +48,14 @@ it('persists history across restarts and keeps Telegram separate from CLI', asyn
     try {
       const rows = recorded.prepare('SELECT app, thread_id FROM executions').all();
       expect(rows).toHaveLength(3);
-      expect(rows.every((row) => row.app === 'oink-lp')).toBe(true);
+      expect(rows.every((row) => row.app === config.id)).toBe(true);
       expect(new Set(rows.map((row) => row.thread_id)).size).toBe(2);
     } finally {
       recorded.close();
     }
     await app.runtime.handle(route, '/reset');
     await app.close();
-    app = createAgent(config);
+    app = createAgentHost(config);
     await app.runtime.handle(route, 'nova conversa');
     expect(requests.at(-1)).not.toContain('marcador exclusivo CLI');
   } finally {

@@ -141,7 +141,7 @@ export class BotManager {
     if (status.state === 'stopped') return status;
     await controlRequest(this.socket(id), '/stop', {}, AbortSignal.timeout(5000)).catch(() => {
       throw new BotError(
-        'Não foi possível parar o bot. Se ele usa o executor antigo, encerre esse processo uma vez para concluir a migração.',
+        'Não foi possível parar o bot. Confira se o executor está respondendo e tente novamente.',
       );
     });
     for (let i = 0; i < 100; i++) {

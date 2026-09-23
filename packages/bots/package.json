@@ -21,10 +21,6 @@
     "./manager": {
       "types": "./dist/manager.d.ts",
       "import": "./dist/manager.js"
-    },
-    "./import-legacy": {
-      "types": "./dist/import-legacy.d.ts",
-      "import": "./dist/import-legacy.js"
     }
   },
   "scripts": {

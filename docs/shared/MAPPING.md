@@ -26,6 +26,8 @@ Blueprint Tecnico (docs/blueprint/)     ← FONTE PRIMARIA
 
 ## Mapeamento Blueprint → Backend
 
+Bots configuráveis: `docs/dashboard/PLAN.md` → `packages/bots` e `apps/dashboard/src/server/bots`. Histórico e isolamento: `packages/agent-runtime/tests`; CLI e ciclo de serviço: `packages/channels/cli/tests`; texto, imagem e áudio Telegram: `packages/channels/telegram/tests`. Cada bot usa `.harness/bots/<id>` e o executor compartilhado.
+
 Projetos e ambientes: `docs/blueprint/24-workspaces-environments.md` → `packages/workspaces`, `packages/environments`, `apps/environment-runner`, ferramentas em `packages/bots/src/programming-tools.ts` e telas `apps/dashboard/src/features/{projects,environments}`. Decisão: `docs/adr/adr-008-local-environments.md`. Operação: `packages/environments/README.md`. Evidências: `docs/dashboard/ENVIRONMENTS-DELIVERY.md`.
 
 Navegação da dashboard: `docs/dashboard/PLAN.md` → `apps/dashboard/src/components/shell/{workbench,dashboard-shell,thread-rail}.tsx` e `components/shared/product-nav.tsx`. Regressões de navegação entre seções e menu móvel: `apps/dashboard/tests/e2e/navigation.spec.ts`.

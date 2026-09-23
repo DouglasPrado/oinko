@@ -15,15 +15,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@oinko/agent-runtime": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",
-    "@types/node": "^25.6.0"
+    "@types/node": "^25.6.0",
+    "vitest": "^4.1.11"
   }
 }

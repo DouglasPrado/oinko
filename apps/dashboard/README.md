@@ -10,7 +10,7 @@ pnpm --filter @oinko/dashboard dev
 
 Abra `http://127.0.0.1:3111/login`. No primeiro acesso local, crie uma senha de pelo menos 12 caracteres. Entre em **Bots** para criar e editar agentes, habilitar CLI/Telegram/MCPs e iniciar, parar ou reiniciar cada processo. As credenciais não são devolvidas ao navegador depois de salvas.
 
-O Oink LP existente é importado sem mover seus dados. Novos bots usam o executor `@oinko/bots`, sem criar outra pasta de aplicação. Salvar uma edição não interrompe o bot: a tela indica que é preciso reiniciar para aplicar a revisão.
+Todos os bots usam o executor `@oinko/bots`, sem criar outra pasta de aplicação. Salvar uma edição não interrompe o bot: a tela indica que é preciso reiniciar para aplicar a revisão.
 
 ## Rede e servidor
 
@@ -30,10 +30,10 @@ O arquivo `.harness/dashboard-auth.json` contém hash scrypt e chave de sessão,
 A tela existente lê o SQLite definido em `TELEMETRY_DB_PATH` no `.env.local`. Para o Oink LP:
 
 ```dotenv
-TELEMETRY_DB_PATH=../oink-lp/data/oink-lp/telemetry.db
+TELEMETRY_DB_PATH=../../.harness/bots/oink-lp/telemetry.db
 ```
 
-Novos bots gravam `.harness/bots/<id>/telemetry.db`. O seletor de banco por bot na interface ainda não está implementado; ajuste `TELEMETRY_DB_PATH` e reinicie a dashboard para inspecionar outro banco. Custos continuam sendo os informados pelo provedor.
+Todos os bots gravam `.harness/bots/<id>/telemetry.db`. O seletor de banco por bot na interface ainda não está implementado; ajuste `TELEMETRY_DB_PATH` e reinicie a dashboard para inspecionar outro banco. Custos continuam sendo os informados pelo provedor.
 
 ## Testes
 

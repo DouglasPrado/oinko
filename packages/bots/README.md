@@ -16,7 +16,6 @@ Na raiz do monorepo:
 
 ```bash
 pnpm build:packages
-pnpm bot import-oink-lp
 pnpm bot list
 pnpm bot start oink-lp
 pnpm bot status oink-lp
@@ -31,7 +30,7 @@ pnpm bot stop oink-lp
 
 `.harness/bots.db` guarda configurações versionadas e credenciais cifradas. `.harness/bots.key` é a chave AES-256-GCM, restrita ao usuário local. Faça backup dos dois arquivos juntos, além dos diretórios de dados. Não remova a chave separadamente.
 
-Novos bots gravam histórico, memória e telemetria em `.harness/bots/<id>`. A importação do Oink LP preserva os caminhos antigos, não apaga nem move os dados, e não sobrescreve um cadastro já existente. `OINKO_ROOT` pode selecionar outro diretório de configuração e dados.
+Todos os bots gravam histórico, memória e telemetria em `.harness/bots/<id>`. O Oink LP usa esse mesmo cadastro e executor; não há aplicação, arquivo `.env` ou importação automática específicos para ele. `OINKO_ROOT` pode selecionar outro diretório de configuração e dados.
 
 ## Extensão
 

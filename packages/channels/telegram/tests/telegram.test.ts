@@ -1,9 +1,6 @@
-import { Readable, Writable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { runCli } from '@oinko/channel-cli';
-import { createTelegramBot, splitMessage } from '@oinko/channel-telegram';
+import { createTelegramBot, splitMessage } from '../src/index.js';
 import { AgentRuntime, threadIdFor } from '@oinko/agent-runtime';
-import { readConfig } from '../src/config.js';
 
 function fixture() {
   const agent = {
@@ -18,44 +15,15 @@ function fixture() {
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('channel adapters', () => {
-  it('accepts piped CLI input in order and exits without sending /exit to the model', async () => {
-    const { runtime, agent } = fixture();
-    let output = '';
-    await runCli(
-      runtime,
-      'work',
-      new AbortController().signal,
-      Readable.from(['oi\n/reset\n/exit\nnão enviar\n']),
-      new Writable({
-        write(chunk, _encoding, callback) {
-          output += chunk.toString();
-          callback();
-        },
-      }),
-    );
-    expect(agent.chat).toHaveBeenCalledTimes(1);
-    expect(agent.clearHistory).toHaveBeenCalledWith(
-      threadIdFor('oinko', { channel: 'cli', connectionId: 'local', conversationId: 'work' }),
-    );
-    expect(output).toContain('Olá!');
-  });
-
+describe('Telegram adapter', () => {
   it.each([undefined, true])(
     'routes Telegram replies with open private access %s and rejects groups',
     async (allowAllPrivateChats) => {
       const { runtime, agent } = fixture();
-      const config = readConfig({
-        HIGGSFIELD: 'off',
-        LLM_API_KEY: 'fake',
-        AGENT_MODEL: 'fake',
-        TELEGRAM_BOT_TOKEN: '123:fake',
-        TELEGRAM_ALLOWED_USER_IDS: '42',
-      });
       const bot = createTelegramBot(
         {
-          token: config.TELEGRAM_BOT_TOKEN!,
-          allowedUserIds: config.allowedUserIds,
+          token: '123:fake',
+          allowedUserIds: ['42'],
           allowAllPrivateChats,
         },
         runtime,

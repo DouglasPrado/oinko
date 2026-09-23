@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { BotStore, BotManager } from '../src/index.js';
+import { runBotCommand } from '../src/commands.js';
 
 const roots: string[] = [];
 function root() {
@@ -109,31 +110,33 @@ it('starts two configured bots through the same worker, reloads a saved revision
   }
 }, 30_000);
 
-it('imports Oink LP once while preserving paths, disabled connections and credentials', async () => {
-  const { mkdirSync, writeFileSync } = await import('node:fs');
-  const { importOinkLp } = await import('../src/import-legacy.js');
+it('keeps canonical data paths and credentials across edits and reopening', () => {
   const dir = root();
-  mkdirSync(join(dir, 'apps/oink-lp'), { recursive: true });
-  writeFileSync(
-    join(dir, 'apps/oink-lp/.env'),
-    'LLM_API_KEY=legacy-secret\nAGENT_MODEL=legacy-model\nAGENT_DATA_DIR=./data\nTELEMETRY=off\nHIGGSFIELD=off\n',
-  );
-  writeFileSync(
-    join(dir, 'apps/oink-lp/connections.json'),
-    JSON.stringify({ channels: [{ id: 'local', type: 'cli', enabled: false }], mcps: [] }),
-  );
+  let store = new BotStore(dir);
+  try {
+    store.save(definition, { apiKey: 'saved-secret' }, 0);
+    const expected = {
+      dataDir: join(dir, '.harness/bots/support'),
+      telemetryDbPath: join(dir, '.harness/bots/support/telemetry.db'),
+    };
+    expect(store.runtime('support').paths).toEqual(expected);
+    store.save({ ...definition, name: 'Atualizado pela dashboard' }, {}, 1);
+    store.close();
+    store = new BotStore(dir);
+    expect(store.runtime('support').paths).toEqual(expected);
+    expect(store.runtime('support').secrets.apiKey).toBe('saved-secret');
+    expect(store.get('support')).toMatchObject({ name: 'Atualizado pela dashboard', revision: 2 });
+  } finally {
+    store.close();
+  }
+});
+
+it('rejects the retired bot-specific import command without creating a bot', async () => {
+  const dir = root();
+  await expect(runBotCommand(dir, ['import-oink-lp'])).rejects.toThrow(/Uso:/);
   const store = new BotStore(dir);
   try {
-    expect(importOinkLp(store)).toBe('oink-lp');
-    const bot = store.runtime('oink-lp');
-    expect(bot.paths.dataDir).toBe(join(dir, 'apps/oink-lp/data/oink-lp'));
-    expect(bot.definition.cli).toBe(false);
-    expect(bot.definition.telemetry.enabled).toBe(false);
-    expect(bot.secrets.apiKey).toBe('legacy-secret');
-    store.save({ ...bot.definition, name: 'Atualizado pela dashboard' }, {}, 1);
-    importOinkLp(store);
-    expect(store.get('oink-lp').name).toBe('Atualizado pela dashboard');
-    expect(store.get('oink-lp').revision).toBe(2);
+    expect(store.list()).toEqual([]);
   } finally {
     store.close();
   }
