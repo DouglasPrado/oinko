@@ -201,3 +201,20 @@ describe('ConversationManager with a store that cannot search', () => {
     expect(manager.supportsSearch()).toBe(false);
   });
 });
+
+describe('ConversationManager — createdAt order within a thread', () => {
+  it('keeps messages written in the same millisecond strictly ordered', () => {
+    const manager = new ConversationManager();
+    const first = manager.appendMessage(at('user', 'a', 1_000), 't1');
+    const second = manager.appendMessage(at('assistant', 'b', 1_000), 't1');
+    const earlier = manager.appendMessage(at('assistant', 'c', 998), 't1');
+    expect([first, second, earlier]).toEqual([1_000, 1_001, 1_002]);
+    expect(manager.getHistory('t1').map((m) => m.createdAt)).toEqual([1_000, 1_001, 1_002]);
+  });
+
+  it('keeps each thread on its own clock', () => {
+    const manager = new ConversationManager();
+    manager.appendMessage(at('user', 'a', 1_000), 't1');
+    expect(manager.appendMessage(at('user', 'b', 1_000), 't2')).toBe(1_000);
+  });
+});

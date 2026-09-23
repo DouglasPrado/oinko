@@ -5,7 +5,7 @@
  * purpose: a fetched page is not the conversation, and it is where injected
  * text lives. Images are left out too — a base64 payload is not words.
  */
-export const MAX_SEARCHABLE_CHARS = 32_000;
+const MAX_SEARCHABLE_CHARS = 32_000;
 
 interface Part {
   type: string;
