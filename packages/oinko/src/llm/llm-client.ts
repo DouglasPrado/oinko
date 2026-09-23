@@ -1,0 +1,725 @@
+import type {
+  StreamChatParams,
+  ChatParams,
+  StreamChunk,
+  ChatResponse,
+  LLMToolCall,
+} from './message-types.js';
+import type { TokenUsage } from '../contracts/entities/token-usage.js';
+import type { LLMUsageDetail } from '../contracts/entities/telemetry.js';
+import { retry } from '../utils/retry.js';
+import { checkModelSuitsEndpoint } from './model-registry.js';
+import {
+  buildReasoningArgs,
+  isReasoningModel,
+  requiresNoSystemRole,
+  rejectsToolsOnChatCompletions,
+} from './reasoning.js';
+import { GenerationNotReadyError } from './errors.js';
+import { validateSsrfUrl } from '../utils/ssrf-guard.js';
+
+/**
+ * Assinatura de `fetch`: recebe uma Request e devolve uma Response. Qualquer
+ * handler com esse formato serve, o que permite plugar um gateway in-process,
+ * sem porta nem rede.
+ */
+export type FetchLike = (request: Request) => Promise<Response>;
+
+export interface LLMClientConfig {
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+  /**
+   * Intercepta as chamadas de chat. Recebe uma Request pronta e devolve a
+   * Response, entao vale tanto para um gateway in-process quanto para um mock
+   * de teste. Aplica-se SO a /chat/completions: /embeddings continua indo
+   * direto pelo fetch global, porque gateways tipicamente nao roteiam essa rota.
+   */
+  fetch?: FetchLike;
+  /**
+   * Modelo de transcricao. Default `whisper-1`, o nome mais amplamente aceito
+   * entre provedores compativeis com a OpenAI. Sondando a API, a linha
+   * `gpt-4o-transcribe` devolve texto mais fiel — vale trocar quando o
+   * endpoint a oferece.
+   */
+  transcriptionModel?: string;
+}
+
+/** Audio de entrada para `transcribe()`. */
+export interface TranscribeParams {
+  audio: Uint8Array;
+  /**
+   * Nome com extensao. O provedor decide o decoder pela extensao, entao um
+   * `.ogg` chamado de `.mp3` e recusado como formato invalido.
+   */
+  filename: string;
+  model?: string;
+  /** Dica de idioma (ISO-639-1). Sem ela o provedor detecta sozinho. */
+  language?: string;
+  signal?: AbortSignal;
+}
+
+export interface TranscribeResult {
+  text: string;
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+const MAX_ERROR_BODY = 500;
+
+function sanitizeErrorBody(text: string): string {
+  const truncated =
+    text.length > MAX_ERROR_BODY ? `${text.slice(0, MAX_ERROR_BODY)}... [truncated]` : text;
+  try {
+    const parsed = JSON.parse(truncated) as { error?: { message?: unknown }; message?: unknown };
+    const msg = parsed.error?.message ?? parsed.message;
+    if (typeof msg === 'string') return msg.slice(0, MAX_ERROR_BODY);
+  } catch {
+    /* not JSON — return truncated plain text */
+  }
+  return truncated;
+}
+
+/**
+ * LLMClient performs automatic retry on RetryableError (HTTP 429 / 5xx).
+ * Non-idempotent POST requests to /chat/completions and /embeddings are retried
+ * only when the server signals rate-limit or server-side failure, where the
+ * request typically did not complete processing. Other failures (4xx) are not
+ * retried. Callers that need strict at-most-once semantics should pass their
+ * own signal and handle failures at the call site.
+ */
+export class LLMClient {
+  /** Default request timeout when caller provides no AbortSignal. */
+  private static readonly DEFAULT_TIMEOUT_MS = 120_000;
+
+  private readonly apiKey: string;
+  private readonly model: string;
+  private readonly baseUrl: string;
+  private readonly timeoutMs: number;
+  private readonly fetchImpl: FetchLike | undefined;
+  private readonly transcriptionModel: string;
+
+  constructor(config: LLMClientConfig) {
+    this.apiKey = config.apiKey;
+    this.model = config.model;
+    const rawBase = (config.baseUrl ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '');
+    // Com fetch injetado nao ha request de rede: a URL e so um rotulo que o
+    // handler recebe. Rodar o guard de SSRF ai barraria justamente o caso de
+    // uso — um gateway in-process costuma ser identificado por localhost.
+    if (config.fetch === undefined) {
+      const ssrfError = validateSsrfUrl(rawBase);
+      if (ssrfError) throw new Error(`baseUrl bloqueada (SSRF): ${ssrfError}`);
+    }
+    this.baseUrl = rawBase;
+    this.timeoutMs = config.timeoutMs ?? LLMClient.DEFAULT_TIMEOUT_MS;
+    this.fetchImpl = config.fetch;
+    this.transcriptionModel = config.transcriptionModel ?? 'whisper-1';
+  }
+
+  /**
+   * Transcreve audio via POST /audio/transcriptions.
+   *
+   * Nao passa pelo `fetchAPI` das outras chamadas porque o corpo e multipart,
+   * nao JSON: o `file` precisa viajar como parte binaria com nome proprio. E o
+   * unico caminho para audio neste endpoint — sondando a API, um bloco
+   * `input_audio` dentro de /chat/completions e recusado com "Content blocks
+   * are expected to be either text or image_url type".
+   */
+  async transcribe(params: TranscribeParams): Promise<TranscribeResult> {
+    const form = new FormData();
+    // Buffer.from normaliza o Uint8Array: o tipo generico aceita
+    // SharedArrayBuffer, que o Blob nao recebe.
+    form.append('file', new Blob([Buffer.from(params.audio)]), params.filename);
+    form.append('model', params.model ?? this.transcriptionModel);
+    if (params.language !== undefined) form.append('language', params.language);
+
+    const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
+    if (params.signal) signals.push(params.signal);
+
+    const request = new Request(`${this.baseUrl}/audio/transcriptions`, {
+      method: 'POST',
+      // Sem Content-Type na mao: quem monta o FormData escolhe o boundary, e
+      // fixar o header aqui produziria um corpo que o servidor nao separa.
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      body: form,
+      signal: AbortSignal.any(signals),
+    });
+
+    const response = await retry(() => this.sendTranscription(request), {
+      maxRetries: 3,
+      initialDelay: 1000,
+      isRetryable: (e) => e instanceof RetryableError,
+    });
+
+    const json = (await response.json()) as { text?: unknown };
+    if (typeof json.text !== 'string') {
+      throw new Error(
+        `Transcription API returned no text. Response: ${JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
+    return { text: json.text };
+  }
+
+  private async sendTranscription(request: Request): Promise<Response> {
+    const response = await fetch(request.clone());
+    if (response.ok) return response;
+
+    const body = sanitizeErrorBody(await response.text());
+    if (isRetryableStatus(response.status)) {
+      throw new RetryableError(`Transcription failed (${response.status}): ${body}`);
+    }
+    throw new Error(`Transcription failed (${response.status}): ${body}`);
+  }
+
+  /**
+   * Monta o body do POST /chat/completions e dispara a request com retry.
+   * Compartilhado entre streamChat() e chat() — única diferença é o `stream` flag
+   * e o `stream_options` que streamChat injeta.
+   */
+  private async sendChatRequest(
+    params: StreamChatParams,
+    streaming: boolean,
+  ): Promise<SentRequest> {
+    const model = params.model ?? this.model;
+    const mismatch = checkModelSuitsEndpoint(model, this.baseUrl);
+    if (mismatch !== undefined) throw new Error(mismatch);
+
+    const hasTools = (params.tools?.length ?? 0) > 0;
+
+    if (hasTools && rejectsToolsOnChatCompletions(model)) {
+      throw new Error(
+        `Model "${model}" does not accept function tools on /chat/completions, which is the ` +
+          'only endpoint this client speaks. Use a model that does (the gpt-5 line works), ' +
+          'run the agent without tools, or route this model through a gateway that speaks ' +
+          '/v1/responses.',
+      );
+    }
+
+    const reasoning = buildReasoningArgs(model, {
+      hasTools,
+      reasoningEffort: params.reasoningEffort,
+    });
+
+    let messages = params.messages;
+    if (requiresNoSystemRole(model)) {
+      messages = messages.map((m) => (m.role === 'system' ? { ...m, role: 'user' as const } : m));
+    }
+
+    const body: Record<string, unknown> = {
+      model,
+      messages,
+      stream: streaming,
+    };
+
+    // OpenAI-compatible providers (OpenAI, OpenRouter, LiteLLM, vLLM) only emit
+    // usage on the SSE stream when this flag is set. Without it, the final chunk
+    // has finish_reason but no token counts — costs cannot be computed downstream.
+    if (streaming) body.stream_options = { include_usage: true };
+
+    if (params.tools?.length) body.tools = params.tools;
+    // Dropped rather than passed through: a reasoning model answers 400 to any
+    // temperature but its default, which would kill the whole request.
+    if (params.temperature !== undefined && !reasoning.dropTemperature) {
+      body.temperature = params.temperature;
+    }
+    if (params.responseFormat) body.response_format = params.responseFormat;
+    // camelCase on the way in, snake_case on the wire.
+    if (reasoning.reasoningEffort !== undefined) body.reasoning_effort = reasoning.reasoningEffort;
+    if (params.seed !== undefined) body.seed = params.seed;
+    if (params.maxTokens !== undefined) {
+      if (isReasoningModel(model)) body.max_completion_tokens = params.maxTokens;
+      else body.max_tokens = params.maxTokens;
+    }
+
+    const sentAt = Date.now();
+    let attempts = 0;
+
+    const response = await retry(
+      () => {
+        attempts++;
+        return this.fetchAPI('/chat/completions', body, params.signal);
+      },
+      {
+        maxRetries: 3,
+        initialDelay: 1000,
+        isRetryable: (e) => e instanceof RetryableError,
+      },
+    );
+
+    return { response, sentAt, headersAt: Date.now(), attempts };
+  }
+
+  async *streamChat(params: StreamChatParams): AsyncIterableIterator<StreamChunk> {
+    const { response, sentAt, headersAt, attempts } = await this.sendChatRequest(params, true);
+
+    // O relogio do TTFT comeca quando a resposta e aceita, nao quando a request
+    // sai: senao o backoff de um 429 entraria como latencia do modelo. Esse
+    // tempo tem nome proprio, `queuedMs`.
+    let firstTokenAt: number | undefined;
+
+    for await (const chunk of this.parseSSEStream(response, params.signal)) {
+      if (chunk.type !== 'done') {
+        firstTokenAt ??= Date.now();
+        yield chunk;
+        continue;
+      }
+
+      yield {
+        ...chunk,
+        ttftMs: firstTokenAt === undefined ? undefined : firstTokenAt - headersAt,
+        durationMs: Date.now() - headersAt,
+        queuedMs: headersAt - sentAt,
+        attempts,
+      };
+    }
+  }
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    const { response } = await this.sendChatRequest(params, false);
+
+    interface ChatJson {
+      choices: {
+        message: { content?: string; tool_calls?: LLMToolCall[] };
+        finish_reason: string;
+      }[];
+      usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+    }
+    let json: ChatJson;
+    try {
+      json = (await response.json()) as ChatJson;
+    } catch (e) {
+      // Ensure body is fully consumed so the HTTP connection is returned to the pool
+      await response.body?.cancel().catch(() => {
+        /* swallow — already in error path */
+      });
+      throw new Error(
+        `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
+      );
+    }
+
+    const choice = json.choices?.[0];
+    if (!choice) {
+      throw new Error(
+        `LLM API returned empty choices (model=${this.model}). Response: ${JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
+    const usage: TokenUsage = {
+      inputTokens: json.usage?.prompt_tokens ?? 0,
+      outputTokens: json.usage?.completion_tokens ?? 0,
+      totalTokens: json.usage?.total_tokens ?? 0,
+    };
+
+    return {
+      content: choice.message.content ?? '',
+      toolCalls: choice.message.tool_calls,
+      finishReason: choice.finish_reason,
+      usage,
+    };
+  }
+
+  async embed(texts: string[], model?: string): Promise<number[][]> {
+    // Mesma checagem do chat: o modelo de embedding tem default proprio
+    // (`openai/text-embedding-3-small`, a grafia do OpenRouter), e quem aponta
+    // o baseUrl para a OpenAI sem trocar esse campo recebia um "invalid model
+    // ID" cru, vindo de um caminho que nem parece relacionado ao que mudou.
+    const embedModel = model ?? this.model;
+    const mismatch = checkModelSuitsEndpoint(embedModel, this.baseUrl);
+    if (mismatch !== undefined) throw new Error(mismatch);
+
+    const response = await retry(
+      () =>
+        this.fetchAPI('/embeddings', {
+          model: embedModel,
+          input: texts,
+        }),
+      { maxRetries: 3, initialDelay: 1000, isRetryable: (e) => e instanceof RetryableError },
+    );
+
+    interface EmbedJson {
+      data: { embedding: number[] }[];
+    }
+    let json: EmbedJson;
+    try {
+      json = (await response.json()) as EmbedJson;
+    } catch (e) {
+      await response.body?.cancel().catch(() => {
+        /* swallow — already in error path */
+      });
+      throw new Error(
+        `Failed to parse LLM response: ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
+      );
+    }
+
+    if (!json.data || !Array.isArray(json.data)) {
+      throw new Error(
+        `LLM embed API returned unexpected response (model=${model ?? this.model}). ` +
+          `Response: ${JSON.stringify(json).slice(0, 200)}`,
+      );
+    }
+
+    return json.data.map((d) => d.embedding);
+  }
+
+  private async fetchAPI(
+    path: string,
+    body: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    // Always apply a default timeout; compose with the caller-provided signal if any.
+    const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
+    if (signal) signals.push(signal);
+    const effectiveSignal = AbortSignal.any(signals);
+
+    const url = `${this.baseUrl}${path}`;
+    const init: RequestInit = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal: effectiveSignal,
+    };
+
+    // O handler injetado vale so para chat. /embeddings segue no fetch global
+    // porque um gateway de chat nao costuma expor essa rota — mandar embeddings
+    // para la daria 404 e derrubaria knowledge/RAG.
+    const injected = path === '/chat/completions' ? this.fetchImpl : undefined;
+    const response = injected ? await injected(new Request(url, init)) : await fetch(url, init);
+
+    await throwForStatus(response);
+    return response;
+  }
+
+  /**
+   * Custo confirmado de uma geracao, no OpenRouter.
+   *
+   * O valor que vem no stream ja e o cobrado, mas nem sempre esta pronto no
+   * instante em que a resposta termina. Este endpoint fecha a conta depois.
+   *
+   * A `apiKey` fica aqui dentro: o enriquecedor recebe uma funcao, nunca a
+   * credencial.
+   */
+  async getGeneration(id: string, signal?: AbortSignal): Promise<GenerationStats> {
+    const signals: AbortSignal[] = [AbortSignal.timeout(this.timeoutMs)];
+    if (signal) signals.push(signal);
+
+    const url = `${this.baseUrl}/generation?id=${encodeURIComponent(id)}`;
+    const init: RequestInit = {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.any(signals),
+    };
+
+    const response = this.fetchImpl
+      ? await this.fetchImpl(new Request(url, init))
+      : await fetch(url, init);
+
+    // 404 e 425 dizem "ainda nao", nao "nao existe": a geracao pode nao ter
+    // sido contabilizada no instante em que o stream fechou.
+    if (response.status === 404 || response.status === 425) {
+      throw new GenerationNotReadyError(`generation ${id} ainda nao esta disponivel`);
+    }
+
+    await throwForStatus(response);
+
+    const json = (await response.json()) as { data?: GenerationPayload };
+    const data = json.data;
+
+    // Corpo sem custo tambem e "ainda nao": tratar como definitivo gravaria
+    // indisponivel numa geracao que so demorou a fechar a conta.
+    if (data?.total_cost === null || data?.total_cost === undefined) {
+      throw new GenerationNotReadyError(`generation ${id} ainda sem custo`);
+    }
+
+    return {
+      totalCostUsd: data.total_cost,
+      ...(data.upstream_inference_cost !== undefined && {
+        upstreamCostUsd: data.upstream_inference_cost,
+      }),
+      ...(data.cache_discount !== undefined && { cacheDiscountUsd: data.cache_discount }),
+      ...(data.native_tokens_cached !== undefined && { cachedTokens: data.native_tokens_cached }),
+      ...(data.native_tokens_reasoning !== undefined && {
+        reasoningTokens: data.native_tokens_reasoning,
+      }),
+      ...(data.provider_name !== undefined && { providerName: data.provider_name }),
+      ...(data.native_finish_reason !== undefined && {
+        nativeFinishReason: data.native_finish_reason,
+      }),
+    };
+  }
+
+  private async *parseSSEStream(
+    response: Response,
+    signal?: AbortSignal,
+  ): AsyncIterableIterator<StreamChunk> {
+    const body = response.body;
+    if (!body) throw new Error('Response body is null');
+
+    const reader = (body as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const MAX_SSE_BUFFER = 1 * 1024 * 1024; // 1 MB
+
+    // Accumulate tool calls incrementally
+    const toolCalls = new Map<number, { id: string; name: string; arguments: string }>();
+
+    // Defer the `done` event until end-of-stream. With stream_options.include_usage,
+    // OpenAI-compatible providers send usage in a SEPARATE chunk (with empty choices)
+    // AFTER the chunk that carried finish_reason. If we emitted `done` on
+    // finish_reason like before, we'd race ahead of the usage chunk and lose it.
+    let pendingFinishReason: string | undefined;
+    let pendingUsage: TokenUsage | undefined;
+    let donePending = false;
+    // Preenchido ao longo do stream: o id da geracao chega no primeiro chunk,
+    // o custo so no ultimo. Ambos eram descartados.
+    const detail: LLMUsageDetail = {};
+
+    // Propagate abort to the reader so a hanging read() is unblocked immediately.
+    const abortHandler = (): void => {
+      void reader.cancel().catch(() => {
+        /* swallow — abort path */
+      });
+    };
+    if (signal) {
+      if (signal.aborted) abortHandler();
+      else signal.addEventListener('abort', abortHandler, { once: true });
+    }
+
+    try {
+      streamLoop: while (true) {
+        if (signal?.aborted) break;
+
+        const { done, value } = await reader.read();
+        if (done) {
+          // Flush any pending multibyte bytes held in the decoder
+          buffer += decoder.decode();
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        if (buffer.length + chunk.length > MAX_SSE_BUFFER) {
+          reader.cancel().catch(() => {
+            /* swallow */
+          });
+          throw new Error(
+            `SSE buffer limit exceeded (${MAX_SSE_BUFFER} bytes) — possible malformed stream`,
+          );
+        }
+        buffer += chunk;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith(':')) continue;
+
+          if (!trimmed.startsWith('data: ')) continue;
+          const data = trimmed.slice(6);
+
+          if (data === '[DONE]') {
+            break streamLoop;
+          }
+
+          let parsed: SSEPayload;
+          try {
+            parsed = JSON.parse(data) as SSEPayload;
+          } catch {
+            continue;
+          }
+
+          // Capture usage from any chunk — when stream_options.include_usage is set
+          // it usually arrives on its own chunk with choices=[].
+          if (parsed.id !== undefined && detail.generationId === undefined) {
+            detail.generationId = parsed.id;
+          }
+          if (parsed.provider !== undefined && detail.providerName === undefined) {
+            detail.providerName = parsed.provider;
+          }
+
+          if (parsed.usage) {
+            const usage = parsed.usage;
+            pendingUsage = {
+              inputTokens: usage.prompt_tokens,
+              outputTokens: usage.completion_tokens,
+              totalTokens: usage.total_tokens,
+            };
+
+            // Atribuicao condicional, nunca `?? 0`: custo ausente significa
+            // "nao sei", e transformar isso em zero corromperia o relatorio.
+            if (usage.cost !== undefined) detail.costUsd = usage.cost;
+            if (usage.cost_details?.upstream_inference_cost !== undefined) {
+              detail.upstreamCostUsd = usage.cost_details.upstream_inference_cost;
+            }
+            if (usage.cost_details?.cache_discount !== undefined) {
+              detail.cacheDiscountUsd = usage.cost_details.cache_discount;
+            }
+            if (usage.prompt_tokens_details?.cached_tokens !== undefined) {
+              detail.cachedTokens = usage.prompt_tokens_details.cached_tokens;
+            }
+            if (usage.prompt_tokens_details?.cache_write_tokens !== undefined) {
+              detail.cacheWriteTokens = usage.prompt_tokens_details.cache_write_tokens;
+            }
+            if (usage.completion_tokens_details?.reasoning_tokens !== undefined) {
+              detail.reasoningTokens = usage.completion_tokens_details.reasoning_tokens;
+            }
+          }
+
+          const choice = parsed.choices?.[0];
+          if (choice?.native_finish_reason !== undefined) {
+            detail.nativeFinishReason = choice.native_finish_reason;
+          }
+          if (!choice) continue;
+
+          const delta = choice.delta;
+
+          // Text content
+          if (delta?.content) {
+            yield { type: 'content', data: delta.content };
+          }
+
+          // Reasoning content
+          if (delta?.reasoning) {
+            yield { type: 'reasoning', data: delta.reasoning };
+          }
+
+          // Tool calls (accumulated incrementally)
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const existing = toolCalls.get(tc.index);
+              if (!existing) {
+                const entry = {
+                  id: tc.id ?? '',
+                  name: tc.function?.name ?? '',
+                  arguments: tc.function?.arguments ?? '',
+                };
+                toolCalls.set(tc.index, entry);
+              } else {
+                if (tc.id) existing.id = tc.id;
+                if (tc.function?.name) existing.name += tc.function.name;
+                if (tc.function?.arguments) existing.arguments += tc.function.arguments;
+              }
+            }
+          }
+
+          if (choice.finish_reason) {
+            pendingFinishReason = choice.finish_reason;
+            donePending = true;
+          }
+        }
+      }
+
+      if (donePending) {
+        for (const tc of toolCalls.values()) {
+          yield { type: 'tool_call', id: tc.id, name: tc.name, arguments: tc.arguments };
+        }
+        yield {
+          type: 'done',
+          finishReason: pendingFinishReason ?? 'stop',
+          usage: pendingUsage,
+          usageDetail: Object.keys(detail).length > 0 ? detail : undefined,
+        };
+      }
+    } finally {
+      if (signal) signal.removeEventListener('abort', abortHandler);
+      reader.releaseLock();
+    }
+  }
+}
+
+class RetryableError extends Error {
+  retryAfterMs?: number;
+
+  constructor(message: string, retryAfterMs?: number) {
+    super(message);
+    this.name = 'RetryableError';
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/** Resposta aceita, com os marcos de tempo que o chunk `done` vai carregar. */
+interface SentRequest {
+  response: Response;
+  /** Antes do primeiro envio. */
+  sentAt: number;
+  /** Depois do ultimo retry, quando a resposta foi aceita. */
+  headersAt: number;
+  attempts: number;
+}
+
+/** Traduz um status de erro em excecao, distinguindo o que vale retentar. */
+async function throwForStatus(response: Response): Promise<void> {
+  if (response.ok) return;
+
+  if (isRetryableStatus(response.status)) {
+    // Parse Retry-After header (seconds or HTTP-date)
+    let retryAfterMs: number | undefined;
+    const retryAfter = response.headers.get('retry-after');
+    if (retryAfter) {
+      const seconds = Number(retryAfter);
+      retryAfterMs = Number.isNaN(seconds)
+        ? Math.max(0, new Date(retryAfter).getTime() - Date.now())
+        : seconds * 1000;
+    }
+    throw new RetryableError(`LLM API error: ${response.status}`, retryAfterMs);
+  }
+
+  const text = await response.text().catch(() => '');
+  throw new Error(`LLM API error ${response.status}: ${sanitizeErrorBody(text)}`);
+}
+
+/** Resposta de `GET /generation`, nos campos que interessam ao custo. */
+interface GenerationPayload {
+  total_cost?: number | null;
+  upstream_inference_cost?: number;
+  cache_discount?: number;
+  native_tokens_cached?: number;
+  native_tokens_reasoning?: number;
+  provider_name?: string;
+  native_finish_reason?: string;
+}
+
+export interface GenerationStats {
+  totalCostUsd: number;
+  upstreamCostUsd?: number;
+  cacheDiscountUsd?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
+  providerName?: string;
+  nativeFinishReason?: string;
+}
+
+interface SSEPayload {
+  /** `gen-…` no OpenRouter. E a chave para confirmar o custo depois. */
+  id?: string;
+  provider?: string;
+  choices?: {
+    delta?: {
+      content?: string;
+      reasoning?: string;
+      tool_calls?: {
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }[];
+    };
+    finish_reason?: string;
+    native_finish_reason?: string;
+  }[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    /** USD efetivamente cobrado. O OpenRouter manda sempre, sem parametro. */
+    cost?: number;
+    cost_details?: { upstream_inference_cost?: number; cache_discount?: number };
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+}

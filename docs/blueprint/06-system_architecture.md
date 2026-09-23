@@ -97,7 +97,7 @@ Esta seção descreve a arquitetura de alto nível do **AI Harness SDK**, inclui
 
 ## Diagrama de Componentes
 
-> 📐 Diagrama: [container-diagram.mmd](../diagrams/containers/container-diagram.mmd)
+> Diagrama: [container-diagram.mmd](../diagrams/containers/container-diagram.mmd)
 >
 > Para componentes internos, veja: [api-components.mmd](../diagrams/components/api-components.mmd)
 
@@ -157,4 +157,4 @@ Esta seção descreve a arquitetura de alto nível do **AI Harness SDK**, inclui
 
 ## Diagrama de Deploy
 
-> 📐 Diagrama: [production.mmd](../diagrams/deployment/production.mmd)
+> Diagrama: [production.mmd](../diagrams/deployment/production.mmd)

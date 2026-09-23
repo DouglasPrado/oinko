@@ -8,7 +8,7 @@ description: "Complete reference for all Agent.create() options"
 All configuration is passed to `Agent.create()` and validated with Zod at runtime. Invalid options throw a descriptive error immediately.
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: process.env.LLM_API_KEY!,
@@ -235,7 +235,7 @@ const agent = Agent.create({
 ## Full Example
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   // Core

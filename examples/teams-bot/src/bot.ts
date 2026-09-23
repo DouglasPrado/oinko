@@ -50,7 +50,7 @@ const server = app.listen(config.server.port, async () => {
   console.log(`Tavily: ${config.tavily.apiKey ? 'enabled' : 'disabled'}`);
 
   const mcp = await validateMCP();
-  console.log(`MCP Albert: ${mcp.status}${mcp.reason ? ` (${mcp.reason})` : ''}`);
+  console.log(`MCP: ${mcp.status}${mcp.reason ? ` (${mcp.reason})` : ''}`);
 
   console.log(`Memory: enabled`);
   console.log('Waiting for messages...');

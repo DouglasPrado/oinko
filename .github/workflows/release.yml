@@ -1,11 +1,6 @@
 name: Release
 
-# release-please abre e mantem a PR de release lendo os commits
-# convencionais; quando ela e mergeada, a tag sai e o publish roda.
-#
-# Adaptado do release.yml do monorepo: la havia um release-please para varios
-# pacotes, com `separate-pull-requests` e componente no nome da tag. Aqui o
-# repo tem um pacote so, entao a config e a de raiz simples e a tag e `vX.Y.Z`.
+# Somente packages/oinko é publicado. A raiz e os demais pacotes são privados.
 
 on:
   push:
@@ -23,7 +18,7 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
-      released: ${{ steps.release.outputs.release_created }}
+      released: ${{ steps.release.outputs['packages/oinko--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
@@ -71,7 +66,7 @@ jobs:
         run: pnpm validate:publish
 
       # O destino e o registry PRIVADO (npm.dify.com.br), nao o npmjs: o escopo
-      # `@gba` resolve la (ver .npmrc) e o pacote nao existe no npmjs publico. O
+      # `@oinko` resolve la (ver .npmrc) e o pacote nao existe no npmjs publico. O
       # `registry-url` do setup-node aponta para o npmjs de proposito — e ele
       # que cria o npmrc onde a credencial privada e escrita, e o install
       # precisa do npmjs para as dependencias de terceiros. Quem manda no
@@ -80,6 +75,6 @@ jobs:
       # Sem `--provenance`: a atestacao depende do OIDC do npmjs e o Verdaccio
       # a rejeita. Por isso `id-token: write` tambem sai.
       - name: Publish to npm
-        run: npm publish --access public
+        run: pnpm --filter @oinko/core publish --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GBA_REGISTRY_TOKEN }}

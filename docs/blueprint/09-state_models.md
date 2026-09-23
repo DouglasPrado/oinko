@@ -48,7 +48,7 @@
 
 #### Diagrama
 
-> 📐 Diagrama: [state-react-loop.mmd](../diagrams/domain/state-react-loop.mmd)
+> Diagrama: [state-react-loop.mmd](../diagrams/domain/state-react-loop.mmd)
 
 ---
 
@@ -90,7 +90,7 @@
 
 #### Diagrama
 
-> 📐 Diagrama: [state-memory.mmd](../diagrams/domain/state-memory.mmd)
+> Diagrama: [state-memory.mmd](../diagrams/domain/state-memory.mmd)
 
 ---
 
@@ -130,7 +130,7 @@
 
 #### Diagrama
 
-> 📐 Diagrama: [state-mcp-connection.mmd](../diagrams/domain/state-mcp-connection.mmd)
+> Diagrama: [state-mcp-connection.mmd](../diagrams/domain/state-mcp-connection.mmd)
 
 ---
 
@@ -173,6 +173,6 @@
 
 #### Diagrama
 
-> 📐 Diagrama: [state-agent-session.mmd](../diagrams/domain/state-agent-session.mmd)
+> Diagrama: [state-agent-session.mmd](../diagrams/domain/state-agent-session.mmd)
 
 <!-- APPEND:state-models -->

@@ -563,7 +563,7 @@ interface MCPConnectionConfigInput {
 Cliente HTTP para APIs compativeis com OpenAI:
 
 ```typescript
-import { LLMClient } from '@gba/ai-harness';
+import { LLMClient } from '@oinko/core';
 
 const client = new LLMClient({
   apiKey: string;
@@ -577,20 +577,20 @@ const client = new LLMClient({
 ```typescript
 import { builtinTools, createGlobTool, createGrepTool, createFileReadTool,
   createFileWriteTool, createFileEditTool, createBashTool, createWebFetchTool,
-  createAskUserTool } from '@gba/ai-harness';
+  createAskUserTool } from '@oinko/core';
 ```
 
 ### SQL Tools
 
 ```typescript
-import { createSqlTools } from '@gba/ai-harness';
-import type { SqlToolFactoryOptions, SqlQueryRunner, SqlQueryDef } from '@gba/ai-harness';
+import { createSqlTools } from '@oinko/core';
+import type { SqlToolFactoryOptions, SqlQueryRunner, SqlQueryDef } from '@oinko/core';
 ```
 
 ### Utilitarios
 
 ```typescript
-import { createLogger, LRUCache, retry, estimateTokens, getModelContextWindow } from '@gba/ai-harness';
+import { createLogger, LRUCache, retry, estimateTokens, getModelContextWindow } from '@oinko/core';
 ```
 
 ### Skills
@@ -598,21 +598,21 @@ import { createLogger, LRUCache, retry, estimateTokens, getModelContextWindow } 
 ```typescript
 import { SkillManager, createSkillTool, SKILL_TOOL_NAME,
   scanSkillFiles, loadSkillFile, parseSkillFrontmatter,
-  substituteArgs, matchGlob, matchAnyGlob } from '@gba/ai-harness';
+  substituteArgs, matchGlob, matchAnyGlob } from '@oinko/core';
 ```
 
 ### MCP
 
 ```typescript
-import { MCPAdapter } from '@gba/ai-harness';
-import type { MCPHealthStatus, MCPResource, MCPPromptInfo, MCPConnectionInfo } from '@gba/ai-harness';
+import { MCPAdapter } from '@oinko/core';
+import type { MCPHealthStatus, MCPResource, MCPPromptInfo, MCPConnectionInfo } from '@oinko/core';
 ```
 
 ### Outros
 
 ```typescript
 import { normalizeMessagesForAPI, PromptSectionCache, analyzeContext,
-  buildToolUsagePrompt, buildEnvironmentPrompt, runTurnEndHooks } from '@gba/ai-harness';
+  buildToolUsagePrompt, buildEnvironmentPrompt, runTurnEndHooks } from '@oinko/core';
 ```
 
 ## Enums e Constantes

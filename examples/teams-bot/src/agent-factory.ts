@@ -1,4 +1,4 @@
-import { Agent, createSqlTools } from '@gba/ai-harness';
+import { Agent, createSqlTools } from '@oinko/core';
 import { config } from './config.js';
 import { createTools } from './tools.js';
 import { queries } from './queries.js';
@@ -42,37 +42,37 @@ const IDLE_TTL = 30 * 60_000;
 /** Maximum number of concurrent agents — prevents OOM under DoS. */
 export let MAX_POOL_SIZE = 500;
 
-const SYSTEM_PROMPT = `You are Albert, a helpful Microsoft Teams assistant for managing businesses on the Albert platform.
+/** Nome com que o servidor MCP remoto e registrado. */
+const MCP_SERVER_NAME = 'docs';
 
-You have PERSISTENT MEMORY across conversations. You remember facts, preferences, and context from previous messages. Never say you don't have memory or don't remember previous conversations — you do.
+/**
+ * O prompt cobre so o que o SDK nao injeta.
+ *
+ * Regras de uso de ferramenta chegam por `buildToolUsagePrompt` e a memoria
+ * persistente vem do sistema de memoria — repeti-las aqui gastava contexto duas
+ * vezes e deixava duas versoes da mesma regra para o modelo conciliar. O que
+ * sobra e o que e proprio deste bot: como interpretar pedido de dado em SQL, o
+ * estilo de resposta e o formato do Teams.
+ */
+const SYSTEM_PROMPT = `Voce e o Oinko, um assistente pessoal.
 
-CRITICAL RULES FOR TOOL USAGE:
-- You HAVE tools available. NEVER say you don't have access to tools or can't query data — you CAN.
-- When the user asks for data or actions (listing, creating, updating, searching), ALWAYS use the appropriate tool.
-- Do NOT use tools for greetings, thanks, small talk, opinions, or general conversation.
-- If the user says "obrigado", "ok", "entendi", just respond naturally WITHOUT calling any tool.
-- Think before acting: does this message require data from an external system? If yes, USE your tools. If no, just respond.
-- NEVER refuse a data request claiming you can't access the platform — you have full tool access.
+Responda o que foi perguntado, sem preambulo e sem repetir a pergunta de volta.
+Nao ofereca o que nao foi pedido: sem "posso tambem mostrar", sem sugestao no
+fim. Se a pessoa quiser outra coisa, ela pede.
 
-SQL QUERIES (run_query tool):
-- For data questions, call run_query IMMEDIATELY. The tool description lists all available queries and their params.
-- NEVER ask the user for structured parameters. Extract everything from their natural language message.
-- All nullable params accept null — use null when the user doesn't mention that filter.
-- Convert relative time expressions: "últimos 7 dias" → days_ago=7, "último mês" → days_ago=30, "última semana" → days_ago=7, "hoje"/"ontem" → days_ago=1, "este ano" → days_ago=365. No period → null.
-- NEVER ask for dates in YYYY-MM-DD. ALWAYS interpret and convert yourself.
+Prefira o que e verdade ao que soa bem: se nao sabe, diga que nao sabe; se a
+ferramenta falhou, diga o que falhou.
 
-RESPONSE STYLE:
-- Answer ONLY what was asked. Nothing more.
-- NEVER offer extra options, suggestions, or "I can also do X" at the end of a response.
-- NEVER ask "do you want me to also..." or "I can also show you..." — just answer the question.
-- Be direct and concise. No filler, no upselling features.
-- If the user wants something else, they will ask.
+Consultas de dados (run_query):
+- extraia os parametros da propria frase; nunca peca parametro estruturado
+- filtro que a pessoa nao mencionou vai como null
+- converta tempo relativo por conta propria: "ultimos 7 dias" vira days_ago=7,
+  "ultimo mes" vira 30, "este ano" vira 365; sem periodo, null
+- nunca peca data em YYYY-MM-DD
 
-Formatting:
-- Be concise. Teams messages should be clear and readable.
-- You can use Markdown: **bold**, *italic*, \`code\`, code blocks, lists, and headers.
-- Use emojis to make the conversation more engaging.
-- Respond in the same language the user writes in.`;
+O canal e o Microsoft Teams:
+- markdown funciona: negrito, italico, codigo, listas, titulos
+- responda no idioma em que a pessoa escreveu`;
 
 /**
  * Returns an isolated Agent for the given conversation.
@@ -157,20 +157,20 @@ async function createAgent(conversationId: string): Promise<Agent> {
   }
 
   // Connect MCP servers (skip if startup validation already failed)
-  if (config.mcp.albert.url && mcpValidated?.status !== 'disabled') {
+  if (config.mcp.server.url && mcpValidated?.status !== 'disabled') {
     try {
       await agent.connectMCP({
-        name: 'albert',
+        name: MCP_SERVER_NAME,
         transport: 'sse',
-        url: config.mcp.albert.url,
-        headers: config.mcp.albert.headers,
+        url: config.mcp.server.url,
+        headers: config.mcp.server.headers,
         timeout: 60_000,
       });
       const health = agent.getHealth();
-      const mcpTools = health.servers.find(s => s.name === 'albert')?.toolCount ?? 0;
-      console.log(`[${sanitizeForLog(conversationId)}] MCP albert connected — ${mcpTools} tools loaded`);
+      const mcpTools = health.servers.find(s => s.name === MCP_SERVER_NAME)?.toolCount ?? 0;
+      console.log(`[${sanitizeForLog(conversationId)}] MCP connected — ${mcpTools} tools loaded`);
     } catch (error) {
-      console.error(`[${sanitizeForLog(conversationId)}] ⚠️  MCP albert FAILED — tools will NOT be available:`, error instanceof Error ? error.message : error);
+      console.error(`[${sanitizeForLog(conversationId)}] MCP FAILED — tools will NOT be available:`, error instanceof Error ? error.message : error);
     }
   }
 
@@ -212,7 +212,7 @@ export async function destroyAll(): Promise<void> {
  * Returns 'enabled' if connection succeeds, 'disabled' with reason otherwise.
  */
 export async function validateMCP(): Promise<{ status: 'enabled' | 'disabled'; reason?: string }> {
-  if (!config.mcp.albert.url) {
+  if (!config.mcp.server.url) {
     mcpValidated = { status: 'disabled' };
     return { status: 'disabled', reason: 'no URL configured' };
   }
@@ -229,10 +229,10 @@ export async function validateMCP(): Promise<{ status: 'enabled' | 'disabled'; r
 
   try {
     await agent.connectMCP({
-      name: 'albert',
+      name: MCP_SERVER_NAME,
       transport: 'sse',
-      url: config.mcp.albert.url,
-      headers: config.mcp.albert.headers,
+      url: config.mcp.server.url,
+      headers: config.mcp.server.headers,
       timeout: 10_000,
     });
     await agent.destroy();

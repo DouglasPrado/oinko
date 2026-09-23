@@ -93,4 +93,4 @@ Esta seção estabelece a visão de alto nível do sistema: quem o utiliza, com 
 
 > Represente visualmente os atores e sistemas externos que interagem com o sistema. Use o diagrama abaixo como ponto de partida (estilo C4 — nível de contexto).
 
-> 📐 Diagrama: [system-context.mmd](../diagrams/context/system-context.mmd)
+> Diagrama: [system-context.mmd](../diagrams/context/system-context.mmd)

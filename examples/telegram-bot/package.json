@@ -1,5 +1,5 @@
 {
-  "name": "ai-harness-telegram-bot",
+  "name": "@oinko/example-telegram",
   "version": "0.1.0",
   "description": "Telegram bot powered by AI Harness SDK with memory, tools, and streaming",
   "type": "module",
@@ -7,13 +7,15 @@
     "dev": "tsx watch src/bot.ts",
     "start": "tsx src/bot.ts",
     "build": "tsc",
-    "start:prod": "node dist/bot.js"
+    "start:prod": "node dist/bot.js",
+    "predev": "pnpm -w build:packages"
   },
   "dependencies": {
     "dotenv": "^16.4.0",
     "grammy": "^1.30.0",
-    "@gba/ai-harness": "file:../../",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@oinko/core": "workspace:*",
+    "@oinko/mcp-higgsfield": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -22,5 +24,6 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "private": true
 }

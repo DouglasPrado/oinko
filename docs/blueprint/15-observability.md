@@ -16,7 +16,7 @@ Logger embutido (console-based) com output estruturado. Consumidor pode integrar
 {
   "timestamp": "2026-04-01T12:00:00.000Z",
   "level": "INFO",
-  "service": "@gba/ai-harness",
+  "service": "@oinko/core",
   "traceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "threadId": "default",
   "type": "tool_call_end",
@@ -117,7 +117,7 @@ O AI Harness SDK fornece tracing embutido via `ExecutionContext`:
 ```typescript
 import { trace } from '@opentelemetry/api';
 
-const tracer = trace.getTracer('@gba/ai-harness');
+const tracer = trace.getTracer('@oinko/core');
 
 agent.stream("Hello", {
   hooks: {

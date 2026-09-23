@@ -1,6 +1,8 @@
 import { z } from 'zod';
-import type { AgentTool } from '@gba/ai-harness';
+import type { AgentTool } from '@oinko/core';
 import { config } from './config.js';
+import { lastImage, rememberMediaId } from './pending-media.js';
+import { uploadImage } from './higgsfield-media.js';
 
 /**
  * All tools available to the agent.
@@ -8,6 +10,53 @@ import { config } from './config.js';
  */
 export function createTools(): AgentTool[] {
   const tools: AgentTool[] = [];
+
+  /**
+   * Ponte entre a imagem que chegou no chat e a geracao.
+   *
+   * O Higgsfield so aceita referencia por `media_id`, e obte-lo exige subir os
+   * bytes por PUT numa URL pre-assinada — coisa que um LLM nao faz, porque ele
+   * so chama ferramenta com JSON. Entao o modelo decide *quando* usar a imagem
+   * e o codigo faz o upload.
+   *
+   * Tambem evita o caminho obvio e errado: mandar ao Higgsfield a URL do
+   * arquivo no Telegram entregaria o token do bot a um terceiro.
+   */
+  if (config.higgsfield.enabled) {
+    tools.push({
+      name: 'preparar_imagem_enviada',
+      description:
+        'Prepara a imagem que a pessoa enviou no chat para servir de referencia em generate_image ou generate_video, e devolve o media_id. Chame antes de gerar sempre que o pedido for editar, refazer ou se inspirar na imagem enviada. Nao tente media_upload nem media_import_url para isso: os bytes estao aqui no bot, nao numa URL publica.',
+      parameters: z.object({}),
+      execute: async (_args, _signal, _onProgress, context) => {
+        const threadId = context?.threadId;
+        const pendente = threadId ? lastImage(threadId) : undefined;
+
+        if (!threadId || !pendente) {
+          return 'Nenhuma imagem foi enviada nesta conversa. Peca a pessoa para mandar a imagem.';
+        }
+
+        const instrucao = (id: string) =>
+          `media_id da imagem enviada: ${id}. Passe em medias: [{ "value": "${id}", "role": "<papel do modelo escolhido>" }].`;
+
+        // Ja subiu nesta conversa: o id vale 24h, e repetir o upload gastaria
+        // uma viagem de rede para chegar ao mesmo lugar.
+        if (pendente.mediaId) return instrucao(pendente.mediaId);
+
+        try {
+          const { mediaId } = await uploadImage(
+            pendente.bytes,
+            pendente.mimeType,
+            pendente.filename,
+          );
+          rememberMediaId(threadId, mediaId);
+          return instrucao(mediaId);
+        } catch (error) {
+          return `Nao consegui preparar a imagem: ${error instanceof Error ? error.message : String(error)}`;
+        }
+      },
+    });
+  }
 
   // Web search via Tavily (if API key provided)
   if (config.tavily.apiKey) {

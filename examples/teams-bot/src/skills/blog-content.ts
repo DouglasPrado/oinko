@@ -1,4 +1,4 @@
-import type { AgentSkill } from '@gba/ai-harness';
+import type { AgentSkill } from '@oinko/core';
 
 export const blogContentSkill: AgentSkill = {
   name: 'blog_content',

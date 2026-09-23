@@ -18,7 +18,7 @@ agent_start -> turn_start -> text_delta* -> text_done -> turn_end -> agent_end
 ```
 
 ```typescript
-import { Agent } from "@gba/ai-harness";
+import { Agent } from "@oinko/core";
 
 const agent = Agent.create({
   llmApiKey: process.env.LLM_API_KEY!,
@@ -283,7 +283,7 @@ Emitted once at the end of every execution. Contains final usage statistics.
 Stream `text_delta` events directly into a UI element for a typewriter effect.
 
 ```typescript
-import { Agent } from "@gba/ai-harness";
+import { Agent } from "@oinko/core";
 
 const agent = Agent.create({
   llmApiKey: process.env.LLM_API_KEY!,
@@ -314,7 +314,7 @@ for await (const event of agent.stream("Explain closures in JS")) {
 Capture structured events for your observability stack (OpenTelemetry, Datadog, etc.).
 
 ```typescript
-import { Agent, createLogger } from "@gba/ai-harness";
+import { Agent, createLogger } from "@oinko/core";
 
 const logger = createLogger({ level: "info" });
 
@@ -356,7 +356,7 @@ for await (const event of agent.stream("Summarize the report")) {
 Track token usage and enforce budgets using `agent_end` events.
 
 ```typescript
-import { Agent } from "@gba/ai-harness";
+import { Agent } from "@oinko/core";
 
 let sessionTokens = 0;
 const SESSION_BUDGET = 100_000;
@@ -387,7 +387,7 @@ async function chat(message: string) {
 Use a standard `AbortController` to cancel a running stream at any time.
 
 ```typescript
-import { Agent } from "@gba/ai-harness";
+import { Agent } from "@oinko/core";
 
 const agent = Agent.create({
   llmApiKey: process.env.LLM_API_KEY!,

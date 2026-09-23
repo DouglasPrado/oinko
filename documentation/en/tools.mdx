@@ -11,7 +11,7 @@ Every tool implements the `AgentTool` interface. Parameters are defined with Zod
 
 ```typescript
 import { z } from 'zod';
-import type { AgentTool } from '@gba/ai-harness';
+import type { AgentTool } from '@oinko/core';
 
 const tavilySearch: AgentTool = {
   name: 'tavily_search',
@@ -47,7 +47,7 @@ Register tools with `addTool()` and remove them with `removeTool()`.
 <CodeGroup>
 
 ```typescript Adding tools
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = new Agent({
   apiKey: process.env.LLM_API_KEY!,
@@ -275,14 +275,14 @@ AI Harness SDK ships with 8 ready-to-use tools for common operations.
 <CodeGroup>
 
 ```typescript Register all builtin tools
-import { builtinTools } from '@gba/ai-harness';
+import { builtinTools } from '@oinko/core';
 
 // All tools except askUser (which needs a callback)
 builtinTools.all().forEach(tool => agent.addTool(tool));
 ```
 
 ```typescript Register individual tools
-import { builtinTools } from '@gba/ai-harness';
+import { builtinTools } from '@oinko/core';
 
 agent.addTool(builtinTools.fileRead());
 agent.addTool(builtinTools.grep());
@@ -290,14 +290,14 @@ agent.addTool(builtinTools.webFetch());
 ```
 
 ```typescript Register file operation tools
-import { builtinTools } from '@gba/ai-harness';
+import { builtinTools } from '@oinko/core';
 
 // fileRead + fileWrite + fileEdit + glob + grep
 builtinTools.fileOps().forEach(tool => agent.addTool(tool));
 ```
 
 ```typescript askUser with callback
-import { builtinTools } from '@gba/ai-harness';
+import { builtinTools } from '@oinko/core';
 
 agent.addTool(
   builtinTools.askUser({
@@ -317,7 +317,7 @@ agent.addTool(
 The `createSqlTools` factory generates two meta-tools (`search_queries` + `run_query`) from a catalog of SQL query definitions. This keeps LLM context small (2 tool definitions instead of N) while giving the agent access to all queries via a search-then-execute workflow.
 
 ```typescript
-import { createSqlTools } from '@gba/ai-harness';
+import { createSqlTools } from '@oinko/core';
 import { z } from 'zod';
 import pg from 'pg';
 

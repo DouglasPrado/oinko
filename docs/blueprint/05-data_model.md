@@ -118,7 +118,7 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 
 > Atualize o diagrama abaixo conforme as tabelas e relacionamentos definidos acima.
 
-> 📐 Diagrama: [er-diagram.mmd](../diagrams/domain/er-diagram.mmd)
+> Diagrama: [er-diagram.mmd](../diagrams/domain/er-diagram.mmd)
 
 ---
 

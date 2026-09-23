@@ -13,3 +13,7 @@ pnpm-lock.yaml
 
 # gerado pelo Release Please; formatar cria conflito a cada release
 CHANGELOG.md
+.next
+next-env.d.ts
+apps/*/playwright-report
+apps/*/test-results

@@ -137,7 +137,7 @@ This happens transparently — no manual search needed.
 If you need to search knowledge programmatically:
 
 ```typescript
-import { KnowledgeManager } from '@gba/ai-harness';
+import { KnowledgeManager } from '@oinko/core';
 // KnowledgeManager is used internally, but you can access
 // the VectorStore directly via custom stores
 ```

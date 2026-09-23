@@ -1,0 +1,90 @@
+{
+  "name": "@oinko/core",
+  "version": "2.1.2",
+  "description": "Oinko: reusable TypeScript agent core with models, tools, memory, knowledge and MCP",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.types.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:live": "tsc && vitest run --config vitest.live.config.ts",
+    "test:mutation": "stryker run",
+    "analyze:decisions": "node scripts/analyze-decisions.ts",
+    "smoke:jev": "tsc && node --env-file-if-exists=.env scripts/smoke-jev.ts",
+    "check:models": "tsc && node scripts/check-models.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:dup": "jscpd src/",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate:publish": "publint && attw --pack . --ignore-rules cjs-resolves-to-esm",
+    "size": "size-limit",
+    "size:why": "size-limit --why"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DouglasPrado/oinko.git",
+    "directory": "packages/oinko"
+  },
+  "homepage": "https://github.com/DouglasPrado/oinko#readme",
+  "bugs": {
+    "url": "https://github.com/DouglasPrado/oinko/issues"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@eslint/js": "^10.0.1",
+    "@size-limit/file": "^12.1.0",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/typescript-checker": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
+    "@types/node": "^25.6.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-sonarjs": "^4.0.3",
+    "globals": "^15.15.0",
+    "jscpd": "^5.0.16",
+    "knip": "^6.11.0",
+    "prettier": "^3.8.3",
+    "publint": "^0.3.18",
+    "size-limit": "^12.1.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^4.1.11"
+  },
+  "optionalDependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "overrides": {
+    "hono": ">=4.12.16",
+    "@hono/node-server": ">=1.19.13",
+    "postcss": ">=8.5.10",
+    "ip-address": ">=10.1.1",
+    "fast-uri": ">=3.1.2"
+  },
+  "license": "MIT",
+  "private": false,
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.dify.com.br/"
+  }
+}

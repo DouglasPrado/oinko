@@ -1,0 +1,795 @@
+import { randomUUID } from 'node:crypto';
+import { z, ZodError } from 'zod';
+import type { ZodIssue, ZodSchema } from 'zod';
+import type {
+  AgentTool,
+  ToolExecuteContext,
+  ToolProgressCallback,
+} from '../contracts/entities/agent-tool.js';
+import type { AgentToolResult } from '../contracts/entities/tool-call.js';
+import type { TelemetrySink } from '../contracts/entities/telemetry.js';
+import type { MCPConnectionConfig } from '../config/config.js';
+import type { ToolExecutor } from './tool-executor.js';
+import { jsonSchemaToZod } from './json-schema-to-zod.js';
+import { validateSsrfUrl } from '../utils/ssrf-guard.js';
+
+/**
+ * Subclass of ZodError that exposes a human-readable, prefixed message while
+ * preserving the original `.issues` and the `instanceof ZodError` contract.
+ * Used when an MCP server returns a payload that fails Zod validation —
+ * callers can either inspect the structured issues or match a message prefix
+ * (`invalid resource shape …`, `invalid prompt shape …`).
+ */
+class MCPInvalidShapeError extends ZodError {
+  constructor(issues: ZodIssue[], customMessage: string) {
+    super(issues);
+    Object.defineProperty(this, 'message', {
+      value: customMessage,
+      writable: true,
+      enumerable: false,
+      configurable: true,
+    });
+  }
+}
+
+/** Validated shape of listResources server response. */
+const ListResourcesResultSchema = z.object({
+  resources: z.array(
+    z
+      .object({
+        uri: z.string(),
+        name: z.string(),
+        mimeType: z.string().optional(),
+        description: z.string().optional(),
+      })
+      .passthrough(),
+  ),
+});
+
+/** Validated shape of readResource server response. */
+const ReadResourceResultSchema = z.object({
+  contents: z.array(
+    z
+      .object({
+        text: z.string().optional(),
+        uri: z.string(),
+      })
+      .passthrough(),
+  ),
+});
+
+/** Validated shape of getPrompt server response. */
+const GetPromptResultSchema = z.object({
+  messages: z.array(
+    z.object({
+      role: z.string(),
+      content: z.union([
+        z.string(),
+        z.object({ type: z.string(), text: z.string().optional() }).passthrough(),
+      ]),
+    }),
+  ),
+});
+
+/** Shape of the content array returned from MCP server tool calls. */
+const MCPToolContentSchema = z.array(
+  z
+    .object({
+      type: z.string(),
+      text: z.string().optional(),
+      data: z.string().optional(),
+      mimeType: z.string().optional(),
+      uri: z.string().optional(),
+    })
+    .passthrough(),
+);
+
+/**
+ * Normalizes a string to a valid function-name identifier per the OpenAI spec:
+ * ^[a-zA-Z0-9_-]{1,N}$
+ * Replaces any character outside that set with '_', collapses runs of '_', and
+ * strips leading/trailing '_'. Falls back to 'x' for an empty result.
+ */
+function toSafeIdentifier(raw: string, maxLen = 50): string {
+  return (
+    raw
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, maxLen) || 'x'
+  );
+}
+
+/** Sanitizes untrusted MCP text (names/descriptions) before embedding in system prompts. */
+function sanitizeForPrompt(value: string): string {
+  return (
+    value
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '') // strip ASCII controls (except \t and \n)
+      // strip bidi/zero-width: U+200B-U+200F, U+202A-U+202E, U+2066-U+2069, U+FEFF
+      .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+      .replace(/[\u{e0000}-\u{e007f}]/gu, '') // strip Unicode tag block (invisible in UIs)
+      .replace(/\n{2,}/g, '\n') // collapse multiple newlines
+      .slice(0, 512)
+  ); // cap length
+}
+
+export interface MCPHealthStatus {
+  servers: {
+    name: string;
+    status: 'connected' | 'disconnected' | 'error' | 'reconnecting';
+    lastError?: string;
+    toolCount: number;
+    uptime: number;
+  }[];
+}
+
+interface MCPConnection {
+  name: string;
+  config: MCPConnectionConfig;
+  client: MCPClient;
+  transport: unknown;
+  toolNames: string[];
+  connectedAt: number;
+  lastError?: string;
+  status: 'connected' | 'disconnected' | 'error' | 'reconnecting';
+  healthTimer?: ReturnType<typeof setInterval>;
+  instructions?: string;
+}
+
+// Minimal MCP SDK types (resolved via dynamic import)
+interface MCPClient {
+  connect(transport: unknown): Promise<void>;
+  close(): Promise<void>;
+  listTools(): Promise<{ tools: MCPToolDef[] }>;
+  callTool(
+    params: { name: string; arguments: unknown },
+    resultSchema?: unknown,
+    options?: { signal?: AbortSignal },
+  ): Promise<MCPToolResult>;
+}
+
+interface MCPToolDef {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    openWorldHint?: boolean;
+    title?: string;
+  };
+}
+
+interface MCPToolResult {
+  content: { type: string; text?: string }[];
+  isError?: boolean;
+}
+
+/**
+ * Bridges MCP servers to AgentTool instances.
+ * Uses dynamic import for @modelcontextprotocol/sdk.
+ */
+export interface MCPResource {
+  uri: string;
+  name: string;
+  mimeType?: string;
+  description?: string;
+  serverName: string;
+}
+
+export interface MCPPromptInfo {
+  serverName: string;
+  promptName: string;
+  description?: string;
+}
+
+export interface MCPConnectionInfo {
+  name: string;
+  status: string;
+  instructions?: string;
+  toolCount: number;
+}
+
+export class MCPAdapter {
+  private readonly executor: ToolExecutor;
+  private readonly connections = new Map<string, MCPConnection>();
+  /** MCP prompts discovered from servers */
+  private readonly mcpPrompts = new Map<string, MCPPromptInfo>();
+
+  constructor(
+    executor: ToolExecutor,
+    /**
+     * Destino da telemetria, resolvido a cada chamada.
+     *
+     * Funcao, e nao o sink direto, porque o adaptador e construido junto com o
+     * agente, antes de a telemetria existir — ela so e aberta no primeiro
+     * turno. Sem provedor, nada de MCP e registrado.
+     */
+    private readonly telemetry?: () => TelemetrySink | undefined,
+  ) {
+    this.executor = executor;
+  }
+
+  /**
+   * Connect to an MCP server and register its tools.
+   * For URL-based transports (sse/http), auto-detects the correct transport
+   * by trying StreamableHTTP first, then falling back to SSE.
+   */
+  async connect(config: MCPConnectionConfig): Promise<AgentTool[]> {
+    if (this.connections.has(config.name)) {
+      throw new Error(`MCP server "${config.name}" already connected`);
+    }
+
+    const { Client } = await loadSDK();
+
+    const { client, transport } = await this.connectWithFallback(Client, config);
+
+    // List tools from server
+    const { tools: mcpTools } = await client.listTools();
+
+    // Convert MCP tools to AgentTools
+    const agentTools = this.selectTools(mcpTools, config.tools).map((mcpTool) =>
+      this.convertTool(config.name, mcpTool, client, config),
+    );
+
+    // Register tools in executor
+    for (const tool of agentTools) {
+      this.executor.register(tool);
+    }
+
+    // Track connection
+    const connection: MCPConnection = {
+      name: config.name,
+      config,
+      client,
+      transport,
+      toolNames: agentTools.map((t) => t.name),
+      connectedAt: Date.now(),
+      status: 'connected',
+    };
+
+    // Health check timer
+    if (config.healthCheckInterval && config.healthCheckInterval > 0) {
+      connection.healthTimer = setInterval(
+        () => void this.healthCheck(config.name),
+        config.healthCheckInterval,
+      );
+    }
+
+    this.connections.set(config.name, connection);
+    return agentTools;
+  }
+
+  /**
+   * Disconnect a specific server and unregister its tools.
+   */
+  async disconnect(name: string): Promise<void> {
+    const conn = this.connections.get(name);
+    if (!conn) throw new Error(`MCP server "${name}" not found`);
+
+    // Clear health check
+    if (conn.healthTimer) clearInterval(conn.healthTimer);
+
+    // Unregister tools
+    for (const toolName of conn.toolNames) {
+      this.executor.unregister(toolName);
+    }
+
+    // Close connection
+    try {
+      await conn.client.close();
+    } catch {
+      // Ignore close errors
+    }
+
+    this.connections.delete(name);
+  }
+
+  /**
+   * Disconnect all servers.
+   */
+  async disconnectAll(): Promise<void> {
+    const names = [...this.connections.keys()];
+    for (const name of names) {
+      await this.disconnect(name);
+    }
+  }
+
+  /**
+   * Get health status of all connected servers.
+   */
+  getHealth(): MCPHealthStatus {
+    return {
+      servers: [...this.connections.values()].map((conn) => ({
+        name: conn.name,
+        status: conn.status,
+        lastError: conn.lastError,
+        toolCount: conn.toolNames.length,
+        uptime: Date.now() - conn.connectedAt,
+      })),
+    };
+  }
+
+  isConnected(name: string): boolean {
+    return this.connections.get(name)?.status === 'connected';
+  }
+
+  /** Get connection info for all servers (for context injection). */
+  getConnections(): MCPConnectionInfo[] {
+    return [...this.connections.values()].map((conn) => ({
+      name: conn.name,
+      status: conn.status,
+      instructions: conn.instructions,
+      toolCount: conn.toolNames.length,
+    }));
+  }
+
+  /** Get all discovered MCP prompts. */
+  getPrompts(): Map<string, MCPPromptInfo> {
+    return this.mcpPrompts;
+  }
+
+  /** List resources from a connected server. */
+  async listResources(serverName: string): Promise<MCPResource[]> {
+    const conn = this.connections.get(serverName);
+    if (conn?.status !== 'connected') return [];
+
+    try {
+      const raw = await (
+        conn.client as unknown as {
+          listResources?: () => Promise<unknown>;
+        }
+      ).listResources?.();
+      if (!raw) return [];
+      const parsed = ListResourcesResultSchema.parse(raw);
+      return parsed.resources.map((r) => ({ ...r, serverName }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Read a specific resource from a server. */
+  async readResource(serverName: string, uri: string): Promise<string> {
+    const conn = this.connections.get(serverName);
+    if (conn?.status !== 'connected') {
+      throw new Error(`MCP server "${serverName}" not connected`);
+    }
+
+    const raw = await (
+      conn.client as unknown as {
+        readResource?: (params: { uri: string }) => Promise<unknown>;
+      }
+    ).readResource?.({ uri });
+    if (!raw) throw new Error('Server does not support resources');
+
+    const result = ReadResourceResultSchema.safeParse(raw);
+    if (!result.success) {
+      throw new MCPInvalidShapeError(
+        result.error.issues,
+        `invalid resource shape from MCP server "${serverName}"`,
+      );
+    }
+    return result.data.contents.map((c) => c.text ?? `[Binary: ${c.uri}]`).join('\n');
+  }
+
+  /** Fetch and return a prompt from a server (for skill getPrompt). */
+  async getPrompt(serverName: string, promptName: string, args?: string): Promise<string> {
+    const conn = this.connections.get(serverName);
+    if (conn?.status !== 'connected') {
+      throw new Error(`MCP server "${serverName}" not connected`);
+    }
+
+    const parsedArgs: Record<string, string> = {};
+    if (args) {
+      for (const part of args.split(/\s+/)) {
+        const [k, ...v] = part.split('=');
+        if (k && v.length > 0) parsedArgs[k] = v.join('=');
+      }
+    }
+
+    const raw = await (
+      conn.client as unknown as {
+        getPrompt?: (params: {
+          name: string;
+          arguments?: Record<string, string>;
+        }) => Promise<unknown>;
+      }
+    ).getPrompt?.({ name: promptName, arguments: parsedArgs });
+
+    if (!raw) throw new Error('Server does not support prompts');
+
+    const result = GetPromptResultSchema.safeParse(raw);
+    if (!result.success) {
+      throw new MCPInvalidShapeError(
+        result.error.issues,
+        `invalid prompt shape from MCP server "${serverName}"`,
+      );
+    }
+    return result.data.messages
+      .map((m) => {
+        const content = typeof m.content === 'string' ? m.content : (m.content.text ?? '');
+        return content;
+      })
+      .join('\n');
+  }
+
+  /**
+   * Recorta o que o servidor publica.
+   *
+   * Lista vazia conta como ausencia de filtro: quase sempre e engano de
+   * configuracao, e deixar o agente sem ferramenta alguma em silencio seria
+   * pior que ignorar o campo.
+   */
+  private selectTools<T extends { name: string }>(
+    tools: readonly T[],
+    allow?: readonly string[],
+  ): T[] {
+    if (!allow || allow.length === 0) return [...tools];
+    const wanted = new Set(allow);
+    return tools.filter((tool) => wanted.has(tool.name));
+  }
+
+  private convertTool(
+    serverName: string,
+    mcpTool: MCPToolDef,
+    client: MCPClient,
+    config: MCPConnectionConfig,
+  ): AgentTool {
+    const safeServerName = toSafeIdentifier(
+      sanitizeForPrompt(serverName.replace(/__/g, '_')).replace(/\n/g, ''),
+    );
+    const safeToolName = toSafeIdentifier(
+      sanitizeForPrompt(mcpTool.name.replace(/__/g, '_')).replace(/\n/g, ''),
+    );
+    const namespacedName = `mcp__${safeServerName}__${safeToolName}`;
+    const parameters: ZodSchema = jsonSchemaToZod(mcpTool.inputSchema);
+    const isolateErrors = config.isolateErrors ?? true;
+    const timeout = config.timeout ?? 30_000;
+
+    // Map MCP annotations to AgentTool flags
+    const annotations = mcpTool.annotations ?? {};
+    const isReadOnly = annotations.readOnlyHint ?? false;
+    const isDestructive = annotations.destructiveHint ?? false;
+
+    const rawDescription = mcpTool.description ?? `MCP tool: ${mcpTool.name}`;
+
+    return {
+      name: namespacedName,
+      description: sanitizeForPrompt(rawDescription),
+      parameters,
+      isReadOnly,
+      isDestructive,
+      isConcurrencySafe: isReadOnly, // read-only tools are safe for parallel execution
+      // Whatever a remote server returns is content this conversation did not
+      // produce, so it gets screened like any other outside text.
+      untrustedOutput: true,
+      execute: async (
+        args: unknown,
+        signal: AbortSignal,
+        _onProgress?: ToolProgressCallback,
+        context?: ToolExecuteContext,
+      ): Promise<string | AgentToolResult> => {
+        const startedAt = Date.now();
+        // Registrada no fim, em qualquer saida — inclusive erro e timeout.
+        const record = (outcome: {
+          response?: string;
+          contentTypes?: string;
+          isError?: boolean;
+          timedOut?: boolean;
+          errorMessage?: string;
+        }): void => {
+          this.telemetry?.()?.write({
+            kind: 'mcp_call',
+            id: randomUUID(),
+            ...(context?.traceId !== undefined && { traceId: context.traceId }),
+            ...(context?.toolCallId !== undefined && { toolCallId: context.toolCallId }),
+            serverName,
+            remoteToolName: mcpTool.name,
+            namespacedToolName: namespacedName,
+            request: JSON.stringify(args),
+            ...(outcome.response !== undefined && { response: outcome.response }),
+            ...(outcome.contentTypes !== undefined && { contentTypes: outcome.contentTypes }),
+            isError: outcome.isError === true,
+            timedOut: outcome.timedOut === true,
+            ...(outcome.errorMessage !== undefined && { errorMessage: outcome.errorMessage }),
+            durationMs: Date.now() - startedAt,
+            startedAt,
+          });
+        };
+
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeout);
+          signal.addEventListener('abort', () => controller.abort(), { once: true });
+
+          try {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+              controller.signal.addEventListener(
+                'abort',
+                () => reject(new Error(`MCP tool "${mcpTool.name}" timed out after ${timeout}ms`)),
+                { once: true },
+              );
+            });
+
+            const result = await Promise.race([
+              client.callTool({ name: mcpTool.name, arguments: args }, undefined, {
+                signal: controller.signal,
+              }),
+              timeoutPromise,
+            ]);
+
+            // Validate the response shape — untrusted MCP servers may return malformed content.
+            const parsedContent = MCPToolContentSchema.safeParse(result.content);
+            if (!parsedContent.success) {
+              record({
+                response: JSON.stringify(result.content),
+                isError: true,
+                errorMessage: 'invalid content shape',
+              });
+              return { content: 'MCP tool returned invalid content shape', isError: true };
+            }
+
+            // Gravado antes do achatamento abaixo: e la que uma imagem vira
+            // "[Image: …]" e o payload real deixa de existir.
+            const rawResponse = JSON.stringify(parsedContent.data);
+            const contentTypes = [...new Set(parsedContent.data.map((c) => c.type))].join(',');
+
+            // Handle mixed content types (text, image, resource)
+            const parts = parsedContent.data.map((c) => {
+              if (c.type === 'text' && typeof c.text === 'string') return c.text;
+              if (c.type === 'image') {
+                const mime = c.mimeType ?? 'unknown';
+                const dataLen = typeof c.data === 'string' ? c.data.length : 0;
+                const sizeKB = Math.round((dataLen * 0.75) / 1024);
+                return `[Image: ${mime}, ~${sizeKB}KB]`;
+              }
+              if (c.type === 'resource') return c.text ?? `[Resource: ${c.uri ?? 'unknown'}]`;
+              return `[${c.type}]`;
+            });
+            const textContent = parts.join('\n');
+
+            if (result.isError) {
+              record({ response: rawResponse, contentTypes, isError: true });
+              return { content: textContent || 'MCP tool returned an error', isError: true };
+            }
+
+            record({ response: rawResponse, contentTypes });
+            return textContent || 'Tool completed with no text output';
+          } finally {
+            clearTimeout(timer);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          record({
+            isError: true,
+            timedOut: /timed out after \d+ms/.test(message),
+            errorMessage: message,
+          });
+
+          if (isolateErrors) {
+            return {
+              content: `MCP tool error: ${error instanceof Error ? error.message : String(error)}`,
+              isError: true,
+            };
+          }
+          throw error;
+        }
+      },
+    };
+  }
+
+  /**
+   * Connect with transport auto-detection for URL-based configs.
+   * When transport is 'auto', tries StreamableHTTP first then falls back to SSE.
+   * Explicit 'sse' or 'http' use that transport directly.
+   */
+  private async connectWithFallback(
+    Client: new (opts: { name: string; version: string }) => MCPClient,
+    config: MCPConnectionConfig,
+  ): Promise<{ client: MCPClient; transport: unknown }> {
+    // Explicit transport — use directly, no fallback
+    if (config.transport !== 'auto') {
+      const client = new Client({ name: `ai-harness-${config.name}`, version: '0.1.0' });
+      const transport = await createTransport(config);
+      try {
+        await client.connect(transport);
+        return { client, transport };
+      } catch (err) {
+        // Release the transport (and any spawned stdio subprocess) on connect failure
+        await closeTransportQuietly(transport);
+        throw err;
+      }
+    }
+
+    // Auto-detect: try StreamableHTTP first, fall back to SSE
+    if (!config.url) {
+      throw new Error('MCPConnectionConfig: "url" is required for transport "auto"');
+    }
+    const ssrfError = validateSsrfUrl(config.url);
+    if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
+
+    const requestInit: RequestInit | undefined = config.headers
+      ? { headers: config.headers }
+      : undefined;
+
+    const client1 = new Client({ name: `ai-harness-${config.name}`, version: '0.1.0' });
+    const { StreamableHTTPClientTransport } =
+      await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    const httpTransport = new StreamableHTTPClientTransport(new URL(config.url), { requestInit });
+    try {
+      await client1.connect(httpTransport);
+      return { client: client1, transport: httpTransport };
+    } catch {
+      // StreamableHTTP failed — clean up before falling back
+      await closeTransportQuietly(httpTransport);
+    }
+
+    const client2 = new Client({ name: `ai-harness-${config.name}`, version: '0.1.0' });
+    const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
+    const sseTransport = new SSEClientTransport(new URL(config.url), { requestInit });
+    try {
+      await client2.connect(sseTransport);
+      return { client: client2, transport: sseTransport };
+    } catch (err) {
+      await closeTransportQuietly(sseTransport);
+      throw err;
+    }
+  }
+
+  private async healthCheck(name: string): Promise<void> {
+    const conn = this.connections.get(name);
+    if (!conn) return;
+    // Skip if a reconnect is already in progress — prevents concurrent reconnects.
+    if (conn.status === 'reconnecting') return;
+
+    try {
+      await conn.client.listTools();
+      conn.status = 'connected';
+      conn.lastError = undefined;
+    } catch (error) {
+      // Set reconnecting BEFORE firing attemptReconnect to close the race window.
+      conn.status = 'reconnecting';
+      conn.lastError = error instanceof Error ? error.message : String(error);
+      void this.attemptReconnect(name);
+    }
+  }
+
+  private attemptReconnect(name: string, attempt = 0): void {
+    const conn = this.connections.get(name);
+    if (!conn) return;
+    // Status is already 'reconnecting' (set atomically in healthCheck).
+    const maxRetries = conn.config.maxRetries ?? 3;
+
+    if (attempt >= maxRetries) {
+      // Failed all retries — remove tools
+      conn.status = 'disconnected';
+      for (const toolName of conn.toolNames) {
+        this.executor.unregister(toolName);
+      }
+      return;
+    }
+
+    const delay = Math.min(1000 * 2 ** attempt, 30_000);
+    // setTimeout is scheduled synchronously here; fake-timer-based tests can
+    // advance through it deterministically without racing against awaited
+    // dynamic imports between iterations.
+    setTimeout(() => {
+      void (async () => {
+        const c = this.connections.get(name);
+        if (!c) return;
+        try {
+          const transport = await createTransport(c.config);
+          await c.client.connect(transport);
+          c.transport = transport;
+          c.status = 'connected';
+          c.lastError = undefined;
+        } catch (error) {
+          c.lastError = error instanceof Error ? error.message : String(error);
+          this.attemptReconnect(name, attempt + 1);
+        }
+      })();
+    }, delay);
+  }
+}
+
+// --- SDK Loading ---
+
+async function loadSDK(): Promise<{
+  Client: new (opts: { name: string; version: string }) => MCPClient;
+}> {
+  try {
+    const mod = await import('@modelcontextprotocol/sdk/client/index.js');
+    // Cast needed because MCP SDK types are broader than our minimal MCPClient interface
+    return {
+      Client: mod.Client as unknown as new (opts: { name: string; version: string }) => MCPClient,
+    };
+  } catch {
+    throw new Error(
+      'Install @modelcontextprotocol/sdk to use MCP connections: npm install @modelcontextprotocol/sdk',
+    );
+  }
+}
+
+async function closeTransportQuietly(transport: unknown): Promise<void> {
+  try {
+    const t = transport as { close?: () => unknown } | null;
+    if (t && typeof t.close === 'function') await Promise.resolve(t.close());
+  } catch {
+    /* best-effort cleanup */
+  }
+}
+
+/**
+ * Envolve o `fetch` para resolver os cabecalhos a cada requisicao.
+ *
+ * O transporte fixa `requestInit` uma vez, na conexao. Uma credencial de vida
+ * curta — o token do Higgsfield dura 24 horas — venceria no meio de uma sessao
+ * longa e o servidor passaria a responder 401 sem que nada reconectasse. Aqui
+ * quem renova entrega o valor fresco na hora da chamada.
+ *
+ * O que vem de `getHeaders` tem precedencia sobre o que ja estava no init: e
+ * justamente o cabecalho que mudou.
+ */
+export function withFreshHeaders(
+  getHeaders: () => Promise<Record<string, string>>,
+): (url: string | URL, init?: RequestInit) => Promise<Response> {
+  return async (url, init) => {
+    const fresh = await getHeaders();
+    // Via `Headers`, e nao por spread: o transporte passa uma instancia de
+    // Headers, e espalhar um objeto assim produz `{}` — o Content-Type se
+    // perde e o servidor recusa a requisicao.
+    const merged = new Headers(init?.headers);
+    for (const [name, value] of Object.entries(fresh)) merged.set(name, value);
+    return fetch(url, { ...init, headers: merged });
+  };
+}
+
+async function createTransport(config: MCPConnectionConfig): Promise<unknown> {
+  const requestInit: RequestInit | undefined = config.headers
+    ? { headers: config.headers }
+    : undefined;
+
+  const fetchImpl = config.getHeaders ? withFreshHeaders(config.getHeaders) : undefined;
+
+  if (config.transport === 'stdio') {
+    if (!config.command) {
+      throw new Error('MCPConnectionConfig: "command" is required for transport "stdio"');
+    }
+    if (
+      config.allowedStdioCommands !== undefined &&
+      !config.allowedStdioCommands.includes(config.command)
+    ) {
+      throw new Error(
+        `MCP stdio command "${config.command}" is not in allowedStdioCommands: [${config.allowedStdioCommands.join(', ')}]`,
+      );
+    }
+    const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+    return new StdioClientTransport({ command: config.command, args: config.args ?? [] });
+  }
+
+  if (config.transport === 'sse' || config.transport === 'http') {
+    if (!config.url) {
+      throw new Error(`MCPConnectionConfig: "url" is required for transport "${config.transport}"`);
+    }
+    const ssrfError = validateSsrfUrl(config.url);
+    if (ssrfError) throw new Error(`MCP URL blocked (SSRF): ${ssrfError}`);
+
+    if (config.transport === 'sse') {
+      const { SSEClientTransport } = await import('@modelcontextprotocol/sdk/client/sse.js');
+      return new SSEClientTransport(new URL(config.url), {
+        requestInit,
+        ...(fetchImpl !== undefined && { fetch: fetchImpl }),
+      });
+    }
+
+    const { StreamableHTTPClientTransport } =
+      await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+    return new StreamableHTTPClientTransport(new URL(config.url), {
+      requestInit,
+      ...(fetchImpl !== undefined && { fetch: fetchImpl }),
+    });
+  }
+
+  throw new Error(`Unsupported MCP transport: ${config.transport}`);
+}

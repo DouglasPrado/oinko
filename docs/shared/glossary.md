@@ -45,6 +45,19 @@
 
 ## Convencoes de Nomenclatura
 
+### Projetos e ambientes locais
+
+| Termo | Significado |
+| --- | --- |
+| Project | Unidade de autorização e isolamento; contém um ou mais repositórios e ambientes vinculados, com um ambiente padrão para o sandbox. |
+| Repository | Origem Git importada para um clone gerenciado, separado do checkout original. |
+| Task | Trabalho de programação com branch/worktrees nos repositórios do projeto; não é uma Thread de conversa. |
+| Environment | Definição reutilizável de ferramentas, limites e serviços. |
+| Service | Aplicação ou dependência executada por Compose, com seu próprio builder e configuração. |
+| Preview | Instância dos serviços para uma Task, com redes e volumes próprios. |
+| Job | Operação persistida de preparação, início ou parada, com resultado e logs. |
+| Sandbox | Container do projeto onde são executados comandos e edições solicitados pelo bot. |
+
 > Regras que se aplicam a todos os blueprints.
 
 | Contexto | Convencao | Exemplo |

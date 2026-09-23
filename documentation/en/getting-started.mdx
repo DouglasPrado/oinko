@@ -6,14 +6,14 @@ description: "Install and create your first agent in minutes"
 # Getting Started
 
 > [!IMPORTANT]
-> **Renamed from `agentx-sdk` / `@gba/agentx` to `@gba/ai-harness`.** The package
+> **Renamed from `agentx-sdk` / `@gba/agentx` to `@oinko/core`.** The package
 > lives in the [gba.dev](https://github.com/DouglasPrado/gba.dev) monorepo, under
 > `packages/ai-harness`. The public API is unchanged — `Agent`, its methods and all
 > exported types keep the same names. Update the dependency and your imports:
 >
 > ```diff
 > - import { Agent } from 'agentx-sdk';
-> + import { Agent } from '@gba/ai-harness';
+> + import { Agent } from '@oinko/core';
 > ```
 >
 > **Breaking:** the data directory moved from `.agentx` to `.harness`. Existing
@@ -31,7 +31,7 @@ description: "Install and create your first agent in minutes"
 ## Installation
 
 ```bash
-npm install @gba/ai-harness
+npm install @oinko/core
 ```
 
 ### Requirements
@@ -58,7 +58,7 @@ Install the MCP SDK only if you need to connect to external tool servers via the
     Create an agent and send a message. The `chat()` method returns the full text response.
 
     ```typescript
-    import { Agent } from '@gba/ai-harness';
+    import { Agent } from '@oinko/core';
 
     const agent = Agent.create({ apiKey: process.env.LLM_API_KEY! });
 

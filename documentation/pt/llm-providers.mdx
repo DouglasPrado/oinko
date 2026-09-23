@@ -30,7 +30,7 @@ O SDK reconhece as seguintes variaveis de ambiente (via `process.env`):
     O cenario mais simples e o **default**. OpenRouter roteia para qualquer modelo e tambem oferece endpoints de embedding:
 
     ```typescript
-    import { Agent } from '@gba/ai-harness';
+    import { Agent } from '@oinko/core';
 
     const agent = Agent.create({
       apiKey: process.env.LLM_API_KEY!,
@@ -47,7 +47,7 @@ O SDK reconhece as seguintes variaveis de ambiente (via `process.env`):
     Para usar a API da OpenAI diretamente, mude `baseUrl` e `model`:
 
     ```typescript
-    import { Agent } from '@gba/ai-harness';
+    import { Agent } from '@oinko/core';
 
     const agent = Agent.create({
       apiKey: process.env.LLM_API_KEY!, // Chave da OpenAI (sk-xxx)
@@ -64,7 +64,7 @@ O SDK reconhece as seguintes variaveis de ambiente (via `process.env`):
     O cenario mais comum em producao — use OpenRouter para chat (acesso a varios modelos) e OpenAI diretamente para embeddings (menor latencia, custo previsivel):
 
     ```typescript
-    import { Agent } from '@gba/ai-harness';
+    import { Agent } from '@oinko/core';
 
     const agent = Agent.create({
       // Chat via OpenRouter
@@ -148,7 +148,7 @@ const agent = Agent.create({
 O SDK exporta a classe `LLMClient` para uso direto, caso voce precise fazer chamadas ao LLM fora do agente:
 
 ```typescript
-import { LLMClient } from '@gba/ai-harness';
+import { LLMClient } from '@oinko/core';
 
 const client = new LLMClient({
   apiKey: process.env.LLM_API_KEY!,

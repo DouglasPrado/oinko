@@ -90,7 +90,7 @@ interface RetrievedKnowledge {
 <Tabs>
   <Tab title="ConversationStore com Redis">
     ```typescript
-    import type { ConversationStore, ChatMessage } from '@gba/ai-harness';
+    import type { ConversationStore, ChatMessage } from '@oinko/core';
     import Redis from 'ioredis';
 
     export class RedisConversationStore implements ConversationStore {
@@ -124,7 +124,7 @@ interface RetrievedKnowledge {
 
   <Tab title="VectorStore com Pinecone">
     ```typescript
-    import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from '@gba/ai-harness';
+    import type { VectorStore, KnowledgeChunk, RetrievedKnowledge } from '@oinko/core';
     import { Pinecone } from '@pinecone-database/pinecone';
 
     export class PineconeVectorStore implements VectorStore {
@@ -178,7 +178,7 @@ import {
   SQLiteDatabase,
   SQLiteConversationStore,
   SQLiteVectorStore,
-} from '@gba/ai-harness';
+} from '@oinko/core';
 
 // Usar o banco padrao (automatico)
 const agent = Agent.create({
@@ -205,7 +205,7 @@ const agent2 = Agent.create({
 Para testes unitarios, use implementacoes in-memory:
 
 ```typescript
-import type { ConversationStore, VectorStore, ChatMessage, KnowledgeChunk, RetrievedKnowledge } from '@gba/ai-harness';
+import type { ConversationStore, VectorStore, ChatMessage, KnowledgeChunk, RetrievedKnowledge } from '@oinko/core';
 
 // Mock de ConversationStore
 class InMemoryConversationStore implements ConversationStore {
@@ -284,7 +284,7 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 Uso em testes:
 
 ```typescript
-import { Agent } from '@gba/ai-harness';
+import { Agent } from '@oinko/core';
 
 const agent = Agent.create({
   apiKey: 'test-key',

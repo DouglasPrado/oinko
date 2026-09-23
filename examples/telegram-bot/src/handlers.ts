@@ -1,8 +1,10 @@
 import type { Context } from "grammy";
-import type { ContentPart } from "@gba/ai-harness";
+import type { ContentPart } from "@oinko/core";
 import { getAgent } from "./agent-factory.js";
+import { extractMedia, type MediaLink } from "./media-links.js";
 import { config } from "./config.js";
 import { buildAgentInput } from "./media.js";
+import { forgetImage, rememberImage } from "./pending-media.js";
 
 const TELEGRAM_MAX_LENGTH = 4096;
 const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
@@ -12,14 +14,14 @@ const STREAM_UPDATE_INTERVAL = 800; // ms between message edits
  */
 export async function handleStart(ctx: Context): Promise<void> {
   await ctx.reply(
-    `*AI Harness SDK Bot* \n\n` +
-      `I'm an AI assistant powered by AI Harness SDK.\n\n` +
-      `*Commands:*\n` +
-      `/start — This message\n` +
-      `/reset — Clear conversation history\n` +
-      `/usage — Show token usage\n` +
-      `/memory — Save a memory\n\n` +
-      `Send me a message, a photo or a voice note — I read all three.`,
+    `*Oinko*\n\n` +
+      `Seu assistente pessoal. Eu lembro do que conversamos.\n\n` +
+      `*Comandos*\n` +
+      `/start — esta mensagem\n` +
+      `/reset — limpa o historico desta conversa\n` +
+      `/usage — quanto foi consumido em tokens\n` +
+      `/memory — guarda algo que eu devo lembrar\n\n` +
+      `Manda texto, foto ou audio — eu leio os tres.`,
     { parse_mode: "Markdown" },
   );
 }
@@ -32,6 +34,10 @@ export async function handleReset(ctx: Context): Promise<void> {
   // but we can use a new threadId suffix to simulate a reset
   const chatId = ctx.chat!.id.toString();
   const resetKey = `reset_${chatId}`;
+
+  // Limpar a conversa inclui a imagem pendente: depois de um /reset, "a
+  // imagem que voce mandou" nao se refere mais a nada.
+  forgetImage(chatId);
 
   // Store reset timestamp in memory so the agent knows
   const agent = await getAgent();
@@ -139,6 +145,11 @@ export async function handleMessage(ctx: Context): Promise<void> {
     input = built.caption ? `${built.caption}\n\n${texto}` : texto;
   } else {
     input = built.input;
+    // A imagem fica disponivel para `preparar_imagem_enviada` durante este
+    // turno. Guardada por conversa, ela sobrevive ate ser usada ou ate a
+    // proxima foto chegar — quem manda a foto num turno e pede a edicao no
+    // seguinte continua atendido.
+    if (built.image) rememberImage(chatId, built.image);
   }
 
   // Show "typing" indicator
@@ -155,9 +166,9 @@ export async function handleMessage(ctx: Context): Promise<void> {
         case "tool_call_start": {
           isSearching = true;
           const toolName = event.toolCall.function.name;
-          // Clean up MCP namespace for display: mcp__albert__list_companies → list_companies
+          // Tira o namespace do MCP para exibir: mcp__servidor__buscar → buscar
           const displayName = toolName.replace(/^mcp__[^_]+__/, "");
-          const statusMsg = `⚙️ ${displayName}...`;
+          const statusMsg = `${displayName}...`;
 
           if (!sentMessage) {
             sentMessage = await ctx.reply(statusMsg);
@@ -227,8 +238,10 @@ export async function handleMessage(ctx: Context): Promise<void> {
     }
 
     // Final message (remove cursor, ensure delivery)
-    if (fullText) {
-      const chunks = splitMessage(fullText, TELEGRAM_MAX_LENGTH);
+    const { text: prose, media } = extractMedia(fullText);
+
+    if (prose) {
+      const chunks = splitMessage(prose, TELEGRAM_MAX_LENGTH);
 
       if (sentMessage) {
         // Update first message
@@ -242,9 +255,14 @@ export async function handleMessage(ctx: Context): Promise<void> {
           await ctx.reply(chunk);
         }
       }
-    } else if (!sentMessage) {
-      await ctx.reply("I couldn't generate a response. Please try again.");
+    } else if (sentMessage && media.length > 0) {
+      // A resposta era so a imagem: o texto parcial com o cursor fica no lugar.
+      await safeEdit(ctx, chatId, sentMessage.message_id, "Pronto.");
+    } else if (!sentMessage && media.length === 0) {
+      await ctx.reply("Nao consegui gerar uma resposta. Tente de novo.");
     }
+
+    await sendMedia(ctx, media);
   } catch (error) {
     console.error("Handler error:", error);
     await ctx
@@ -254,6 +272,28 @@ export async function handleMessage(ctx: Context): Promise<void> {
 }
 
 // --- Helpers ---
+
+/**
+ * Manda o que o agente gerou como anexo, nao como endereco.
+ *
+ * O Telegram baixa a URL por conta propria. Quando recusa — arquivo grande
+ * demais, formato que ele nao aceita, endereco expirado — o link volta como
+ * texto: melhor receber o endereco do que nao receber nada.
+ */
+async function sendMedia(ctx: Context, media: MediaLink[]): Promise<void> {
+  for (const item of media) {
+    try {
+      if (item.kind === "photo") await ctx.replyWithPhoto(item.url);
+      else await ctx.replyWithVideo(item.url);
+    } catch (error) {
+      console.error(
+        `Telegram recusou a midia (${item.kind}):`,
+        error instanceof Error ? error.message : error,
+      );
+      await ctx.reply(item.url).catch(() => {});
+    }
+  }
+}
 
 async function safeEdit(
   ctx: Context,

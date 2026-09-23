@@ -88,7 +88,7 @@ of a chat does not belong in a metrics file.
 
 ### Working against the local SDK
 
-This example depends on the repo itself (`"@gba/ai-harness": "file:../../"`).
+This example depends on the repo itself (`"@oinko/core": "file:../../"`).
 pnpm does not symlink that — it copies the package into its store using
 hardlinks. So:
 
@@ -189,3 +189,21 @@ pm2 start dist/bot.js --name telegram-bot
 pm2 startup
 pm2 save
 ```
+
+## Telemetria
+
+O bot grava telemetria de execucao em `./data/telemetry.db`: o prompt montado a
+cada turno, cada chamada de LLM com o custo que o provedor cobrou, as tool
+calls com argumentos e resultado, e os tempos de cada etapa.
+
+Para inspecionar pela interface:
+
+```bash
+cd ../../apps/dashboard
+echo 'TELEMETRY_DB_PATH=../../examples/telegram-bot/data/telemetry.db' > .env.local
+pnpm dev
+```
+
+`TELEMETRY=off` desliga. Em producao com dado de terceiro, `TELEMETRY_CAPTURE=hashed`
+guarda tamanho e identidade dos payloads sem o conteudo.
+

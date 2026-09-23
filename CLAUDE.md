@@ -1,4 +1,4 @@
-# AI Harness SDK
+# Oinko Monorepo
 
 ## Fonte de Verdade
 
@@ -10,7 +10,7 @@ Todo codigo DEVE implementar fielmente o que esta documentado nos blueprints.
 
 1. Leia docs relevantes antes de codar
 2. Use linguagem ubiqua de `docs/shared/glossary.md`
-3. Leia `src/contracts/` antes de implementar
+3. Leia `packages/oinko/src/contracts/` antes de implementar
 4. Test-first (RED → GREEN → REFACTOR)
 5. Use `docs/shared/MAPPING.md` para rastreabilidade
 
@@ -35,7 +35,7 @@ Todo codigo DEVE implementar fielmente o que esta documentado nos blueprints.
 
 ## Clientes Frontend
 
-Nenhum cliente frontend documentado. O AI Harness SDK e uma biblioteca TypeScript backend-only.
+A dashboard Next.js está em `apps/dashboard`. O SDK continua independente da interface e de Docker. Leia `docs/dashboard/PLAN.md` para bots e `docs/blueprint/24-workspaces-environments.md` para projetos, ambientes e prévias.
 
 ---
 
@@ -157,7 +157,7 @@ Public API  →  Core/Application  →  Domain  ←  Infrastructure
 
 ## Sempre Ler Antes de Codar
 
-- `src/contracts/` — tipos compartilhados e interfaces
+- `packages/oinko/src/contracts/` — tipos compartilhados e interfaces
 - `docs/shared/glossary.md` — linguagem ubiqua
 - `package.json` — dependencias instaladas
 
@@ -200,7 +200,7 @@ Para docs grandes (50k+ tokens), NAO carregue o doc inteiro:
 
 ## Publicacao no npm
 
-- Pacote: `@gba/ai-harness` (**AI Harness SDK by GBA**), na raiz DESTE repo
+- Pacote: `@oinko/core` (**Oinko**), em `packages/oinko`; a raiz e privada e apenas organiza o workspace
 - Registry privado `https://npm.dify.com.br/`, via `publishConfig` do
   package.json. A credencial vive no npmrc do USUARIO (`npm adduser`) — o
   `.npmrc` versionado so aponta o registry do escopo `@gba`
@@ -225,8 +225,18 @@ pnpm validate:publish
   campo `pnpm` (nem `overrides`) de manifests de pacote, entao sem esse
   arquivo as pinagens de CVE simplesmente nao valeriam no install
 - o lockfile e proprio (`pnpm-lock.yaml` na raiz)
-- NAO vieram junto: hooks de git (husky), `commitlint.config.mjs`,
-  `.lintstagedrc.json` e os workflows do GitHub Actions — todos moravam na
-  raiz do gba.dev. Nao ha CI aqui ainda
+- Os checks atuais do monorepo estão em `.github/workflows/pr-check.yml`; execute os scripts agregados da raiz antes de entregar alterações.
 - o vinculo com o `@gba/ai-gateway` foi cortado. O `fetch` injetavel continua
   existindo, mas agora e generico: qualquer `(Request) => Promise<Response>`
+
+## Estrutura do monorepo
+
+- `packages/oinko`: núcleo, testes e scripts do SDK. Caminhos de fonte dos blueprints são relativos a este pacote.
+- `packages/agent-runtime`: lifecycle e conversas.
+- `packages/workspaces`: projetos, repositórios, tarefas, worktrees e permissões.
+- `packages/environments`: sandbox Docker, builders, Compose, Traefik e cliente do gerenciador.
+- `apps/environment-runner`: processo local independente para executar operações de ambiente.
+- `packages/channels/*`: adaptadores sem dependência de apps.
+- `packages/mcps/*`: integrações específicas; MCP genérico permanece no núcleo.
+- `apps/*`: configurações de produto e dashboard.
+- Execute os checks agregados da raiz; nunca publique a raiz.
