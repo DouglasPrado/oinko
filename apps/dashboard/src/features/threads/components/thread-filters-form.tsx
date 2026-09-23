@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useTransition } from 'react';
 import type { ThreadFilters } from '../schemas/thread.schema';
 
@@ -13,6 +13,7 @@ import type { ThreadFilters } from '../schemas/thread.schema';
 export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
   const router = useRouter();
   const params = useSearchParams();
+  const pathname = usePathname();
   const [pending, startTransition] = useTransition();
 
   function apply(key: string, value: string): void {
@@ -21,7 +22,7 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
     else next.delete(key);
 
     startTransition(() => {
-      router.replace(next.size > 0 ? `/?${next.toString()}` : '/');
+      router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname);
     });
   }
 
@@ -29,7 +30,7 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
     <form className="flex flex-wrap items-end gap-4" onSubmit={(event) => event.preventDefault()}>
       <div className="flex flex-col gap-1">
         <label htmlFor="q" className="text-[0.8125rem] text-ink-muted">
-          Buscar thread
+          Buscar conversa
         </label>
         <input
           id="q"
@@ -37,8 +38,8 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
           type="search"
           defaultValue={filters.q}
           onChange={(event) => apply('q', event.target.value)}
-          placeholder="identificador"
-          className="border border-rule bg-surface px-3 py-1.5 text-sm"
+          placeholder="Identificador da conversa"
+          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm"
           style={{ borderRadius: 'var(--radius-control)' }}
         />
       </div>
@@ -54,7 +55,7 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
           defaultValue={filters.model}
           onChange={(event) => apply('model', event.target.value)}
           placeholder="anthropic/claude"
-          className="border border-rule bg-surface px-3 py-1.5 text-sm"
+          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm"
           style={{ borderRadius: 'var(--radius-control)' }}
         />
       </div>
@@ -68,7 +69,7 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
           name="status"
           defaultValue={filters.status}
           onChange={(event) => apply('status', event.target.value)}
-          className="border border-rule bg-surface px-3 py-1.5 text-sm"
+          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm"
           style={{ borderRadius: 'var(--radius-control)' }}
         >
           <option value="all">Todas</option>

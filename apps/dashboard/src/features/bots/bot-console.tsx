@@ -1,10 +1,44 @@
 'use client';
 
 import Link from 'next/link';
+import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Blank, Metric, Trail } from '@/features/projects/workspace-ui';
 
 import { useState, useId, cloneElement, type FormEvent, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Play, Square, RotateCw, ArrowLeft, Bot, Terminal, Settings2 } from 'lucide-react';
+import {
+  Plus,
+  Play,
+  Square,
+  RotateCw,
+  ArrowLeft,
+  Bot,
+  Terminal,
+  Settings2,
+  Activity,
+  Cable,
+} from 'lucide-react';
 import {
   BotDefinitionSchema,
   type BotDefinition,
@@ -16,9 +50,8 @@ import type { BotStatus } from '@oinko/bots';
 type ListedBot = BotProfile & { status: BotStatus };
 const key = ['bots'];
 const inputStyle =
-  'w-full rounded-[2px] border border-rule bg-surface px-3 py-2 text-sm outline-offset-2';
-const buttonStyle =
-  'inline-flex items-center justify-center gap-2 rounded-[2px] border border-rule bg-surface px-3 py-2 text-sm hover:bg-paper disabled:cursor-wait disabled:opacity-50';
+  'w-full rounded-lg border border-rule bg-surface px-3 py-2 text-sm outline-offset-2';
+const buttonStyle = buttonVariants({ variant: 'outline', size: 'lg' });
 async function request<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     ...(body === undefined
@@ -154,7 +187,7 @@ function BotEditor({
         </div>
       </div>
       <fieldset disabled={save.isPending} className="grid gap-7 disabled:opacity-60">
-        <section className="grid gap-4 border border-rule bg-surface p-5 md:grid-cols-2">
+        <section className="grid gap-4 rounded-xl border border-rule bg-surface p-5 md:grid-cols-2">
           <Field label="Nome">
             <input
               required
@@ -202,7 +235,7 @@ function BotEditor({
             </Field>
           </div>
         </section>
-        <section className="space-y-4 border border-rule bg-surface p-5">
+        <section className="space-y-4 rounded-xl border border-rule bg-surface p-5">
           <h3 className="font-medium">Modelo</h3>
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Modelo de IA">
@@ -248,7 +281,7 @@ function BotEditor({
             </div>
           </div>
         </section>
-        <section className="space-y-4 border border-rule bg-surface p-5">
+        <section className="space-y-4 rounded-xl border border-rule bg-surface p-5">
           <h3 className="font-medium">Programação</h3>
           <label className="flex items-center gap-3 text-sm">
             <input
@@ -263,7 +296,7 @@ function BotEditor({
             bot pode acessar. Reinicie o bot para aplicar.
           </p>
         </section>
-        <section className="space-y-5 border border-rule bg-surface p-5">
+        <section className="space-y-5 rounded-xl border border-rule bg-surface p-5">
           <div>
             <h3 className="font-medium">Canais</h3>
             <p className="mt-1 text-sm text-ink-muted">
@@ -341,7 +374,7 @@ function BotEditor({
             </div>
           )}
         </section>
-        <section className="space-y-5 border border-rule bg-surface p-5">
+        <section className="space-y-5 rounded-xl border border-rule bg-surface p-5">
           <div>
             <h3 className="font-medium">Integrações e MCPs</h3>
             <p className="mt-1 text-sm text-ink-muted">
@@ -451,7 +484,7 @@ function BotEditor({
             Adicionar MCP
           </button>
         </section>
-        <details className="border border-rule bg-surface p-5">
+        <details className="rounded-xl border border-rule bg-surface p-5">
           <summary className="cursor-pointer text-sm font-medium">Transcrição de áudio</summary>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <Field label="Modelo de transcrição">
@@ -506,7 +539,7 @@ function BotEditor({
       <div className="flex flex-wrap items-center gap-4">
         <button
           disabled={save.isPending}
-          className="rounded-[2px] bg-ink px-5 py-2.5 text-sm font-medium text-surface disabled:opacity-50"
+          className="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-surface disabled:opacity-50"
         >
           {save.isPending ? 'Salvando…' : 'Salvar bot'}
         </button>
@@ -521,15 +554,17 @@ function BotEditor({
   );
 }
 
-export function BotConsole() {
+export function BotConsole({ botId }: { botId?: string }) {
   const queryClient = useQueryClient();
   const bots = useQuery({
     queryKey: key,
     queryFn: () => request<ListedBot[]>('/api/bots'),
     refetchInterval: 3000,
   });
-  const [editing, setEditing] = useState<BotProfile | null | undefined>(undefined);
-  const [feedback, setFeedback] = useState('');
+  const [editing, setEditing] = useState<BotProfile | null | undefined>(),
+    [feedback, setFeedback] = useState(''),
+    [search, setSearch] = useState('');
+  const selected = bots.data?.find((bot) => bot.id === botId);
   const action = useMutation({
     mutationFn: ({ id, operation }: { id: string; operation: 'start' | 'stop' | 'restart' }) =>
       request<BotStatus>(`/api/bots/${encodeURIComponent(id)}/${operation}`, {}),
@@ -538,183 +573,301 @@ export function BotConsole() {
       await queryClient.invalidateQueries({ queryKey: key });
     },
   });
-  if (editing !== undefined)
-    return (
-      <BotEditor
-        key={`${editing?.id ?? 'new'}-${editing?.revision ?? 0}`}
-        profile={editing}
-        onCancel={() => setEditing(undefined)}
-        onSaved={(bot) => {
-          setEditing(undefined);
-          setFeedback(`${bot.name} salvo. Você já pode iniciá-lo ou reiniciá-lo.`);
-        }}
-      />
-    );
+  const shown = bots.data?.filter((bot) =>
+    botId ? bot.id === botId : bot.name.toLowerCase().includes(search.toLowerCase()),
+  );
   return (
-    <>
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-7">
+      <Trail
+        items={[
+          { label: 'Bots', ...(botId ? { href: '/bots' } : {}) },
+          ...(botId ? [{ label: selected?.name ?? 'Carregando…' }] : []),
+        ]}
+      />
+      <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-2 font-mono text-xs uppercase tracking-widest text-ink-muted">Oinko</p>
-          <h1 className="text-3xl font-medium tracking-tight">Seus bots</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
-            Um lugar para definir o comportamento, conectar os canais e colocar cada bot para
-            funcionar.
+          <p className="mb-2 text-xs font-medium tracking-widest text-primary uppercase">
+            Seu time de IA
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">{selected?.name ?? 'Seus bots'}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {botId
+              ? 'Comportamento, conexões e atividade em um só lugar.'
+              : 'Configure cada assistente e acompanhe o trabalho que ele realiza.'}
           </p>
         </div>
-        <button
-          className="inline-flex items-center gap-2 rounded-[2px] bg-ink px-4 py-2.5 text-sm text-surface"
-          onClick={() => setEditing(null)}
-        >
-          <Plus size={16} />
-          Novo bot
-        </button>
+        {botId && selected ? (
+          <Button asChild>
+            <Link href={`/bots/${selected.id}/telemetria`}>
+              <Activity />
+              Telemetria
+            </Link>
+          </Button>
+        ) : (
+          <Button onClick={() => setEditing(null)}>
+            <Plus />
+            Novo bot
+          </Button>
+        )}
       </header>
       {(action.error || bots.error) && (
-        <p role="alert" className="mb-5 border border-fault/30 bg-surface p-3 text-sm text-fault">
-          {action.error?.message || bots.error?.message}
-        </p>
+        <Alert variant="destructive">
+          <AlertTitle>Não foi possível concluir</AlertTitle>
+          <AlertDescription>{action.error?.message || bots.error?.message}</AlertDescription>
+        </Alert>
       )}
       {feedback && (
-        <p role="status" className="mb-5 text-sm text-ok">
+        <p role="status" className="text-sm text-ok">
           {feedback}
         </p>
       )}
-      {bots.isPending && <p className="text-sm text-ink-muted">Carregando bots…</p>}
-      {bots.data?.length === 0 && (
-        <div className="border border-dashed border-rule bg-surface px-6 py-16 text-center">
-          <Bot className="mx-auto mb-4 size-9 text-ink-muted" />
-          <h2 className="text-lg font-medium">Crie seu primeiro bot</h2>
-          <p className="mt-2 text-sm text-ink-muted">
-            Escolha um modelo, escreva as instruções e habilite os canais.
-          </p>
-          <button className={`${buttonStyle} mt-5`} onClick={() => setEditing(null)}>
-            Criar bot
-          </button>
+      {bots.isPending && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Skeleton className="h-72" />
+          <Skeleton className="h-72" />
         </div>
       )}
-      <div className="grid gap-5 md:grid-cols-2">
-        {bots.data?.map((bot) => {
+      {!botId && bots.data && (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Metric label="Bots" value={bots.data.length} icon={<Bot className="size-4" />} />
+            <Metric
+              label="Em execução"
+              value={bots.data.filter((b) => b.status.state === 'running').length}
+              icon={<Play className="size-4" />}
+            />
+            <Metric
+              label="Programadores"
+              value={bots.data.filter((b) => b.programming).length}
+              icon={<Terminal className="size-4" />}
+            />
+            <Metric
+              label="Conexões ativas"
+              value={bots.data.reduce(
+                (n, b) => n + b.status.connections.filter((c) => c.state === 'connected').length,
+                0,
+              )}
+              icon={<Cable className="size-4" />}
+            />
+          </div>
+          <Input
+            className="max-w-sm"
+            aria-label="Buscar bots"
+            placeholder="Buscar bots…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </>
+      )}
+      {shown?.length === 0 && (
+        <Blank
+          icon={<Bot />}
+          title={
+            botId
+              ? 'Bot não encontrado'
+              : search
+                ? 'Nenhum bot encontrado'
+                : 'Crie seu primeiro bot'
+          }
+          description={
+            botId
+              ? 'Volte à lista para escolher outro bot.'
+              : 'Escolha um modelo, defina as instruções e conecte seus canais.'
+          }
+        >
+          {!botId && !search && <Button onClick={() => setEditing(null)}>Criar bot</Button>}
+        </Blank>
+      )}
+      <div className={botId ? 'space-y-5' : 'grid gap-5 xl:grid-cols-2'}>
+        {shown?.map((bot) => {
           const running = bot.status.state === 'running';
-          const pending = action.isPending && action.variables?.id === bot.id;
           return (
-            <article
-              key={bot.id}
-              aria-label={bot.name}
-              className="flex flex-col border border-rule bg-surface p-5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-medium">{bot.name}</h2>
-                  <p className="mt-1 font-mono text-xs text-ink-muted">{bot.model}</p>
-                </div>
-                <span
-                  className={`rounded-[2px] px-2 py-1 text-xs ${running ? 'bg-ok/10 text-ok' : 'bg-paper text-ink-muted'}`}
-                >
-                  {pending
-                    ? 'Atualizando…'
-                    : running
-                      ? 'Em execução'
-                      : bot.status.state === 'stopped'
-                        ? 'Parado'
-                        : 'Sem resposta'}
-                </span>
-              </div>
-              <p className="my-5 line-clamp-3 text-sm leading-6 text-ink-muted">
-                {bot.systemPrompt}
-              </p>
-              <div className="mb-5 flex flex-wrap gap-2 text-xs">
-                {bot.status.connections.length ? (
-                  bot.status.connections.map((connection) => (
-                    <span
-                      key={`${connection.kind}-${connection.id}`}
-                      className={`border border-rule px-2 py-1 ${connection.state === 'error' ? 'text-fault' : connection.state === 'connected' ? 'text-ok' : 'text-ink-muted'}`}
+            <article key={bot.id} aria-label={bot.name}>
+              <Card className="h-full gap-5 shadow-none">
+                <CardHeader>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <Bot className="size-6" />
+                      </div>
+                      <div>
+                        <CardTitle>
+                          <Link href={`/bots/${bot.id}`} className="hover:text-primary">
+                            {bot.name}
+                          </Link>
+                        </CardTitle>
+                        <CardDescription className="mt-1">
+                          {bot.programming ? 'Programador' : 'Assistente'}
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <Badge
+                      variant={running ? 'secondary' : 'outline'}
+                      className={running ? 'bg-emerald-50 text-emerald-800' : ''}
                     >
-                      {connection.type === 'cli' ? 'CLI' : connection.id} ·{' '}
-                      {connection.state === 'connected'
-                        ? 'conectado'
-                        : connection.state === 'error'
-                          ? 'falha na conexão'
-                          : 'conectando'}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-ink-muted">
-                    {[
-                      bot.cli && 'CLI',
-                      bot.telegram.enabled && 'Telegram',
-                      bot.higgsfield && 'Higgsfield',
-                      ...bot.mcps.filter((mcp) => mcp.enabled).map((mcp) => mcp.id),
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || 'Nenhuma conexão habilitada'}
-                  </span>
-                )}
-              </div>
-              {bot.status.needsRestart && (
-                <p className="mb-4 text-xs text-spend">
-                  Há alterações salvas. Reinicie para aplicá-las.
-                </p>
-              )}
-              {!bot.hasApiKey && (
-                <p className="mb-4 text-xs text-spend">
-                  Configure a chave da API antes de iniciar.
-                </p>
-              )}
-              <div className="mt-auto flex flex-wrap gap-2 border-t border-rule pt-4">
-                <button className={buttonStyle} onClick={() => setEditing(bot)}>
-                  <Settings2 size={14} />
-                  Configurar
-                </button>
-                {running ? (
-                  <>
-                    <button
-                      disabled={action.isPending}
-                      className={buttonStyle}
-                      onClick={() => action.mutate({ id: bot.id, operation: 'restart' })}
-                    >
-                      <RotateCw size={14} />
-                      Reiniciar
-                    </button>
-                    <button
-                      disabled={action.isPending}
-                      className={buttonStyle}
-                      onClick={() => action.mutate({ id: bot.id, operation: 'stop' })}
-                    >
-                      <Square size={13} />
-                      Parar
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    disabled={
-                      action.isPending || !bot.hasApiKey || bot.status.state === 'unavailable'
+                      {action.isPending && action.variables?.id === bot.id
+                        ? 'Atualizando…'
+                        : running
+                          ? 'Em execução'
+                          : bot.status.state === 'stopped'
+                            ? 'Parado'
+                            : 'Sem resposta'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{bot.model}</Badge>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="secondary">
+                          {bot.telemetry.enabled ? 'Telemetria ativa' : 'Telemetria desativada'}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {bot.telemetry.enabled
+                          ? `Retenção de ${bot.telemetry.retentionDays} dias`
+                          : 'Ative na configuração para registrar respostas.'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <p
+                    className={
+                      botId
+                        ? 'whitespace-pre-wrap text-sm leading-6 text-muted-foreground'
+                        : 'line-clamp-3 text-sm leading-6 text-muted-foreground'
                     }
-                    className={buttonStyle}
-                    onClick={() => action.mutate({ id: bot.id, operation: 'start' })}
                   >
-                    <Play size={14} />
-                    Iniciar
-                  </button>
-                )}
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                {bot.cli ? (
-                  <span className="flex items-center gap-2">
-                    <Terminal size={13} />
-                    <code>pnpm bot chat {bot.id}</code>
-                  </span>
-                ) : null}
-                <Link
-                  href={`/?bot=${encodeURIComponent(bot.id)}`}
-                  className="ml-auto text-time underline"
-                >
-                  Ver telemetria
-                </Link>
-              </div>
+                    {bot.systemPrompt}
+                  </p>
+                  <Separator />
+                  <div>
+                    <p className="mb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                      Conexões
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {bot.status.connections.length ? (
+                        bot.status.connections.map((connection) => (
+                          <Badge
+                            variant="outline"
+                            key={`${connection.kind}-${connection.id}`}
+                            className={
+                              connection.state === 'error'
+                                ? 'text-destructive'
+                                : connection.state === 'connected'
+                                  ? 'text-ok'
+                                  : ''
+                            }
+                          >
+                            <span className="size-1.5 rounded-full bg-current" />
+                            {connection.type === 'cli' ? 'CLI' : connection.id} ·{' '}
+                            {connection.state === 'connected'
+                              ? 'conectado'
+                              : connection.state === 'error'
+                                ? 'falha na conexão'
+                                : 'conectando'}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm text-muted-foreground">
+                          {[
+                            bot.cli && 'CLI',
+                            bot.telegram.enabled && 'Telegram',
+                            bot.higgsfield && 'Higgsfield',
+                            ...bot.mcps.filter((m) => m.enabled).map((m) => m.id),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') || 'Nenhuma conexão habilitada'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {(bot.status.needsRestart || !bot.hasApiKey) && (
+                    <Alert>
+                      <AlertDescription>
+                        {!bot.hasApiKey
+                          ? 'Configure a chave da API antes de iniciar.'
+                          : 'Há alterações salvas. Reinicie para aplicá-las.'}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+                <CardFooter className="mt-auto flex-wrap gap-2 border-t pt-4">
+                  <Button variant="outline" onClick={() => setEditing(bot)}>
+                    <Settings2 />
+                    Configurar
+                  </Button>
+                  {running ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        disabled={action.isPending}
+                        onClick={() => action.mutate({ id: bot.id, operation: 'restart' })}
+                      >
+                        <RotateCw />
+                        Reiniciar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={action.isPending}
+                        onClick={() => action.mutate({ id: bot.id, operation: 'stop' })}
+                      >
+                        <Square />
+                        Parar
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      disabled={
+                        action.isPending || !bot.hasApiKey || bot.status.state === 'unavailable'
+                      }
+                      onClick={() => action.mutate({ id: bot.id, operation: 'start' })}
+                    >
+                      <Play />
+                      Iniciar
+                    </Button>
+                  )}
+                  <Button asChild className="ml-auto">
+                    <Link href={`/bots/${bot.id}/telemetria`}>
+                      <Activity />
+                      Ver telemetria
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
             </article>
           );
         })}
       </div>
-    </>
+      <Sheet
+        open={editing !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setEditing(undefined);
+        }}
+      >
+        <SheetContent className="w-full overflow-y-auto sm:max-w-3xl">
+          <SheetHeader>
+            <SheetTitle>{editing ? `Configurar ${editing.name}` : 'Novo bot'}</SheetTitle>
+            <SheetDescription>
+              Defina o comportamento e escolha onde o bot vai atender.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="p-6">
+            {editing !== undefined && (
+              <BotEditor
+                key={`${editing?.id ?? 'new'}-${editing?.revision ?? 0}`}
+                profile={editing}
+                onCancel={() => setEditing(undefined)}
+                onSaved={(bot) => {
+                  setEditing(undefined);
+                  setFeedback(`${bot.name} salvo. Você já pode iniciá-lo ou reiniciá-lo.`);
+                }}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }

@@ -8,12 +8,12 @@ A dashboard cadastra projetos Git (incluindo monorepos e conjuntos de repositór
 
 ## Modelo e responsabilidades
 
-- Project: nome, repositórios Git, Environment e bots autorizados. Um Environment exclusivo é o padrão; a mesma definição pode ser reutilizada deliberadamente.
+- Project: nome, repositórios Git, ambientes vinculados e bots autorizados. Pode ser criado antes dos ambientes. O primeiro ambiente torna-se o padrão das ferramentas do sandbox (`environmentId`); configurações adicionais vivem em `environmentIds`. Dados antigos continuam válidos. A mesma definição pode ser reutilizada deliberadamente.
 - Repository: origem Git e referência inicial. Cada clone gerenciado permanece no workspace do projeto, separado do checkout original.
 - Task: trabalho associado ao projeto e a uma branch/worktree em cada repositório envolvido.
 - Environment: ferramentas do container de programação, CPU/memória/rede e serviços da aplicação.
 - Service: origem do código, contexto de build, builder, comandos, porta, verificação de disponibilidade, variáveis e dependências.
-- Preview: instância dos serviços para uma Task. Uma prévia ativa por projeto por padrão; concorrência configurável, com recursos nomeados por prévia.
+- Preview: instância dos serviços para uma Task. Uma prévia ativa por ambiente no projeto por padrão; concorrência configurável, com recursos nomeados por prévia.
 - Job: operação persistida, com progresso, resultado, falha e logs limitados. Reinício do gerenciador reconcilia operações e containers existentes.
 
 `packages/workspaces` contém cadastro, tarefas, worktrees e persistência. `packages/environments` contém contratos, cliente, políticas, sandbox Docker, builders, Compose e Traefik. `apps/environment-runner` hospeda o serviço local independente. Dashboard e bots usam seu cliente. O SDK de IA continua independente de Docker.
@@ -45,3 +45,9 @@ A dashboard cadastra projetos Git (incluindo monorepos e conjuntos de repositór
 ## Ordem de execução
 
 Contratos e testes; persistência; sandbox/Git; builders/Compose/Traefik; runner/cliente; ferramentas dos bots; dashboard; validação real e documentação. Esta ordem não reduz o escopo de aceitação.
+
+## Navegação por contexto
+
+`/projetos` → `/projetos/[projectId]` → `/projetos/[projectId]/ambientes/[environmentId]`. O projeto reúne ambientes, worktrees, repositórios/bots e atividade. O ambiente reúne prévias e serviços. Abas persistem na URL; detalhes, configurações, saída e terminal abrem sem trocar de projeto. Rotas antigas `/ambientes` e `/previas` redirecionam para Projetos.
+
+O sandbox e as worktrees continuam isolados por projeto. `startPreview` aceita um `environmentId` opcional; o padrão permanece compatível com clientes anteriores. O runner valida o vínculo antes de enfileirar. Uma mesma worktree pode gerar prévias distintas em ambientes diferentes, com IDs, Compose, rotas e limites de concorrência independentes. O estado destinado aos bots expõe apenas ambientes vinculados a projetos autorizados.

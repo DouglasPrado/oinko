@@ -28,6 +28,10 @@ export class DockerSandbox implements WorkspaceExecutor {
     return `${this.namespace}-work-${Id.parse(projectId)}`;
   }
   async ensure(project: Project) {
+    if (!project.environmentId)
+      throw new WorkspaceError(
+        'Configure o primeiro ambiente do projeto antes de preparar o sandbox.',
+      );
     const config = this.environment(project.environmentId);
     const name = this.name(project.id);
     const fingerprint = createHash('sha256')

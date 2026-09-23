@@ -2,7 +2,7 @@ import { test, expect } from './auth';
 
 test.describe('inspecao de telemetria', () => {
   test('lista as conversas com custo real e tempo', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
 
     await expect(page.getByRole('link', { name: 'suporte-4821' }).first()).toBeVisible();
     // O custo aparece com as casas que importam, nao arredondado a zero.
@@ -10,8 +10,8 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('preserva o filtro ao recarregar, porque ele vive na URL', async ({ page }) => {
-    await page.goto('/');
-    await page.getByLabel('Buscar thread').fill('suporte');
+    await page.goto('/telemetria');
+    await page.getByLabel('Buscar conversa').fill('suporte');
     await page.waitForURL(/q=suporte/);
 
     await page.reload();
@@ -22,7 +22,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('abre a resposta mais recente da conversa direto', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
 
     // Sem tela intermediaria: a lista de respostas ja vive na barra lateral.
@@ -32,7 +32,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('mostra o turno e a fita do que aconteceu', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
 
@@ -42,7 +42,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('abre a etapa no inspetor sem trocar de pagina', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
 
@@ -57,7 +57,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('busca o corpo do payload so quando alguem pede', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
     await page.getByRole('link', { name: /chamada 1/ }).click();
@@ -77,7 +77,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('le o prompt como conversa, nao como JSON escapado', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
     await page.getByRole('link', { name: /chamada 1/ }).click();
@@ -104,7 +104,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('diz que o custo e desconhecido em vez de mostrar zero', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('interno-0007').click();
     await page.waitForURL(/\/threads\/interno-0007\/[0-9a-f-]+/);
 
@@ -114,7 +114,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('ajusta a largura do inspetor e lembra a escolha', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
 
@@ -136,7 +136,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('diz quais ferramentas existiam e quais foram chamadas', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
 
@@ -159,7 +159,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('acompanha o agente em tempo real', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
 
     // Sem este aviso, tela parada e ambigua: nao da para distinguir "nada
     // aconteceu" de "parei de receber".
@@ -167,7 +167,7 @@ test.describe('inspecao de telemetria', () => {
   });
 
   test('percorre a interface pelo teclado', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/telemetria');
     await page.keyboard.press('Tab');
     await page.keyboard.press('Tab');
 

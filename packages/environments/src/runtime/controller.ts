@@ -119,7 +119,12 @@ export class EnvironmentController {
           .environments()
           .filter(
             (environment) =>
-              !botId || projects.some((project) => project.environmentId === environment.id),
+              !botId ||
+              projects.some(
+                (project) =>
+                  project.environmentId === environment.id ||
+                  project.environmentIds?.includes(environment.id),
+              ),
           ),
         tasks: this.workspaces.tasks().filter((task) => projectIds.has(task.projectId)),
         previews: this.environments
@@ -150,7 +155,11 @@ export class EnvironmentController {
     }
     if (command.action === 'saveProject') {
       admin();
-      this.environments.environment(command.definition.environmentId);
+      for (const id of [
+        command.definition.environmentId,
+        ...(command.definition.environmentIds ?? []),
+      ].filter((id): id is string => !!id))
+        this.environments.environment(id);
       const previous = this.workspaces
         .projects()
         .find((project) => project.id === command.definition.id);
@@ -243,10 +252,18 @@ export class EnvironmentController {
     const task = this.workspaces.task(command.taskId);
     const project = this.workspaces.authorize(task.projectId, botId);
     if (task.state !== 'ready') throw new WorkspaceError('A tarefa ainda não está pronta.');
-    if (command.action === 'startPreview')
+    if (command.action === 'startPreview') {
+      const environmentId = command.environmentId ?? project.environmentId;
+      if (
+        !environmentId ||
+        (environmentId !== project.environmentId &&
+          !project.environmentIds?.includes(environmentId))
+      )
+        throw new WorkspaceError('O ambiente não pertence a este projeto.');
       return this.enqueue('startPreview', project.id, (log) =>
-        this.previews.start(project, task, log),
+        this.previews.start(project, task, log, environmentId),
       );
+    }
     this.repository(project, command.repositoryId);
     return this.serial(project.id, async () => {
       if (command.action === 'shell')

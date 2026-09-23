@@ -1,3 +1,4 @@
+import { threadLabel } from '@/features/telemetry/thread-label';
 import type { TelemetrySelection } from '@/server/repositories/telemetry-sources';
 import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import Link from 'next/link';
@@ -54,7 +55,7 @@ export function ThreadRail({ activeThreadId, activeTraceId, telemetry }: Props) 
           const open = thread.threadId === activeThreadId;
 
           return (
-            <li key={thread.threadId}>
+            <li key={threadLabel(thread.threadId)}>
               <Link
                 href={telemetryHref(
                   `/threads/${encodeURIComponent(thread.threadId)}`,
@@ -66,8 +67,8 @@ export function ThreadRail({ activeThreadId, activeTraceId, telemetry }: Props) 
                   open && 'bg-paper font-medium',
                 )}
               >
-                <span className="min-w-0 flex-1 truncate font-mono" title={thread.threadId}>
-                  {thread.threadId}
+                <span className="min-w-0 flex-1 truncate" title={threadLabel(thread.threadId)}>
+                  {threadLabel(thread.threadId)}
                 </span>
                 <span className="tabular ml-auto shrink-0 text-xs text-ink-muted">
                   {thread.executionCount}

@@ -36,7 +36,17 @@ export function programmingTools(root: string, botId: string): AgentTool[] {
   });
   const read = z.object({ ...location, path: z.string().min(1) });
   const write = read.extend({ content: z.string().max(200_000) });
-  const preview = z.object({ taskId: id, action: z.enum(['start', 'stop']) });
+  const preview = z
+    .object({
+      taskId: id.optional(),
+      previewId: id.optional(),
+      environmentId: id.optional(),
+      action: z.enum(['start', 'stop']),
+    })
+    .refine(
+      (value) => (value.action === 'start' ? !!value.taskId : !!(value.previewId ?? value.taskId)),
+      'Informe taskId para iniciar ou previewId para parar.',
+    );
   const logs = z.object({ kind: z.enum(['job', 'preview']), id });
   return [
     tool(
@@ -73,13 +83,17 @@ export function programmingTools(root: string, botId: string): AgentTool[] {
     ),
     tool(
       'workspace_preview',
-      'Solicita iniciar ou parar a prévia de uma tarefa. Acompanhe o job até concluir.',
+      'Inicia a prévia de taskId no environmentId escolhido (padrão do projeto se omitido), ou para uma prévia por previewId. Consulte os IDs em workspace_status e acompanhe o job até concluir.',
       preview,
       (args) => {
         const value = preview.parse(args);
         return value.action === 'start'
-          ? { action: 'startPreview', taskId: value.taskId }
-          : { action: 'stopPreview', previewId: value.taskId };
+          ? {
+              action: 'startPreview',
+              taskId: value.taskId!,
+              ...(value.environmentId ? { environmentId: value.environmentId } : {}),
+            }
+          : { action: 'stopPreview', previewId: (value.previewId ?? value.taskId)! };
       },
     ),
     tool(

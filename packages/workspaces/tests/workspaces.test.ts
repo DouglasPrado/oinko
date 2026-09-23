@@ -17,6 +17,17 @@ const project = {
   allowedBotIds: ['programmer'],
 };
 
+it('supports project-first setup and multiple environments without changing legacy projects', () => {
+  expect(
+    ProjectSchema.parse({ ...project, environmentId: undefined }).environmentId,
+  ).toBeUndefined();
+  expect(
+    ProjectSchema.parse({ ...project, environmentIds: ['review', 'staging'] }).environmentIds,
+  ).toEqual(['review', 'staging']);
+  expect(ProjectSchema.parse(project).environmentId).toBe('node');
+  expect(() => ProjectSchema.parse({ ...project, environmentIds: ['review', 'review'] })).toThrow();
+});
+
 it('models a monorepo as one repository and related repositories as one project', () => {
   expect(ProjectSchema.parse(project).repositories).toHaveLength(1);
   expect(

@@ -12,7 +12,8 @@
     "apps/dashboard": {
       "entry": [
         "src/app/**/{page,layout,route,error,global-error,not-found,loading}.{ts,tsx}",
-        "scripts/*.mjs"
+        "scripts/*.mjs",
+        "src/components/ui/*.{ts,tsx}"
       ],
       "project": ["src/**/*.{ts,tsx,css}", "tests/**/*.{ts,tsx}"],
       "playwright": {

@@ -46,7 +46,12 @@ export const ProjectSchema = z
   .object({
     id: Id,
     name: z.string().trim().min(1).max(100),
-    environmentId: Id,
+    environmentId: Id.optional(),
+    environmentIds: z
+      .array(Id)
+      .max(24)
+      .refine((ids) => new Set(ids).size === ids.length, 'Ambientes duplicados.')
+      .optional(),
     repositories: z.array(RepositorySchema).min(1).max(12),
     allowedBotIds: z
       .array(z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/))

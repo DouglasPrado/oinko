@@ -6,7 +6,7 @@ export default function ProjectsPage() {
   return (
     <Workbench>
       <div className="mx-auto max-w-7xl px-5 py-6 md:px-10">
-        <WorkspacesConsole view="projects" />
+        <WorkspacesConsole />
       </div>
     </Workbench>
   );

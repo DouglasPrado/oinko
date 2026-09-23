@@ -49,7 +49,7 @@
 
 | Termo | Significado |
 | --- | --- |
-| Project | Unidade de autorização e isolamento; contém um ou mais repositórios e uma definição de ambiente. |
+| Project | Unidade de autorização e isolamento; contém um ou mais repositórios e ambientes vinculados, com um ambiente padrão para o sandbox. |
 | Repository | Origem Git importada para um clone gerenciado, separado do checkout original. |
 | Task | Trabalho de programação com branch/worktrees nos repositórios do projeto; não é uma Thread de conversa. |
 | Environment | Definição reutilizável de ferramentas, limites e serviços. |

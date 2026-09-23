@@ -28,6 +28,8 @@ export function EnvironmentEditor({
   save: (command: RunnerCommandInput) => Promise<void>;
   cancel: () => void;
 }) {
+  const [suffix] = useState(() => crypto.randomUUID().slice(0, 6));
+  const newId = (name: string) => `${slug(name)}-${suffix}`;
   const [definition, setDefinition] = useState<Environment>(
     () =>
       environment ?? {
@@ -118,8 +120,9 @@ export function EnvironmentEditor({
                 setDefinition((value) => ({
                   ...value,
                   name: event.target.value,
-                  ...(!environment && (value.id === 'new' || value.id === slug(value.name))
-                    ? { id: slug(event.target.value) }
+                  ...(!environment &&
+                  (!value.id || value.id === 'new' || value.id === newId(value.name))
+                    ? { id: newId(event.target.value) }
                     : {}),
                 }))
               }
@@ -177,8 +180,8 @@ export function EnvironmentEditor({
             />
           </Field>
           <Field
-            label="Prévias simultâneas por projeto"
-            help="Com uma prévia, iniciar outra tarefa encerra a anterior e preserva seus dados."
+            label="Prévias simultâneas por ambiente"
+            help="O limite vale para este ambiente no projeto. Iniciar outra tarefa encerra a anterior quando o limite é atingido."
           >
             <input
               type="number"

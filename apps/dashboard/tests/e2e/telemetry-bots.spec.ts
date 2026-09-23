@@ -62,26 +62,26 @@ test('selects each bot throughout navigation, payloads, downloads and live updat
   await page.goto('/bots');
   const card = page
     .locator('article')
-    .filter({ has: page.getByRole('heading', { name: 'Dev de teste', exact: true }) });
+    .filter({ has: page.getByRole('link', { name: 'Dev de teste', exact: true }) });
   await card.getByRole('link', { name: 'Ver telemetria' }).click();
-  await expect(page.getByLabel('Telemetria do bot')).toHaveValue(ids.dev);
-  await page.getByLabel('Buscar thread').fill('suporte');
+  await expect(page).toHaveURL(new RegExp(`/bots/${ids.dev}/telemetria`));
+  await page.getByLabel('Buscar conversa').fill('suporte');
   await page.waitForURL(/q=suporte/);
-  expect(new URL(page.url()).searchParams.get('bot')).toBe(ids.dev);
+  expect(new URL(page.url()).pathname).toContain(`/bots/${ids.dev}/telemetria`);
   await page.reload();
 
   for (const [id, name] of [
     [ids.dev, 'Dev de teste'],
     [ids.landing, 'LP de teste'],
   ]) {
-    if (id !== ids.dev) await page.getByLabel('Telemetria do bot').selectOption(id!);
+    if (id !== ids.dev) await page.goto(`/bots/${id}/telemetria`);
     const thread = page
       .getByRole('navigation', { name: 'Conversas' })
       .getByRole('link', { name: /^suporte-4821/ });
-    await expect(thread).toHaveAttribute('href', `/threads/suporte-4821?bot=${id}`);
+    await expect(thread).toHaveAttribute('href', `/bots/${id}/telemetria/threads/suporte-4821`);
     await thread.click();
-    await page.waitForURL(/\/threads\/suporte-4821\/[^?]+\?bot=/);
-    expect(new URL(page.url()).searchParams.get('bot')).toBe(id);
+    await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
+    expect(new URL(page.url()).pathname).toContain(`/bots/${id}/telemetria`);
     const response = page.waitForResponse((res) =>
       res.url().includes(`/api/payloads/${dev.payloadId}`),
     );
@@ -97,17 +97,14 @@ test('selects each bot throughout navigation, payloads, downloads and live updat
     expect(await file.text()).toContain(`${name}: conteúdo completo exclusivo.`);
     await page.getByRole('link', { name: /chamada 1/ }).click();
     await page.waitForURL(/item=/);
-    expect(new URL(page.url()).searchParams.get('bot')).toBe(id);
-    await page
-      .getByRole('navigation', { name: 'Principal' })
-      .getByRole('link', { name: 'Telemetria' })
-      .click();
-    expect(new URL(page.url()).searchParams.get('bot')).toBe(id);
+    expect(new URL(page.url()).pathname).toContain(`/bots/${id}/telemetria`);
+    await page.getByRole('link', { name: 'Visão geral', exact: true }).click();
+    expect(new URL(page.url()).pathname).toContain(`/bots/${id}/telemetria`);
   }
 
-  await page.getByLabel('Telemetria do bot').selectOption(ids.dev);
-  await page.waitForURL((url) => url.searchParams.get('bot') === ids.dev);
-  await expect(page.getByLabel('Telemetria do bot')).toHaveValue(ids.dev);
+  await page.goto(`/bots/${ids.dev}/telemetria`);
+
+  await expect(page).toHaveURL(new RegExp(`/bots/${ids.dev}/telemetria`));
   await expect(page.getByRole('status')).toContainText('ao vivo');
   const db = new DatabaseSync(dev.path);
   db.prepare(
@@ -118,12 +115,12 @@ test('selects each bot throughout navigation, payloads, downloads and live updat
   await expect(
     page.getByRole('navigation', { name: 'Conversas' }).getByText('nova-conversa-dev'),
   ).toBeVisible();
-  await page.getByLabel('Telemetria do bot').selectOption(ids.landing);
+  await page.goto(`/bots/${ids.landing}/telemetria`);
   await expect(
     page.getByRole('navigation', { name: 'Conversas' }).getByText('nova-conversa-dev'),
   ).toHaveCount(0);
 
-  await page.getByLabel('Telemetria do bot').selectOption(ids.empty);
+  await page.goto(`/bots/${ids.empty}/telemetria`);
   await expect(page.getByText('Nenhuma conversa registrada ainda')).toBeVisible();
   expect(existsSync(join(root, '.harness/bots', ids.empty, 'telemetry.db'))).toBe(false);
   expect((await page.request.get('/?bot=unknown')).status()).toBe(404);

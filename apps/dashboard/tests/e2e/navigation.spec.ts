@@ -5,16 +5,13 @@ test('keeps the sidebar and current section across all dashboard pages', async (
   const navigation = page.getByRole('navigation', { name: 'Principal' });
   for (const [label, path] of [
     ['Projetos', '/projetos'],
-    ['Ambientes', '/ambientes'],
-    ['Prévias', '/previas'],
     ['Integrações', '/integracoes'],
-    ['Telemetria', '/'],
     ['Bots', '/bots'],
   ]) {
     await navigation.getByRole('link', { name: label, exact: true }).click();
     await expect(page).toHaveURL(path!);
     await expect(navigation).toBeVisible();
-    await expect(navigation.getByRole('link')).toHaveCount(6);
+    await expect(navigation.getByRole('link')).toHaveCount(3);
     await expect(navigation.getByRole('link', { name: label, exact: true })).toHaveAttribute(
       'aria-current',
       'page',
@@ -28,7 +25,7 @@ test('provides navigation and conversations in the mobile menu without overflowi
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/telemetria');
   const navigation = page.getByRole('navigation', { name: 'Principal' });
   const conversations = page.getByRole('navigation', { name: 'Conversas' });
   await expect(navigation).toBeHidden();
@@ -38,10 +35,7 @@ test('provides navigation and conversations in the mobile menu without overflowi
   await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
   await expect(navigation).toBeHidden();
   await page.getByRole('button', { name: 'Abrir menu' }).click();
-  await expect(navigation.getByRole('link', { name: 'Telemetria' })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+
   await expect(conversations.locator('[aria-current="page"]')).toHaveCount(1);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Abrir menu' })).toBeFocused();

@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { WorkspaceError, type Project, type Task } from '@oinko/workspaces';
 import { type CommandRunner, type Preview } from '../contracts/index.js';
 import { EnvironmentStore } from '../storage/store.js';
@@ -17,11 +18,33 @@ export class PreviewManager {
   ) {
     this.router = new TraefikRouter(root, sandbox.namespace, run);
   }
-  async start(project: Project, task: Task, onOutput?: (text: string) => void) {
+  async start(
+    project: Project,
+    task: Task,
+    onOutput?: (text: string) => void,
+    environmentId = project.environmentId,
+  ) {
     if (task.state !== 'ready' || task.projectId !== project.id)
       throw new WorkspaceError('Selecione uma tarefa pronta deste projeto.');
-    const env = this.store.environment(project.environmentId);
-    const id = task.id;
+    if (
+      !environmentId ||
+      (environmentId !== project.environmentId && !project.environmentIds?.includes(environmentId))
+    )
+      throw new WorkspaceError('O ambiente não pertence a este projeto.');
+    const env = this.store.environment(environmentId);
+    // Preserve resource identity even when the project's default environment changes.
+    const existing = this.store.previews();
+    const id =
+      existing.find(
+        (preview) =>
+          preview.taskId === task.id &&
+          preview.projectId === project.id &&
+          preview.environmentId === env.id,
+      )?.id ??
+      (environmentId === project.environmentId &&
+      !existing.some((preview) => preview.id === task.id)
+        ? task.id
+        : `p-${createHash('sha256').update(`${project.id}/${task.id}/${environmentId}`).digest('hex').slice(0, 24)}`);
     if (this.store.previews().some((preview) => preview.id === id && preview.state !== 'stopped'))
       await this.stop(id);
     const previous = this.store
@@ -29,6 +52,7 @@ export class PreviewManager {
       .filter(
         (preview) =>
           preview.projectId === project.id &&
+          preview.environmentId === env.id &&
           preview.id !== id &&
           ['ready', 'building', 'starting', 'failed'].includes(preview.state),
       );
@@ -56,7 +80,9 @@ export class PreviewManager {
         onOutput,
       });
       prepared.routeGroup =
-        env.maxPreviews === 1 ? `${this.sandbox.namespace}-project-${project.id}` : prepared.name;
+        env.maxPreviews === 1
+          ? `${this.sandbox.namespace}-project-${project.id}-${env.id}`
+          : prepared.name;
       this.store.saveRuntime(id, prepared);
       this.store.savePreview({ ...preview, state: 'starting' });
       await this.run(

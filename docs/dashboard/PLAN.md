@@ -6,7 +6,7 @@
 
 Em `/bots`, a pessoa cria um bot, define nome, modelo, instruções, credenciais e conexões. Pode editar, iniciar, parar e reiniciar. Salvar não interrompe uma conversa: a tela sinaliza a revisão pendente, aplicada no próximo reinício. CLI, Telegram, Higgsfield e MCP HTTP são reutilizados, sem copiar uma aplicação por bot.
 
-A navegação principal é a mesma em Bots, Projetos, Ambientes, Prévias, Telemetria e Integrações. No desktop, fica em uma sidebar com a seção atual destacada, rolagem própria e saída no rodapé. No celular, o botão Menu revela os mesmos destinos e fecha ao navegar ou pressionar Escape. As conversas e respostas aparecem em uma seção separada dentro da sidebar da telemetria, inclusive no menu móvel.
+A navegação principal contém Bots, Projetos e Integrações. Projetos contêm ambientes, e cada ambiente apresenta suas prévias. Worktrees e atividade pertencem ao projeto. A telemetria é aberta pelo botão no bot, em `/bots/[botId]/telemetria`, mantendo o contexto nas conversas e respostas. No desktop, fica em uma sidebar com a seção atual destacada, rolagem própria e saída no rodapé. No celular, o botão Menu revela os mesmos destinos e fecha ao navegar ou pressionar Escape. As conversas e respostas aparecem em uma seção separada dentro da sidebar da telemetria, inclusive no menu móvel.
 
 ## Responsabilidades
 
@@ -44,4 +44,8 @@ Acesso remoto: `pnpm --filter @oinko/dashboard start:network` após o build e a 
 
 ## Limites
 
-A interface configura MCP HTTP com Bearer opcional e Higgsfield com OAuth compartilhado. MCP stdio e ferramentas/skills escritas em TypeScript continuam disponíveis na composição em código; não há editor de código nem execução de comandos arbitrários no formulário. A telemetria permite selecionar qualquer bot cadastrado. A seleção fica na URL (`bot=<id>`) e acompanha conversas, respostas, detalhes, downloads e atualizações ao vivo. Cada banco é aberto separadamente, somente para leitura. Bots sem execuções mostram um estado vazio. `TELEMETRY_DB_PATH` continua disponível para consumidores independentes do SDK e define a seleção inicial quando corresponde a um bot. Não há inicialização automática após reiniciar o computador nem exclusão de históricos pelo cadastro.
+A interface configura MCP HTTP com Bearer opcional e Higgsfield com OAuth compartilhado. MCP stdio e ferramentas/skills escritas em TypeScript continuam disponíveis na composição em código; não há editor de código nem execução de comandos arbitrários no formulário. A telemetria é acessada dentro de qualquer bot cadastrado. O ID do bot fica no caminho da página e acompanha conversas, respostas e detalhes; downloads e atualizações ao vivo carregam esse mesmo ID na API. Links antigos com `bot=<id>` continuam compatíveis. Cada banco é aberto separadamente, somente para leitura. Bots sem execuções mostram um estado vazio. `TELEMETRY_DB_PATH` continua disponível para consumidores independentes do SDK e define a seleção inicial quando corresponde a um bot. Não há inicialização automática após reiniciar o computador nem exclusão de históricos pelo cadastro.
+
+## Componentes da experiência
+
+A interface usa componentes shadcn/Radix locais: cards e badges para resumo/estado, breadcrumbs para contexto, tabs para vistas do mesmo recurso, sheets para configurações/terminal/logs, dialog para criar tarefa, menus para ações do sandbox, accordion para detalhes dos serviços e reutilização de configuração, alert para falhas, skeleton para carregamento, empty para primeiros passos, table e progress para telemetria, tooltip para retenção. Campos avançados e credenciais permanecem disponíveis. Sheets restauram o foco ao fechar.

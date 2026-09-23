@@ -1,13 +1,13 @@
 'use client';
+import { buttonVariants } from '@/components/ui/button';
 import { cloneElement, useId, type ReactElement } from 'react';
 import type { RunnerCommandInput, RunnerState } from '@oinko/environments/client';
 
 export type { RunnerState, RunnerCommandInput };
 export const inputStyle =
-  'w-full min-w-0 rounded-[2px] border border-rule bg-surface px-3 py-2 text-sm outline-offset-2';
-export const buttonStyle =
-  'inline-flex items-center justify-center gap-2 rounded-[2px] border border-rule bg-surface px-3 py-2 text-sm hover:bg-paper disabled:opacity-50 disabled:cursor-wait';
-export const panelStyle = 'space-y-4 border border-rule bg-surface p-5';
+  'w-full min-w-0 rounded-lg border border-rule bg-surface px-3 py-2 text-sm outline-offset-2';
+export const buttonStyle = buttonVariants({ variant: 'outline', size: 'lg' });
+export const panelStyle = 'space-y-4 rounded-xl border border-rule bg-surface p-5 shadow-xs';
 export const slug = (text: string) =>
   text
     .normalize('NFD')

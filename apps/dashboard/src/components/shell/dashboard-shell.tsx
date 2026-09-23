@@ -12,11 +12,10 @@ interface Props {
   children: React.ReactNode;
   conversations?: React.ReactNode;
   inspector?: React.ReactNode;
-  telemetryHref?: string;
 }
 
 /** Shared sidebar, with an inline disclosure on narrow screens. */
-export function DashboardShell({ children, conversations, inspector, telemetryHref = '/' }: Props) {
+export function DashboardShell({ children, conversations, inspector }: Props) {
   const pathname = usePathname();
   const [openPath, setOpenPath] = useState<string | null>(null);
   const open = openPath === pathname;
@@ -54,7 +53,7 @@ export function DashboardShell({ children, conversations, inspector, telemetryHr
         id="dashboard-navigation"
         aria-label="Navegação da dashboard"
         className={cn(
-          'w-full shrink-0 flex-col border-b border-rule bg-surface lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-72 lg:self-start lg:border-r lg:border-b-0',
+          'w-full shrink-0 flex-col border-b border-rule bg-surface lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-60 lg:self-start lg:border-r lg:border-b-0',
           open ? 'flex max-h-[calc(100dvh-3.5rem)] lg:max-h-none' : 'hidden',
         )}
         onClick={(event) => {
@@ -67,7 +66,7 @@ export function DashboardShell({ children, conversations, inspector, telemetryHr
           </Link>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <ProductNav pathname={pathname} telemetryHref={telemetryHref} />
+          <ProductNav pathname={pathname} />
           {conversations ? <div className="border-t border-rule">{conversations}</div> : null}
         </div>
         <div className="shrink-0 border-t border-rule px-6 py-4">

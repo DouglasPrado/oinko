@@ -8,18 +8,15 @@ import {
   buttonStyle,
   panelStyle,
   slug,
-  type RunnerState,
   type RunnerCommandInput,
 } from './shared';
 
 export function ProjectEditor({
   project,
-  state,
   save,
   cancel,
 }: {
   project?: Saved<Project>;
-  state: RunnerState;
   save: (command: RunnerCommandInput) => Promise<void>;
   cancel: () => void;
 }) {
@@ -27,7 +24,7 @@ export function ProjectEditor({
     project ?? {
       id: '',
       name: '',
-      environmentId: state.environments[0]?.id ?? '',
+
       repositories: [{ id: 'app', source: '', ref: 'HEAD' }],
       allowedBotIds: [],
     },
@@ -95,24 +92,6 @@ export function ProjectEditor({
               value={definition.id}
               onChange={(event) => change('id', event.target.value)}
             />
-          </Field>
-          <Field
-            label="Ambiente"
-            help="A configuração pode ser reutilizada; cada projeto mantém seu próprio workspace."
-          >
-            <select
-              className={inputStyle}
-              required
-              value={definition.environmentId}
-              onChange={(event) => change('environmentId', event.target.value)}
-            >
-              <option value="">Selecione</option>
-              {state.environments.map((env) => (
-                <option key={env.id} value={env.id}>
-                  {env.name}
-                </option>
-              ))}
-            </select>
           </Field>
         </div>
         <section className={panelStyle}>

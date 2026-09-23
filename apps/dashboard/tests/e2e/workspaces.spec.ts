@@ -57,7 +57,11 @@ test('configures projects, runs worktrees and opens real previews on desktop and
   await page.getByRole('button', { name: 'Salvar bot', exact: true }).click();
   await expect(page.getByRole('article', { name: 'Programadora E2E', exact: true })).toBeVisible();
 
-  await page.goto('/ambientes');
+  await page.goto('/projetos');
+  await page.getByRole('button', { name: 'Novo projeto', exact: true }).click();
+  await page.getByLabel('Nome do projeto', { exact: true }).fill('Base E2E');
+  await page.getByLabel('Origem Git 1', { exact: true }).fill(source);
+  await page.getByRole('button', { name: 'Salvar projeto', exact: true }).click();
   await page.getByRole('button', { name: 'Novo ambiente', exact: true }).click();
   await page.getByLabel('Nome do ambiente', { exact: true }).fill('Ambiente E2E');
   await page.getByRole('button', { name: 'Adicionar serviço', exact: true }).click();
@@ -73,55 +77,53 @@ test('configures projects, runs worktrees and opens real previews on desktop and
   await page.getByRole('button', { name: 'Salvar ambiente', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Ambiente E2E', exact: true })).toBeVisible();
   const initial = await state();
+  const environmentId = initial.environments.find((env) => env.name === 'Ambiente E2E')!.id;
   expect(
-    initial.environments.find((env) => env.id === 'ambiente-e2e')?.services[0]?.secrets,
+    initial.environments.find((env) => env.id === environmentId)?.services[0]?.secrets,
   ).toEqual(['ALPHA', 'BETA']);
   expect(JSON.stringify(initial)).not.toContain('e2e-private-');
-  const environmentCard = page
-    .getByRole('article')
-    .filter({ has: page.getByRole('heading', { name: 'Ambiente E2E', exact: true }) });
-  await environmentCard.getByRole('button', { name: 'Configurar', exact: true }).click();
+  await page.getByRole('button', { name: 'Configurar', exact: true }).click();
   await page.getByLabel('CPUs por container', { exact: true }).fill('1.5');
   await expect(page.getByLabel('ALPHA', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Salvar ambiente', exact: true }).click();
-  await expect(environmentCard).toBeVisible();
-  expect((await state()).environments.find((env) => env.id === 'ambiente-e2e')?.cpus).toBe(1.5);
+  await expect(page.getByRole('heading', { name: 'Ambiente E2E', exact: true })).toBeVisible();
+  expect((await state()).environments.find((env) => env.id === environmentId)?.cpus).toBe(1.5);
+  await page.getByRole('button', { name: 'Ações do projeto' }).click();
+  await page.getByRole('menuitem', { name: 'Acesso às prévias' }).click();
   await page.getByLabel('Porta do Traefik', { exact: true }).fill('3190');
   await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
+  await page.keyboard.press('Escape');
 
   for (const viewport of [
     { name: 'desktop', width: 1365, height: 900 },
     { name: 'mobile', width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
-    await page
-      .getByRole('navigation', { name: 'Principal', exact: true })
-      .getByRole('link', { name: 'Projetos', exact: true })
-      .click();
+    await page.goto('/projetos');
     await page.getByRole('button', { name: 'Novo projeto', exact: true }).click();
     await page.getByLabel('Nome do projeto', { exact: true }).fill(`Projeto ${viewport.name}`);
-    await page.getByLabel('Ambiente', { exact: true }).selectOption('ambiente-e2e');
     await page.getByLabel('Origem Git 1', { exact: true }).fill(source);
     await page.getByLabel('Programadora E2E', { exact: true }).check();
     await page.getByRole('button', { name: 'Salvar projeto', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: `Projeto ${viewport.name}`, exact: true }),
     ).toBeVisible();
-    const projectCard = page.getByRole('article').filter({
-      has: page.getByRole('heading', { name: `Projeto ${viewport.name}`, exact: true }),
-    });
-    await projectCard.getByRole('button', { name: 'Configurar', exact: true }).click();
+    await page.getByRole('button', { name: 'Configurar', exact: true }).click();
     await expect(page.getByLabel('Programadora E2E', { exact: true })).toBeChecked();
     await page.getByLabel('Referência inicial 1', { exact: true }).fill('main');
     await page.getByRole('button', { name: 'Salvar projeto', exact: true }).click();
-    await expect(projectCard).toBeVisible();
-    await page
-      .getByLabel('Projeto selecionado', { exact: true })
-      .selectOption(`projeto-${viewport.name}`);
+    await expect(
+      page.getByRole('heading', { name: `Projeto ${viewport.name}`, exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Novo ambiente', exact: true }).click();
+    await page.getByRole('button', { name: 'Reutilizar configuração existente' }).click();
+    await page.getByLabel('Ambiente existente').selectOption(environmentId);
+    await page.getByRole('button', { name: 'Vincular ambiente' }).click();
+    await page.getByRole('button', { name: 'Nova tarefa', exact: true }).click();
     await page.getByLabel('Nome da tarefa', { exact: true }).fill(`Tarefa ${viewport.name}`);
     await page.getByRole('button', { name: 'Criar tarefa', exact: true }).click();
     const card = page
-      .getByRole('article')
+      .locator('[data-slot=card]')
       .filter({ has: page.getByRole('heading', { name: `Tarefa ${viewport.name}`, exact: true }) });
     await expect(card.getByRole('button', { name: 'Subir prévia', exact: true })).toBeEnabled({
       timeout: 60_000,
@@ -136,6 +138,7 @@ test('configures projects, runs worktrees and opens real previews on desktop and
     await expect(page.getByText('Código de saída: 0', { exact: false })).toBeVisible({
       timeout: 30_000,
     });
+    await page.keyboard.press('Escape');
     await card.getByRole('button', { name: 'Subir prévia', exact: true }).click();
     const link = card.getByRole('link', { name: 'Abrir web ↗', exact: true });
     await expect(link).toBeVisible({ timeout: 120_000 });
@@ -153,6 +156,7 @@ test('configures projects, runs worktrees and opens real previews on desktop and
     await preview.close();
     await card.getByRole('button', { name: 'Logs dos serviços', exact: true }).click();
     await expect(page.getByText('[redacted]', { exact: false })).toBeVisible();
+    await page.keyboard.press('Escape');
     await card.getByRole('button', { name: 'Parar prévia', exact: true }).click();
     await expect(card.getByText('Parado', { exact: true })).toBeVisible({ timeout: 30_000 });
   }

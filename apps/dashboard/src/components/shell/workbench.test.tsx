@@ -14,16 +14,16 @@ vi.mock('./thread-rail', () => ({
 it.each([
   ['/bots', 'Bots'],
   ['/projetos', 'Projetos'],
-  ['/ambientes', 'Ambientes'],
-  ['/previas', 'Prévias'],
+  ['/projetos/shop/ambientes/review', 'Projetos'],
+  ['/projetos/shop', 'Projetos'],
   ['/integracoes', 'Integrações'],
-  ['/', 'Telemetria'],
-  ['/threads/example/response', 'Telemetria'],
+  ['/bots/dev/telemetria', 'Bots'],
+  ['/bots/dev/telemetria/threads/example/response', 'Bots'],
 ])('keeps the same navigation and marks the current section at %s', (path, label) => {
   pathname = path;
   render(<Workbench>Conteúdo da página</Workbench>);
   const navigation = screen.getByRole('navigation', { name: 'Principal' });
-  expect(within(navigation).getAllByRole('link')).toHaveLength(6);
+  expect(within(navigation).getAllByRole('link')).toHaveLength(3);
   expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute(
     'aria-current',
     'page',

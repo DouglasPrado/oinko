@@ -2,7 +2,8 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { EnvironmentClient } from '@oinko/environments/client';
 import { createAgentHost } from '@oinko/agent-runtime';
 import { startEnvironmentService } from '@oinko/environments';
 import { programmingTools } from '../src/programming-tools.js';
@@ -212,3 +213,31 @@ it.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
   },
   180_000,
 );
+
+it('routes preview tools to the selected environment and stops by preview identity', async () => {
+  const command = vi.spyOn(EnvironmentClient.prototype, 'command').mockResolvedValue({ id: 'job' });
+  try {
+    const tool = programmingTools('/unused-test-root', 'dev').find(
+      (tool) => tool.name === 'workspace_preview',
+    )!;
+    const signal = new AbortController().signal;
+    await tool.execute({ action: 'start', taskId: 'task', environmentId: 'review' }, signal);
+    expect(command).toHaveBeenLastCalledWith({
+      action: 'startPreview',
+      taskId: 'task',
+      environmentId: 'review',
+    });
+    await tool.execute({ action: 'stop', previewId: 'review-preview' }, signal);
+    expect(command).toHaveBeenLastCalledWith({
+      action: 'stopPreview',
+      previewId: 'review-preview',
+    });
+    await tool.execute({ action: 'stop', taskId: 'legacy-task' }, signal);
+    expect(command).toHaveBeenLastCalledWith({ action: 'stopPreview', previewId: 'legacy-task' });
+    await expect(
+      tool.execute({ action: 'start', environmentId: 'review' }, signal),
+    ).rejects.toThrow(/taskId/);
+  } finally {
+    command.mockRestore();
+  }
+});

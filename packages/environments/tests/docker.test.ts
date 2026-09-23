@@ -343,11 +343,22 @@ it.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
       expect(store.preview(first.id).state).toBe('ready');
       expect(store.preview(second.id).state).toBe('ready');
       store.saveEnvironment({ ...environment, maxPreviews: 1 }, {}, environment.revision);
+      const reviewEnvironment = store.saveEnvironment(
+        { ...environment, id: 'review', name: 'Review', maxPreviews: 1 },
+        { TEST_PRIVATE: 'this-must-stay-encrypted' },
+        0,
+      );
+      project.environmentIds = [reviewEnvironment.id];
+      const review = await manager.start(project, first, undefined, 'review');
+      expect(await readPreview(review.urls[0]!.url)).toBe('first-worktree');
       const stableA = await manager.start(project, first);
       const stableB = await manager.start(project, second);
       expect(stableA.urls).toEqual(stableB.urls);
       expect(store.preview(first.id).state).toBe('stopped');
       expect(await readPreview(stableB.urls[0]!.url)).toBe('second-worktree');
+      expect(store.preview(review.id).state).toBe('ready');
+      expect(await readPreview(review.urls[0]!.url)).toBe('first-worktree');
+      expect(review.urls).not.toEqual(stableB.urls);
     } catch (error) {
       const proxyLogs = await runCommand('docker', ['logs', manager.router.name], {
         allowFailure: true,
