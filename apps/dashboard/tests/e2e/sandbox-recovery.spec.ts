@@ -133,8 +133,14 @@ test('rejects invalid and oversized workspace API requests and stale edits witho
     await anonymous.close();
   }
   expect((await post({ action: 'state' }, {} as { origin: string })).status()).toBe(403);
-  expect((await post({ action: 'unknown' })).status()).toBe(400);
-  expect((await post({ action: 'writeFile', content: 'x'.repeat(200_001) })).status()).toBe(400);
+  const invalid = await post({ action: 'unknown' });
+  expect(invalid.status(), await invalid.text()).toBe(400);
+  expect((await invalid.json()) as { error: string }).toMatchObject({
+    error: expect.stringContaining('No matching discriminator'),
+  });
+  const oversized = await post({ action: 'writeFile', content: 'x'.repeat(200_001) });
+  expect(oversized.status(), await oversized.text()).toBe(400);
+  expect(await oversized.json()).toEqual({ error: 'Configuração muito grande.' });
   expect(
     (
       await page.request.post('/api/workspaces', {
@@ -166,4 +172,48 @@ test('rejects invalid and oversized workspace API requests and stale edits witho
   ).toBe(400);
   const state = (await (await page.request.get('/api/workspaces')).json()) as RunnerState;
   expect(state.environments.find((env) => env.id === definition.id)?.name).toBe('Updated');
+});
+
+test('creates environments concurrently and rejects one of two simultaneous edits to the same revision', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const definitions = Array.from({ length: 12 }, (_, index) => ({
+    id: `concurrent-${testInfo.repeatEachIndex}-${index}`,
+    name: `Concurrent ${index}`,
+  }));
+  const save = (definition: (typeof definitions)[number], revision: number) =>
+    page.request.post('/api/workspaces', {
+      headers: { origin: baseURL! },
+      data: { action: 'saveEnvironment', definition, revision },
+    });
+  const creations = await Promise.all(definitions.map((definition) => save(definition, 0)));
+  for (const response of creations) expect(response.status(), await response.text()).toBe(200);
+  const edits = definitions.slice(0, 2).map((definition) => ({
+    ...definitions[0]!,
+    name: definition.name,
+  }));
+  const responses = await Promise.all(edits.map((definition) => save(definition, 1)));
+  const results = await Promise.all(
+    responses.map(async (response) => ({
+      status: response.status(),
+      body: (await response.json()) as { name?: string; error?: string },
+    })),
+  );
+  expect(results.map((result) => result.status).sort(), JSON.stringify(results)).toEqual([
+    200, 400,
+  ]);
+  expect(results.find((result) => result.status === 400)?.body.error).toContain(
+    'O cadastro foi alterado',
+  );
+  const response = await page.request.get('/api/workspaces');
+  expect(response.status(), await response.text()).toBe(200);
+  const state = (await response.json()) as RunnerState;
+  expect(
+    state.environments.filter((env) => definitions.some((item) => item.id === env.id)),
+  ).toHaveLength(definitions.length);
+  expect(state.environments.find((env) => env.id === definitions[0]!.id)).toMatchObject({
+    name: results.find((result) => result.status === 200)!.body.name,
+    revision: 2,
+  });
 });
