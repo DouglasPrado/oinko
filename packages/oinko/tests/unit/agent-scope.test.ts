@@ -181,6 +181,12 @@ describe('Agent — memoria relevante continua no contexto da thread', () => {
       expect(systems).toHaveLength(2);
       expect(systems[0]).toContain('MARCA-ZETA-42');
       expect(systems[1]).toContain('MARCA-ZETA-42');
+      // Memoria e dado recuperado, nao instrucao do host.
+      expect(systems[0]).toMatch(
+        /<context-data source="memory:relevant">[\s\S]*MARCA-ZETA-42[\s\S]*?<\/context-data>/,
+      );
+      expect(systems[1]).toMatch(/<context-data source="memory:carried">[\s\S]*MARCA-ZETA-42/);
+      expect(systems[0]).toContain('# Context protocol');
       const selecoes = decide.mock.calls.filter(([, questions]) => 'm0' in questions);
       expect(selecoes).toHaveLength(1);
     } finally {
