@@ -49,6 +49,7 @@ import {
   buildContextProtocolPrompt,
 } from './core/prompt-builders.js';
 import { formatRetrievedKnowledge } from './knowledge/knowledge-format.js';
+import { localDateInfo, systemTimeZone } from './utils/local-date.js';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -394,10 +395,15 @@ export class Agent {
     });
 
     // Environment info — gives model awareness of execution context
-    const today = new Date().toISOString().split('T')[0]!;
+    // In the user's zone, not UTC: from 21:00 on in Brasília, UTC is tomorrow.
+    const clock = localDateInfo(new Date(), this.config.timezone ?? systemTimeZone());
+    const today = clock.date;
     const envContent = buildEnvironmentPrompt({
       model,
       date: today,
+      weekday: clock.weekday,
+      time: clock.time,
+      timezone: clock.timeZone,
       platform: process.platform,
     });
     injections.push({

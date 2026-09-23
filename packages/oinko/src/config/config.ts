@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
 import type { Decider } from '../contracts/entities/decider.js';
 import type { TelemetrySink } from '../contracts/entities/telemetry.js';
+import { isValidTimeZone } from '../utils/local-date.js';
 
 /**
  * Telemetria de execucao.
@@ -139,6 +140,11 @@ export const AgentConfigSchema = z.object({
     .custom<(request: Request) => Promise<Response>>((v) => typeof v === 'function')
     .optional(),
   systemPrompt: z.string().optional(),
+  /**
+   * IANA time zone for the date and time the model is told ("America/Sao_Paulo").
+   * Defaults to the host's. UTC would make it tomorrow every evening in Brazil.
+   */
+  timezone: z.string().refine(isValidTimeZone, 'Unknown IANA time zone').optional(),
 
   // Subsystem configs
   memory: MemoryConfigSchema.optional(),
