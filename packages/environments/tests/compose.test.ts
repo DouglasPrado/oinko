@@ -92,3 +92,37 @@ it('refuses access to secrets not selected for the imported service', async () =
     }),
   ).rejects.toThrow(/OTHER/);
 });
+
+it('keeps long container hostnames within DNS limits without collisions between services', async () => {
+  const { root } = fixture('services: {}');
+  const prepare = (name: string) =>
+    prepareCompose({
+      root,
+      workspace: root,
+      task,
+      environment: EnvironmentSchema.parse({
+        id: 'node',
+        name: 'Node',
+        services: ['dashboard', 'dashboard-admin'].map((id) => ({ id, expose: true })),
+      }),
+      name,
+      directory: join(root, 'runtime'),
+      secrets: {},
+      run: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+    });
+  const name = 'oinko-0123456789-p-fazer-versao-dark-do-dashboard-b82e12';
+  const first = await prepare(name);
+  const containers = first.routes.map((route) => route.container);
+  for (const container of containers) {
+    expect(container.length).toBeLessThanOrEqual(63);
+    expect(container).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
+  }
+  expect(new Set(containers).size).toBe(2);
+  const output = JSON.parse(readFileSync(first.path, 'utf8')) as {
+    services: Record<string, { container_name: string }>;
+  };
+  for (const route of first.routes)
+    expect(output.services[route.serviceId]?.container_name).toBe(route.container);
+  expect((await prepare(name)).routes.map((route) => route.container)).toEqual(containers);
+  expect((await prepare('short')).routes[0]?.container).toBe('short-dashboard');
+});

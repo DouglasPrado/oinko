@@ -330,6 +330,38 @@ describe.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
       expect((await response(review)).body).toBe('hot|');
     }, 200_000);
 
+    it('serves previews for descriptive task names through real Docker DNS and Traefik', async () => {
+      await f.configure();
+      await f.client.command({
+        action: 'saveSettings',
+        definition: { port: await freePort() },
+        revision: 0,
+      });
+      await environment({
+        services: [
+          {
+            id: 'dashboard',
+            builder: 'image',
+            image: 'node:22-alpine',
+            command: `node -e "require('node:http').createServer((req,res)=>res.end('long-name-preview')).listen(3000,'0.0.0.0')"`,
+            expose: true,
+          },
+        ] as Environment['services'],
+      });
+      const taskId = 'fazer-versao-dark-do-dashboard-b82e12';
+      await f.task(taskId);
+      const result = await preview(taskId);
+      expect(result.state).toBe('ready');
+      expect(await response(result)).toEqual({ status: 200, body: 'long-name-preview' });
+      await f.stop();
+      await f.start();
+      expect((await f.client.state()).previews.find((item) => item.id === result.id)?.state).toBe(
+        'ready',
+      );
+      expect((await response(result)).body).toBe('long-name-preview');
+      await f.job({ action: 'stopPreview', previewId: result.id });
+    }, 120_000);
+
     it('marks real queued work failed after an abrupt runner death and permits retry', async () => {
       await f.configure();
       await f.task();

@@ -86,6 +86,8 @@ O teste de arquivo UTF-8 grande também falhou: cada bloco de bytes era converti
 
 O primeiro teste de porta ocupada usava um listener nativo. Docker Desktop conseguiu publicar a porta apesar dele, portanto essa fixture não provava conflito Docker. O teste foi corrigido para reservar o mapeamento com outro container isolado; não houve mudança de produto para “fazer o teste passar”.
 
+Uma prévia real com nome descritivo de tarefa revelou outro defeito: o nome gerado para o container tinha 66 caracteres. Docker iniciava o serviço, mas seu DNS não resolvia esse nome para o Traefik, causando HTTP 502. Os nomes gerados agora respeitam o limite de 63 caracteres, com sufixo hash determinístico para distinguir serviços; nomes curtos continuam iguais. A regressão unitária falhou antes da correção e passou depois. O teste `serves previews for descriptive task names…` verifica HTTP 200 pelo Traefik com Docker real e novamente após reiniciar o runner.
+
 ## Execução e limites
 
 Execução local em 23/09/2026, macOS arm64, Node 22.23.0, Docker 29.7.2, Railpack 0.39.0 e Chromium. Evidências locais em `.harness/sandbox-e2e/`: logs das regressões antes/depois, `final-*.log`, `api-repeat.log` e `browser-confirm-{1,2}.log`; screenshots preservados em `.harness/sandbox-e2e/evidence/`. Esses arquivos são artefatos locais ignorados pelo Git; os testes e este relatório estão versionados.
