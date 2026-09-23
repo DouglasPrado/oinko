@@ -35,9 +35,12 @@ Define os repositories, schema do ORM, estrategia de migrations, indices critico
 | `appendMessage(message, threadId)` | `ChatMessage, string` | `void` | `INSERT INTO conversations (...) VALUES (...)` |
 | `listThread(threadId)` | `string` | `ChatMessage[]` | `SELECT * FROM conversations WHERE thread_id = ? ORDER BY created_at ASC` |
 | `listPinned(threadId)` | `string` | `ChatMessage[]` | `SELECT * FROM conversations WHERE thread_id = ? AND pinned = 1` |
-| `clearThread(threadId)` | `string` | `void` | `DELETE FROM conversations WHERE thread_id = ?` |
+| `clearThread(threadId)` | `string` | `void` | `DELETE FROM conversations WHERE thread_id = ?` (o trigger limpa `conversations_fts`) |
+| `searchMessages(query, threadIds)` (opcional) | `ConversationSearchQuery, string[]` | `ConversationSearchPage` | `conversations_fts MATCH ?` + `JOIN conversations` filtrando `thread_id IN (...)`, papel e janela de tempo; ordena por `bm25` e data; `snippet()` para o trecho |
 
-**Indices:** `idx_conversations_thread`, `idx_conversations_pinned`
+**Indices:** `idx_conversations_thread`, `idx_conversations_pinned`, `conversations_fts` (FTS5)
+
+`searchMessages` é opcional no contrato: um store sem ele continua válido, mas `conversation.search.enabled` falha explicitamente com ele. Os termos chegam como palavras e são sempre citados como literais no `MATCH`, nunca como sintaxe FTS5.
 
 ### MemoryStore
 
@@ -119,6 +122,16 @@ CREATE TABLE IF NOT EXISTS conversations (
   pinned INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
+
+-- migrateV3: busca em conversas passadas
+CREATE VIRTUAL TABLE conversations_fts USING fts5(
+  body,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER conversations_fts_after_delete AFTER DELETE ON conversations
+BEGIN DELETE FROM conversations_fts WHERE rowid = old.id; END;
+CREATE TRIGGER conversations_fts_after_update AFTER UPDATE OF content, role ON conversations
+BEGIN DELETE FROM conversations_fts WHERE rowid = old.id; END;
 ```
 
 <!-- APPEND:schema -->
@@ -132,7 +145,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 | Aspecto | Decisao |
 | --- | --- |
 | Ferramenta | Migracoes em codigo no `SQLiteDatabase.initialize()` |
-| Convencao de nomes | `migrateV1()`, `migrateV2()` |
+| Convencao de nomes | `migrateV1()`, `migrateV2()`, `migrateV3()` |
 | Rollback | Backup do arquivo antes de migracoes destrutivas |
 | Ambientes | Dev/Test auto-apply; Prod aplica na inicializacao da instancia host |
 | Dados de seed | Nao aplicavel ao pacote |
