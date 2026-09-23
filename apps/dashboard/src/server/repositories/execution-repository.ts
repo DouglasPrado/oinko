@@ -46,7 +46,7 @@ function toExecution(row: Row): ExecutionSummary {
   };
 }
 
-const EXECUTION_COLUMNS = `trace_id, thread_id, app, model, status, end_reason,
+const EXECUTION_COLUMNS = `trace_id, thread_id, app, model, requested_model, status, end_reason,
   input_tokens, output_tokens, total_tokens, cost_usd, cost_status, context_tokens,
   started_at, duration_ms, ttft_ms, error_message`;
 
