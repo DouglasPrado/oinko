@@ -16,6 +16,7 @@ packages/
     cli/                   @oinko/channel-cli
     telegram/              @oinko/channel-telegram — texto, imagens e áudio
   mcps/
+    oinko/                 @oinko/mcp-oinko — servidor MCP para projetos, sandboxes e prévias
     higgsfield/             @oinko/mcp-higgsfield — OAuth, credenciais, MCP e upload
 examples/
   telegram-bot/            consumidor do workspace
@@ -47,6 +48,8 @@ Todos os bots, incluindo o Oink LP, são configurações do executor compartilha
 Para acesso pela rede, configure primeiro a senha no computador e use `pnpm --filter @oinko/dashboard start:network` após o build. A dashboard exige login; os bots continuam rodando quando ela fecha.
 
 Para programação, configure **Ambientes**, cadastre **Projetos** e autorize os bots. Cada tarefa cria worktrees próprias. Dockerfile, Railpack e imagens prontas podem ser combinados por serviço; Compose organiza a aplicação e Traefik fornece as prévias. O gerenciador também continua funcionando quando a dashboard fecha. [Guia de ambientes e acesso pelo celular](packages/environments/README.md).
+
+Para manipular os mesmos projetos por um assistente externo, use o servidor MCP **oinko**. Após o build, `node packages/mcps/oinko/dist/cli.js --print-config` gera o JSON de conexão local. [Instalação, ferramentas e fluxo GitHub → sandbox → prévia](packages/mcps/oinko/README.md).
 
 ## Dependências e responsabilidades
 

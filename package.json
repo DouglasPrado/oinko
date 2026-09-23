@@ -35,7 +35,9 @@
     "lint:apps": "pnpm -r --filter './apps/*' lint",
     "typecheck:apps": "pnpm -r --filter './apps/*' typecheck",
     "build:apps": "pnpm -r --filter './apps/*' build",
-    "bot": "pnpm --filter @oinko/bots cli"
+    "bot": "pnpm --filter @oinko/bots cli",
+    "mcp:oinko": "node packages/mcps/oinko/dist/cli.js",
+    "mcp:oinko:config": "node packages/mcps/oinko/dist/cli.js --print-config"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
