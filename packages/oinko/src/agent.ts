@@ -51,6 +51,10 @@ import {
 import { formatRetrievedKnowledge } from './knowledge/knowledge-format.js';
 import { localDateInfo, systemTimeZone } from './utils/local-date.js';
 import { DEFAULT_BEHAVIOR_PROMPT } from './core/behavior-prompt.js';
+import {
+  createConversationSearchTool,
+  CONVERSATION_SEARCH_GUIDANCE,
+} from './tools/builtin/conversation-search.js';
 import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -124,6 +128,30 @@ export class Agent {
           'Pass conversation.store explicitly to enable persistence without knowledge.',
       );
       this.conversations = new ConversationManager();
+    }
+
+    // Registered once, here, and never per turn: the executor is shared by
+    // threads running in parallel, so the thread to search must come from
+    // each call's context — a closure over "the current thread" would leak
+    // one person's history into another's turn.
+    const search = config.conversation?.search;
+    if (search?.enabled) {
+      if (!this.conversations.supportsSearch()) {
+        throw new Error(
+          'conversation.search.enabled requires a ConversationStore that implements searchMessages()',
+        );
+      }
+      this.toolExecutor.register(
+        createConversationSearchTool({
+          search: (query, threadIds) => this.conversations.search(query, threadIds),
+          ...(search.scope !== undefined && { scope: search.scope }),
+          maxResults: search.maxResults,
+          maxPages: search.maxPages,
+          snippetChars: search.snippetChars,
+          maxCallsPerTurn: search.maxCallsPerTurn,
+          timeZone: config.timezone ?? systemTimeZone(),
+        }),
+      );
     }
 
     // Embedding service — optionally uses a separate provider (e.g. direct OpenAI)
@@ -394,6 +422,15 @@ export class Agent {
       });
     }
 
+    if (this.config.conversation?.search?.enabled) {
+      injections.push({
+        source: 'conversation-search',
+        priority: 9,
+        content: CONVERSATION_SEARCH_GUIDANCE,
+        tokens: estimateTokens(CONVERSATION_SEARCH_GUIDANCE),
+      });
+    }
+
     // Which blocks speak for the host — without it, the <context-data>
     // wrapper is only a tag the model has to guess the meaning of.
     const protocol = buildContextProtocolPrompt();
@@ -530,6 +567,7 @@ export class Agent {
       ...(decider !== undefined && { decider }),
       traceId: ctx.traceId,
       threadId,
+      turnStartedAt: ctx.startedAt,
       progressCheckInterval: this.config.progressCheckInterval,
       logger: this.logger,
       maxConsecutiveErrors: this.config.maxConsecutiveErrors,

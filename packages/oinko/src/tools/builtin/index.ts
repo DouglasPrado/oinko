@@ -16,6 +16,7 @@ import { createFileEditTool } from './file-edit.js';
 import { createBashTool } from './bash.js';
 import { createWebFetchTool } from './web-fetch.js';
 import { createAskUserTool, type AskUserOptions as _AskUserOptions } from './ask-user.js';
+import { createConversationSearchTool } from './conversation-search.js';
 
 export const builtinTools = {
   /** File pattern search (**, *, ?) */
@@ -34,6 +35,11 @@ export const builtinTools = {
   webFetch: createWebFetchTool,
   /** Ask user a question (requires callback) */
   askUser: createAskUserTool,
+  /**
+   * Search earlier messages (requires a search function). Usually enabled
+   * through `conversation.search` instead, which wires the store and scope.
+   */
+  conversationSearch: createConversationSearchTool,
 
   /** All tools except askUser (which needs a callback) */
   all(workingDir?: string): AgentTool[] {
@@ -69,3 +75,9 @@ export { createBashTool } from './bash.js';
 export { createWebFetchTool } from './web-fetch.js';
 export { createAskUserTool } from './ask-user.js';
 export type { AskUserOptions } from './ask-user.js';
+export {
+  createConversationSearchTool,
+  CONVERSATION_SEARCH_TOOL_NAME,
+  CONVERSATION_SEARCH_GUIDANCE,
+} from './conversation-search.js';
+export type { ConversationSearchToolOptions } from './conversation-search.js';
