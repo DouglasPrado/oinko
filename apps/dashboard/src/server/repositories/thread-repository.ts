@@ -29,7 +29,7 @@ const PAGE_SIZE = 50;
  * contada a parte, para a interface poder dizer quantas ficaram de fora em vez
  * de apresentar um numero que parece completo e nao e.
  */
-export function listThreads(filters: ThreadFilters): ThreadSummary[] {
+export function listThreads(filters: ThreadFilters, database = telemetryDb()): ThreadSummary[] {
   const where: string[] = [];
   const params: (string | number)[] = [];
 
@@ -46,7 +46,7 @@ export function listThreads(filters: ThreadFilters): ThreadSummary[] {
 
   const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
 
-  const rows = telemetryDb()
+  const rows = database
     .prepare(
       `SELECT
          thread_id,

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useTelemetryBot } from '@/features/telemetry/telemetry-context';
+import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import { Download, Loader2 } from 'lucide-react';
 import type { PayloadRef } from '../schemas/timeline.schema';
 import { usePayloadQuery } from '../api/use-payload-query';
@@ -15,6 +17,7 @@ import { formatBytes } from '@/lib/utils/format-bytes';
  * handler, que e o caso canonico de BFF aqui.
  */
 export function PayloadViewer({ label, payload }: { label: string; payload: PayloadRef | null }) {
+  const botId = useTelemetryBot();
   const [wanted, setWanted] = useState(false);
   const query = usePayloadQuery(payload?.id ?? '', wanted && payload !== null);
 
@@ -49,7 +52,10 @@ export function PayloadViewer({ label, payload }: { label: string; payload: Payl
           </button>
         ) : complete ? null : (
           <a
-            href={`/api/payloads/${payload.id}?download=1`}
+            href={telemetryHref(
+              `/api/payloads/${encodeURIComponent(payload.id)}?download=1`,
+              botId,
+            )}
             className="inline-flex items-center gap-1.5 text-xs text-time underline"
           >
             <Download className="size-3" aria-hidden />

@@ -1,3 +1,4 @@
+import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import Link from 'next/link';
 import type { ThreadSummary } from '../schemas/thread.schema';
 import { formatUsd } from '@/lib/utils/format-usd';
@@ -12,7 +13,7 @@ function when(ms: number): string {
  * Lista densa, alinhada a esquerda, com os numeros a direita em coluna
  * tabular. Separacao por regua de 1px — nao ha cartao nem sombra aqui.
  */
-export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
+export function ThreadTable({ threads, botId = '' }: { threads: ThreadSummary[]; botId?: string }) {
   return (
     <div className="overflow-x-auto border-t border-rule">
       <table className="w-full min-w-[42rem] border-collapse text-sm">
@@ -49,7 +50,7 @@ export function ThreadTable({ threads }: { threads: ThreadSummary[] }) {
             <tr key={thread.threadId} className="border-b border-rule/60 hover:bg-surface">
               <td className="py-1.5 pr-4 pl-5">
                 <Link
-                  href={`/threads/${encodeURIComponent(thread.threadId)}`}
+                  href={telemetryHref(`/threads/${encodeURIComponent(thread.threadId)}`, botId)}
                   className="font-mono text-time underline-offset-2 hover:underline"
                 >
                   {thread.threadId}

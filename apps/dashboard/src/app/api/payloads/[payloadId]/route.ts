@@ -1,3 +1,4 @@
+import { selectTelemetry } from '@/server/repositories/telemetry-sources';
 import { authenticated } from '@/server/auth/auth';
 import { NextResponse } from 'next/server';
 import { getPayloadChunk } from '@/server/repositories/payload-repository';
@@ -27,7 +28,10 @@ export async function GET(
     );
   }
 
-  const payload = getPayloadChunk(payloadId, offset, limit);
+  const telemetry = selectTelemetry(url.searchParams.get('bot') ?? undefined);
+  const payload = telemetry?.database
+    ? getPayloadChunk(payloadId, offset, limit, telemetry.database)
+    : undefined;
   if (!payload) {
     return NextResponse.json(
       { error: { code: 'PAYLOAD_NOT_FOUND', message: 'Esse conteudo nao esta mais no banco' } },

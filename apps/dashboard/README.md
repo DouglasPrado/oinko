@@ -27,13 +27,15 @@ O arquivo `.harness/dashboard-auth.json` contém hash scrypt e chave de sessão,
 
 ## Telemetria
 
-A tela existente lê o SQLite definido em `TELEMETRY_DB_PATH` no `.env.local`. Para o Oink LP:
+Use **Ver telemetria** no cartão do bot ou **Telemetria do bot** no topo da tela para alternar entre bots cadastrados. Cada um grava `.harness/bots/<id>/telemetry.db`; a dashboard descobre o caminho pelo cadastro e não exige reinício ao criar um bot.
+
+A seleção fica na URL (`/?bot=dev`) e acompanha as conversas, respostas, conteúdos completos, downloads e atualizações ao vivo. Antes do primeiro turno, a tela informa que ainda não há conversas; com telemetria desativada, orienta ativá-la e reiniciar o bot. Os bancos permanecem separados e são lidos sem modificações. Custos são os informados pelo provedor.
+
+`TELEMETRY_DB_PATH` no `.env.local` é opcional para bots cadastrados. Ele continua atendendo consumidores independentes do SDK e define a seleção inicial quando aponta para o banco de um bot:
 
 ```dotenv
 TELEMETRY_DB_PATH=../../.harness/bots/oink-lp/telemetry.db
 ```
-
-Todos os bots gravam `.harness/bots/<id>/telemetry.db`. O seletor de banco por bot na interface ainda não está implementado; ajuste `TELEMETRY_DB_PATH` e reinicie a dashboard para inspecionar outro banco. Custos continuam sendo os informados pelo provedor.
 
 ## Testes
 

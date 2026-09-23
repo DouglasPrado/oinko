@@ -12,10 +12,11 @@ interface Props {
   children: React.ReactNode;
   conversations?: React.ReactNode;
   inspector?: React.ReactNode;
+  telemetryHref?: string;
 }
 
 /** Shared sidebar, with an inline disclosure on narrow screens. */
-export function DashboardShell({ children, conversations, inspector }: Props) {
+export function DashboardShell({ children, conversations, inspector, telemetryHref = '/' }: Props) {
   const pathname = usePathname();
   const [openPath, setOpenPath] = useState<string | null>(null);
   const open = openPath === pathname;
@@ -66,7 +67,7 @@ export function DashboardShell({ children, conversations, inspector }: Props) {
           </Link>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <ProductNav pathname={pathname} />
+          <ProductNav pathname={pathname} telemetryHref={telemetryHref} />
           {conversations ? <div className="border-t border-rule">{conversations}</div> : null}
         </div>
         <div className="shrink-0 border-t border-rule px-6 py-4">

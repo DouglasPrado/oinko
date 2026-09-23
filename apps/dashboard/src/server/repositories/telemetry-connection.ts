@@ -1,11 +1,13 @@
 import 'server-only';
 import { DatabaseSync } from 'node:sqlite';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { env } from '@/config/env';
 
-const CONNECTION = Symbol.for('@oinko/dashboard/telemetry-db');
+const CONNECTION = Symbol.for('@oinko/dashboard/telemetry-databases');
 
 interface Holder {
-  [CONNECTION]?: DatabaseSync;
+  [CONNECTION]?: Map<string, DatabaseSync>;
 }
 
 /** Tabelas sem as quais nenhuma tela funciona. */
@@ -46,26 +48,22 @@ function assertSchema(database: DatabaseSync, path: string): void {
   }
 }
 
-/**
- * Conexao unica por processo, somente-leitura.
- *
- * Guardada em globalThis para sobreviver ao hot reload do dev, que sem isso
- * abriria um descritor novo a cada edicao. A dashboard nunca roda migration:
- * quem e dono deste schema e o SDK.
- */
-export function telemetryDb(): DatabaseSync {
+/** Conexões somente-leitura, separadas por caminho e reutilizadas durante HMR. */
+export function telemetryDb(path = env.TELEMETRY_DB_PATH): DatabaseSync {
+  path = resolve(path);
   const holder = globalThis as unknown as Holder;
-  const existing = holder[CONNECTION];
+  const connections = (holder[CONNECTION] ??= new Map<string, DatabaseSync>());
+  const existing = connections.get(path);
   if (existing) return existing;
-
-  let database: DatabaseSync;
+  // O fallback WAL nunca deve criar um banco que o bot ainda não inicializou.
+  if (!existsSync(path)) throw new Error('O bot ainda não criou o banco de telemetria.');
+  const database = connect(path);
   try {
-    database = connect(env.TELEMETRY_DB_PATH);
-  } catch (err) {
-    throw new Error(`Nao foi possivel abrir ${env.TELEMETRY_DB_PATH}`, { cause: err });
+    assertSchema(database, path);
+  } catch (error) {
+    database.close();
+    throw error;
   }
-
-  assertSchema(database, env.TELEMETRY_DB_PATH);
-  holder[CONNECTION] = database;
+  connections.set(path, database);
   return database;
 }

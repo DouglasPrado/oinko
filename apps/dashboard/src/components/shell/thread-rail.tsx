@@ -1,3 +1,5 @@
+import type { TelemetrySelection } from '@/server/repositories/telemetry-sources';
+import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import Link from 'next/link';
 import { navThreads, navExecutions } from '@/server/repositories/navigation-repository';
 import { LiveBadge } from '@/features/live/components/live-badge';
@@ -14,6 +16,7 @@ function day(ms: number): string {
 }
 
 interface Props {
+  telemetry: TelemetrySelection;
   activeThreadId?: string;
   activeTraceId?: string;
 }
@@ -26,16 +29,19 @@ interface Props {
  * que mudou —, e uma navegacao que troca de pagina a cada passo perde
  * justamente esse contexto.
  */
-export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
-  const threads = navThreads();
-  const executions = activeThreadId ? navExecutions(activeThreadId) : [];
+export function ThreadRail({ activeThreadId, activeTraceId, telemetry }: Props) {
+  const threads = telemetry.database ? navThreads(60, telemetry.database) : [];
+  const executions =
+    activeThreadId && telemetry.database
+      ? navExecutions(activeThreadId, 100, telemetry.database)
+      : [];
 
   return (
     <nav aria-label="Conversas" className="min-w-0 py-3">
       <div className="flex items-center gap-2 px-5 pb-2">
         <h2 className="text-xs font-medium text-ink-muted">Conversas</h2>
         <span className="ml-auto">
-          <LiveBadge />
+          <LiveBadge key={telemetry.id} />
         </span>
       </div>
 
@@ -50,7 +56,10 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
           return (
             <li key={thread.threadId}>
               <Link
-                href={`/threads/${encodeURIComponent(thread.threadId)}`}
+                href={telemetryHref(
+                  `/threads/${encodeURIComponent(thread.threadId)}`,
+                  telemetry.id,
+                )}
                 aria-current={open ? 'true' : undefined}
                 className={cn(
                   'flex items-baseline gap-2 px-4 py-2 text-[0.8125rem] hover:bg-paper',
@@ -73,7 +82,10 @@ export function ThreadRail({ activeThreadId, activeTraceId }: Props) {
                   {executions.map((execution) => (
                     <li key={execution.traceId}>
                       <Link
-                        href={`/threads/${encodeURIComponent(thread.threadId)}/${execution.traceId}`}
+                        href={telemetryHref(
+                          `/threads/${encodeURIComponent(thread.threadId)}/${execution.traceId}`,
+                          telemetry.id,
+                        )}
                         aria-current={execution.traceId === activeTraceId ? 'page' : undefined}
                         className={cn(
                           'flex items-baseline gap-2 py-1 pr-3 pl-6 text-xs hover:bg-surface',

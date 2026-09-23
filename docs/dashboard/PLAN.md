@@ -39,8 +39,9 @@ Acesso remoto: `pnpm --filter @oinko/dashboard start:network` após o build e a 
 - Runtime e canais: histórico persistente, isolamento de conversas, encerramento e suporte Telegram a texto, imagem e áudio, testados nos respectivos pacotes.
 - Senha, assinatura/expiração de sessão, rejeição de origem externa e acesso sem login.
 - Navegador: criar, iniciar, editar, reiniciar, recarregar e parar um bot com provedor simulado.
+- Telemetria de dois bots com IDs coincidentes, troca de banco, conteúdo completo/download, atualização ao vivo e bot ainda sem dados.
 - Suíte anterior da dashboard e checks agregados do workspace.
 
 ## Limites
 
-A interface configura MCP HTTP com Bearer opcional e Higgsfield com OAuth compartilhado. MCP stdio e ferramentas/skills escritas em TypeScript continuam disponíveis na composição em código; não há editor de código nem execução de comandos arbitrários no formulário. A telemetria existente continua consultando `TELEMETRY_DB_PATH`; cada novo bot grava seu próprio banco, mas um seletor de bancos na tela de telemetria é uma evolução separada. Não há inicialização automática após reiniciar o computador nem exclusão de históricos pelo cadastro.
+A interface configura MCP HTTP com Bearer opcional e Higgsfield com OAuth compartilhado. MCP stdio e ferramentas/skills escritas em TypeScript continuam disponíveis na composição em código; não há editor de código nem execução de comandos arbitrários no formulário. A telemetria permite selecionar qualquer bot cadastrado. A seleção fica na URL (`bot=<id>`) e acompanha conversas, respostas, detalhes, downloads e atualizações ao vivo. Cada banco é aberto separadamente, somente para leitura. Bots sem execuções mostram um estado vazio. `TELEMETRY_DB_PATH` continua disponível para consumidores independentes do SDK e define a seleção inicial quando corresponde a um bot. Não há inicialização automática após reiniciar o computador nem exclusão de históricos pelo cadastro.

@@ -57,11 +57,19 @@ beforeEach(() => {
   // todos os testes leriam o banco do primeiro.
   vi.resetModules();
   // O repositorio guarda a conexao em globalThis para sobreviver ao HMR.
-  delete (globalThis as Record<symbol, unknown>)[Symbol.for('@oinko/dashboard/telemetry-db')];
+  const holder = globalThis as Record<symbol, unknown>;
+  const key = Symbol.for('@oinko/dashboard/telemetry-databases');
+  for (const db of (holder[key] as Map<string, DatabaseSync> | undefined)?.values() ?? [])
+    db.close();
+  delete holder[key];
 });
 
 afterEach(() => {
-  delete (globalThis as Record<symbol, unknown>)[Symbol.for('@oinko/dashboard/telemetry-db')];
+  const holder = globalThis as Record<symbol, unknown>;
+  const key = Symbol.for('@oinko/dashboard/telemetry-databases');
+  for (const db of (holder[key] as Map<string, DatabaseSync> | undefined)?.values() ?? [])
+    db.close();
+  delete holder[key];
   rmSync(dir, { recursive: true, force: true });
 });
 

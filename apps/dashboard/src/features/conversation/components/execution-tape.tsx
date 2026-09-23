@@ -120,7 +120,7 @@ export function ExecutionTape({ items, startedAt, selectedId, basePath }: Props)
         return (
           <li key={item.id}>
             <Link
-              href={`${basePath}?item=${encodeURIComponent(item.id)}`}
+              href={`${basePath}${basePath.includes('?') ? '&' : '?'}item=${encodeURIComponent(item.id)}`}
               scroll={false}
               aria-current={selected ? 'true' : undefined}
               className={cn(

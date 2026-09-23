@@ -8,8 +8,8 @@ import { telemetryDb } from './telemetry-connection';
  * aqui e "chegou coisa nova?", e esta consulta usa indice e custa quase nada
  * mesmo repetida a cada segundo.
  */
-export function telemetryWatermark(): string {
-  const row = telemetryDb()
+export function telemetryWatermark(database = telemetryDb()): string {
+  const row = database
     .prepare(
       `SELECT
          (SELECT COUNT(*) FROM executions)       AS executions,

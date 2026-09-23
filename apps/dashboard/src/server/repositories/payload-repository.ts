@@ -14,10 +14,10 @@ export function getPayloadChunk(
   id: string,
   offset: number,
   limit: number,
+  database = telemetryDb(),
 ): PayloadChunk | undefined {
-  const row = telemetryDb()
-    .prepare('SELECT body, size_bytes FROM payloads WHERE id = ?')
-    .get(id) as { body: string; size_bytes: number } | undefined;
+  const row = database.prepare('SELECT body, size_bytes FROM payloads WHERE id = ?').get(id) as
+    { body: string; size_bytes: number } | undefined;
 
   if (!row) return undefined;
 

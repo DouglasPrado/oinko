@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTelemetryBot } from '@/features/telemetry/telemetry-context';
+import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import { useRouter } from 'next/navigation';
 
 export type LiveStatus = 'connecting' | 'live' | 'offline';
@@ -15,11 +17,12 @@ export type LiveStatus = 'connecting' | 'live' | 'offline';
  */
 export function useLiveTelemetry(): { status: LiveStatus; updatedAt: number | null } {
   const router = useRouter();
+  const botId = useTelemetryBot();
   const [status, setStatus] = useState<LiveStatus>('connecting');
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
 
   useEffect(() => {
-    const source = new EventSource('/api/stream');
+    const source = new EventSource(telemetryHref('/api/stream', botId));
 
     const onOpen = (): void => setStatus('live');
     const onChanged = (): void => {
@@ -39,7 +42,7 @@ export function useLiveTelemetry(): { status: LiveStatus; updatedAt: number | nu
       source.removeEventListener('error', onError);
       source.close();
     };
-  }, [router]);
+  }, [router, botId]);
 
   return { status, updatedAt };
 }

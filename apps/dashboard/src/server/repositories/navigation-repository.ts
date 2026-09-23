@@ -19,8 +19,8 @@ export interface NavExecution {
 }
 
 /** Threads para a barra lateral: so o que cabe numa linha densa. */
-export function navThreads(limit = 60): NavThread[] {
-  const rows = telemetryDb()
+export function navThreads(limit = 60, database = telemetryDb()): NavThread[] {
+  const rows = database
     .prepare(
       `SELECT thread_id, COUNT(*) AS n, MAX(started_at) AS last,
               SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors
@@ -37,8 +37,12 @@ export function navThreads(limit = 60): NavThread[] {
 }
 
 /** Execucoes de uma thread, para aninhar sob ela na barra lateral. */
-export function navExecutions(threadId: string, limit = 100): NavExecution[] {
-  const rows = telemetryDb()
+export function navExecutions(
+  threadId: string,
+  limit = 100,
+  database = telemetryDb(),
+): NavExecution[] {
+  const rows = database
     .prepare(
       `SELECT trace_id, model, status, started_at, duration_ms, total_tokens, cost_usd
        FROM executions WHERE thread_id = ?

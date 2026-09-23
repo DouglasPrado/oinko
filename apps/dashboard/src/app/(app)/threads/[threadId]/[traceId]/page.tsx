@@ -1,3 +1,5 @@
+import { selectTelemetry } from '@/server/repositories/telemetry-sources';
+import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import { notFound } from 'next/navigation';
 import { getExecutionDetail } from '@/server/repositories/execution-repository';
 import { Workbench } from '@/components/shell/workbench';
@@ -32,17 +34,24 @@ export default async function ExecutionPage({
 }) {
   const { threadId, traceId } = await params;
   const query = await searchParams;
-  const detail = getExecutionDetail(traceId);
+  const telemetry = selectTelemetry(typeof query.bot === 'string' ? query.bot : undefined);
+  if (!telemetry?.database) notFound();
+  const detail = getExecutionDetail(traceId, telemetry.database);
   if (!detail) notFound();
 
   const decoded = decodeURIComponent(threadId);
-  const basePath = `/threads/${encodeURIComponent(decoded)}/${traceId}`;
+  if (detail.execution.threadId !== decoded) notFound();
+  const basePath = telemetryHref(
+    `/threads/${encodeURIComponent(decoded)}/${traceId}`,
+    telemetry.id,
+  );
   const selectedId = typeof query.item === 'string' ? query.item : undefined;
   const { execution } = detail;
 
   return (
     <Workbench
       showConversations
+      telemetry={telemetry}
       activeThreadId={decoded}
       activeTraceId={traceId}
       inspector={

@@ -19,14 +19,20 @@ export function currentSection(pathname: string) {
   );
 }
 
-export function ProductNav({ pathname }: { pathname: string }) {
+export function ProductNav({
+  pathname,
+  telemetryHref = '/',
+}: {
+  pathname: string;
+  telemetryHref?: string;
+}) {
   const active = currentSection(pathname)?.href;
   return (
     <nav aria-label="Principal" className="space-y-1 p-3 text-sm">
       {links.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
-          href={href}
+          href={href === '/' ? telemetryHref : href}
           aria-current={active === href ? 'page' : undefined}
           className={cn(
             'flex min-h-11 items-center gap-3 rounded-control border-l-2 px-3 py-2.5',

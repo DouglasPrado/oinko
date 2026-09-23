@@ -50,8 +50,8 @@ const EXECUTION_COLUMNS = `trace_id, thread_id, app, model, status, end_reason,
   input_tokens, output_tokens, total_tokens, cost_usd, cost_status, context_tokens,
   started_at, duration_ms, ttft_ms, error_message`;
 
-export function listExecutions(threadId: string): ExecutionSummary[] {
-  const rows = telemetryDb()
+export function listExecutions(threadId: string, database = telemetryDb()): ExecutionSummary[] {
+  const rows = database
     .prepare(
       `SELECT ${EXECUTION_COLUMNS} FROM executions
        WHERE thread_id = ? ORDER BY started_at DESC, trace_id DESC LIMIT 200`,
@@ -68,8 +68,11 @@ export function listExecutions(threadId: string): ExecutionSummary[] {
  * custo atualiza as chamadas; recalcular por SUM mantem o numero certo mesmo
  * com confirmacao chegando depois.
  */
-function rollUpCost(traceId: string): { costUsd: number | null; costStatus: string } {
-  const row = telemetryDb()
+function rollUpCost(
+  traceId: string,
+  database = telemetryDb(),
+): { costUsd: number | null; costStatus: string } {
+  const row = database
     .prepare(
       `SELECT SUM(cost_usd) AS total,
               SUM(CASE WHEN cost_status = 'pending' THEN 1 ELSE 0 END) AS pending,
@@ -86,8 +89,8 @@ function rollUpCost(traceId: string): { costUsd: number | null; costStatus: stri
   };
 }
 
-function llmCalls(traceId: string): TimelineItem[] {
-  const rows = telemetryDb()
+function llmCalls(traceId: string, database = telemetryDb()): TimelineItem[] {
+  const rows = database
     .prepare(
       `SELECT c.id, c.seq, c.model, c.finish_reason, c.input_tokens, c.output_tokens,
               c.cached_tokens, c.cost_usd, c.cost_status, c.cost_source, c.ttft_ms,
@@ -125,8 +128,8 @@ function llmCalls(traceId: string): TimelineItem[] {
   }));
 }
 
-function toolCalls(traceId: string): TimelineItem[] {
-  const rows = telemetryDb()
+function toolCalls(traceId: string, database = telemetryDb()): TimelineItem[] {
+  const rows = database
     .prepare(
       `SELECT t.id, t.name, t.origin, t.is_error, t.truncated, t.duration_ms, t.started_at,
               ${payloadColumns('a', 'args')}, ${payloadColumns('r', 'result')}
@@ -151,8 +154,8 @@ function toolCalls(traceId: string): TimelineItem[] {
   }));
 }
 
-function mcpCalls(traceId: string): TimelineItem[] {
-  const rows = telemetryDb()
+function mcpCalls(traceId: string, database = telemetryDb()): TimelineItem[] {
+  const rows = database
     .prepare(
       `SELECT m.id, m.server_name, m.remote_tool_name, m.is_error, m.timed_out,
               m.duration_ms, m.started_at,
@@ -178,8 +181,8 @@ function mcpCalls(traceId: string): TimelineItem[] {
   }));
 }
 
-function decisions(traceId: string): TimelineItem[] {
-  const rows = telemetryDb()
+function decisions(traceId: string, database = telemetryDb()): TimelineItem[] {
+  const rows = database
     .prepare(
       `SELECT id, point, answers_json, duration_ms, created_at
        FROM decisions WHERE trace_id = ? ORDER BY created_at`,
@@ -204,8 +207,8 @@ function decisions(traceId: string): TimelineItem[] {
   });
 }
 
-function injections(traceId: string): Injection[] {
-  const rows = telemetryDb()
+function injections(traceId: string, database = telemetryDb()): Injection[] {
+  const rows = database
     .prepare(
       `SELECT source, tokens, applied FROM llm_call_injections
        WHERE trace_id = ? ORDER BY priority DESC, tokens DESC`,
@@ -226,10 +229,10 @@ function injections(traceId: string): Injection[] {
  * e o que o modelo podia chamar naquele turno, que muda com skill ativada e
  * servidor MCP conectado.
  */
-function availableTools(payloadId: string | null): string[] {
+function availableTools(payloadId: string | null, database = telemetryDb()): string[] {
   if (payloadId === null) return [];
 
-  const row = telemetryDb().prepare('SELECT body FROM payloads WHERE id = ?').get(payloadId) as
+  const row = database.prepare('SELECT body FROM payloads WHERE id = ?').get(payloadId) as
     { body: string } | undefined;
   if (!row) return [];
 
@@ -244,8 +247,11 @@ function availableTools(payloadId: string | null): string[] {
   }
 }
 
-export function getExecutionDetail(traceId: string): ExecutionDetail | undefined {
-  const row = telemetryDb()
+export function getExecutionDetail(
+  traceId: string,
+  database = telemetryDb(),
+): ExecutionDetail | undefined {
+  const row = database
     .prepare(
       `SELECT ${EXECUTION_COLUMNS},
               ${payloadColumns('sp', 'system')}, ${payloadColumns('ui', 'input')},
@@ -262,13 +268,13 @@ export function getExecutionDetail(traceId: string): ExecutionDetail | undefined
   if (!row) return undefined;
 
   const execution = toExecution(row);
-  const cost = rollUpCost(traceId);
+  const cost = rollUpCost(traceId, database);
 
   const items = [
-    ...llmCalls(traceId),
-    ...toolCalls(traceId),
-    ...mcpCalls(traceId),
-    ...decisions(traceId),
+    ...llmCalls(traceId, database),
+    ...toolCalls(traceId, database),
+    ...mcpCalls(traceId, database),
+    ...decisions(traceId, database),
   ].sort((a, b) => a.startedAt - b.startedAt);
 
   // Validado na fronteira: o schema pertence ao SDK, e uma coluna que mude de
@@ -283,8 +289,8 @@ export function getExecutionDetail(traceId: string): ExecutionDetail | undefined
     userInput: toPayloadRef(row, 'input'),
     assistantText: toPayloadRef(row, 'assistant'),
     toolsSchema: toPayloadRef(row, 'tools'),
-    availableTools: availableTools(nullableStr(row.tools_id)),
-    injections: injections(traceId),
+    availableTools: availableTools(nullableStr(row.tools_id), database),
+    injections: injections(traceId, database),
     items,
   });
 }

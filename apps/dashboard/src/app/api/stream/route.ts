@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import { selectTelemetry } from '@/server/repositories/telemetry-sources';
+import { telemetryDb } from '@/server/repositories/telemetry-connection';
 import { authenticated } from '@/server/auth/auth';
 import { telemetryWatermark } from '@/server/repositories/watermark-repository';
 
@@ -20,6 +23,8 @@ const HEARTBEAT_MS = 15_000;
  */
 export function GET(request: Request): Response {
   if (!authenticated(request.headers)) return new Response('Não autorizado.', { status: 401 });
+  const telemetry = selectTelemetry(new URL(request.url).searchParams.get('bot') ?? undefined);
+  if (!telemetry) return new Response('Bot não encontrado.', { status: 404 });
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -39,7 +44,9 @@ export function GET(request: Request): Response {
       const tick = (): void => {
         let current: string;
         try {
-          current = telemetryWatermark();
+          current = existsSync(telemetry.path)
+            ? telemetryWatermark(telemetryDb(telemetry.path))
+            : 'empty';
         } catch {
           // Banco indisponivel por um instante nao derruba a conexao.
           return;

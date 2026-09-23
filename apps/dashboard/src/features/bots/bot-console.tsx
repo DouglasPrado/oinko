@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useId, cloneElement, type FormEvent, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Play, Square, RotateCw, ArrowLeft, Bot, Terminal, Settings2 } from 'lucide-react';
@@ -695,12 +697,20 @@ export function BotConsole() {
                   </button>
                 )}
               </div>
-              {bot.cli && (
-                <p className="mt-4 flex items-center gap-2 text-xs text-ink-muted">
-                  <Terminal size={13} />
-                  <code>pnpm bot chat {bot.id}</code>
-                </p>
-              )}
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                {bot.cli ? (
+                  <span className="flex items-center gap-2">
+                    <Terminal size={13} />
+                    <code>pnpm bot chat {bot.id}</code>
+                  </span>
+                ) : null}
+                <Link
+                  href={`/?bot=${encodeURIComponent(bot.id)}`}
+                  className="ml-auto text-time underline"
+                >
+                  Ver telemetria
+                </Link>
+              </div>
             </article>
           );
         })}

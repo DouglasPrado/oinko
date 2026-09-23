@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+import { selectTelemetry } from '@/server/repositories/telemetry-sources';
 import { listThreads } from '@/server/repositories/thread-repository';
 import { ThreadFiltersSchema } from '@/features/threads/schemas/thread.schema';
 import { Workbench } from '@/components/shell/workbench';
@@ -24,7 +26,9 @@ export default async function ThreadsPage({
     status: params.status === 'ok' || params.status === 'error' ? params.status : 'all',
   });
 
-  const threads = listThreads(filters);
+  const telemetry = selectTelemetry(typeof params.bot === 'string' ? params.bot : undefined);
+  if (!telemetry) notFound();
+  const threads = telemetry.database ? listThreads(filters, telemetry.database) : [];
 
   // Custo desconhecido nao entra no total e e contado a parte: um numero que
   // parece completo e nao e seria pior que numero nenhum.
@@ -46,7 +50,7 @@ export default async function ThreadsPage({
   );
 
   return (
-    <Workbench showConversations>
+    <Workbench showConversations telemetry={telemetry}>
       <header className="flex flex-wrap items-baseline gap-x-8 gap-y-3 border-b border-rule px-5 py-4">
         <div className="flex flex-col">
           <span className="text-[0.6875rem] text-ink-muted">
@@ -84,11 +88,11 @@ export default async function ThreadsPage({
         <div className="px-5">
           <EmptyState
             title="Nenhuma conversa registrada ainda"
-            description="Ligue a telemetria no agente e rode um turno. Cada resposta aparece aqui com o custo cobrado, o tempo gasto e tudo que entrou e saiu do modelo."
+            description={telemetry.emptyMessage}
           />
         </div>
       ) : (
-        <ThreadTable threads={threads} />
+        <ThreadTable threads={threads} botId={telemetry.id} />
       )}
     </Workbench>
   );
