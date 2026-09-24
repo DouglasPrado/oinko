@@ -15,7 +15,7 @@ import { createConversationSearchTool } from '../tools/builtin/conversation-sear
 import { createToolResultReader } from '../tools/builtin/tool-result.js';
 import { systemTimeZone } from '../utils/local-date.js';
 import { estimateTokens } from '../utils/token-counter.js';
-import { messageTokens, prepareWorkingContext } from './working-context.js';
+import { messageTokens, prepareWorkingContext, type SummaryPlan } from './working-context.js';
 import { createContextSummaryWriter } from './context-summary-writer.js';
 import { createToolSelection } from '../tools/tool-selection.js';
 import { archivedDetailInjection } from './archived-detail.js';
@@ -113,6 +113,8 @@ export async function prepareAdaptiveContext(options: {
   traceId: string;
   signal?: AbortSignal;
   telemetry?: TelemetrySink;
+  /** Background summary queue of the agent (used when policy.summaryMode is background). */
+  schedule?: (plan: SummaryPlan) => void;
 }) {
   const {
     manager,
@@ -167,7 +169,13 @@ export async function prepareAdaptiveContext(options: {
       })
     : undefined;
   const working = effective
-    ? await prepareWorkingContext({ manager, threadId, policy: effective, summarize: summarize! })
+    ? await prepareWorkingContext({
+        manager,
+        threadId,
+        policy: effective,
+        summarize: summarize!,
+        ...(options.schedule && { schedule: options.schedule }),
+      })
     : undefined;
   const history = working?.history ?? manager.getHistory(threadId);
   return {
@@ -188,6 +196,14 @@ export async function prepareAdaptiveContext(options: {
         events.push({ type: 'compaction', strategy: 'autocompact', tokensFreed: 0, traceId });
       for (const message of working?.warnings ?? [])
         events.push({ type: 'warning', code: 'context_summary_failed', message, traceId });
+      if (working?.pending)
+        events.push({
+          type: 'warning',
+          code: 'context_preparation_pending',
+          message:
+            'Older messages are being summarized in the background; this turn used the recent window and the full history stays available.',
+          traceId,
+        });
       if (fallback)
         events.push({
           type: 'warning',

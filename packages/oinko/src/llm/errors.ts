@@ -14,6 +14,14 @@ export class OverloadedError extends Error {
   }
 }
 
+/** An attempt produced no useful output (content or tool call) within the limit. */
+export class LatencyTimeoutError extends Error {
+  constructor(readonly afterMs: number) {
+    super(`No useful output after ${afterMs} ms`);
+    this.name = 'LatencyTimeoutError';
+  }
+}
+
 /** Thrown when the API returns 402 — insufficient credits/billing */
 export class InsufficientCreditsError extends Error {
   constructor(message = 'Insufficient credits') {

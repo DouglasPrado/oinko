@@ -39,6 +39,9 @@ export function llmCallRecord(
     ...(call.durationMs !== undefined && { durationMs: call.durationMs }),
     ...(call.queuedMs !== undefined && { queuedMs: call.queuedMs }),
     ...(call.attempts !== undefined && { attempts: call.attempts }),
+    // An interrupted attempt is recorded too: its latency is real and any usage counts.
+    ...(call.cancelled && { cancelled: true }),
+    ...(call.error && { error: call.error }),
     streamed: true,
     startedAt: call.startedAt,
     endedAt: call.endedAt,

@@ -57,9 +57,9 @@ export class LocalRunner implements RunnerPort {
       case 'gitDiff':
         return this.ops({ op: 'gitDiff', baseline: command.baselineRef ? this.baselines.get(command.baselineRef) : command.baseline });
       case 'replaceExact':
-        return this.apply([{ action: 'replace', path: command.path, expectedHash: command.expectedHash, oldText: command.oldText, newText: command.newText, replaceAll: command.replaceAll ?? false }]);
+        return (await this.apply([{ action: 'replace', path: command.path, expectedHash: command.expectedHash, oldText: command.oldText, newText: command.newText, replaceAll: command.replaceAll ?? false }])) as T;
       case 'applyPatch':
-        return this.apply(command.edits);
+        return (await this.apply(command.edits)) as T;
       case 'reconcileEdit':
         return { found: false, state: 'unknown' } as T;
       case 'startCheck':
@@ -145,7 +145,10 @@ export type ScriptStep = { tool: string; args: Record<string, unknown> } | { tex
  * the script sees previous tool results (e.g. a file hash) and decides the
  * next call, like a model would.
  */
-export function scriptedProvider(script: (messages: Message[], call: number) => ScriptStep) {
+export function scriptedProvider(script: (messages: Message[], call: number) => ScriptStep): {
+  fetch: (request: Request) => Promise<Response>;
+  requests: { model: string; messages: Message[] }[];
+} {
   let call = 0;
   const requests: { model: string; messages: Message[] }[] = [];
   const fetch = async (request: Request) => {

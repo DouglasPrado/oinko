@@ -58,6 +58,7 @@ export class AgentCycleExecutor implements RunExecutor {
     const traceIds: string[] = [];
     let text = '';
     let error: Error | undefined;
+    let model = policy.models?.main ?? 'unknown';
     for await (const event of this.agent.stream(cyclePrompt(input), {
       threadId: this.options.threadId?.(input.run.id) ?? `programming:${input.run.id}`,
       signal: input.context.signal,
@@ -71,9 +72,32 @@ export class AgentCycleExecutor implements RunExecutor {
         stepId: input.context.stepId,
       },
     })) {
-      if (event.type === 'agent_start') traceIds.push(event.traceId);
-      else if (event.type === 'text_delta') text += event.content;
+      if (event.type === 'agent_start') {
+        traceIds.push(event.traceId);
+        model = event.model;
+        input.context.emit('routing_decision', { model: event.model, tier: event.model === policy.models?.fast ? 'fast' : 'main' });
+      } else if (event.type === 'text_delta') text += event.content;
       else if (event.type === 'error' && !event.recoverable) error = event.error;
+      else if (event.type === 'model_fallback') {
+        // Both attempts are journaled: the interrupted one and the switch.
+        input.context.emit('model_attempt_cancelled', { model: event.from, reason: event.reason ?? 'unavailable' }, 'failed');
+        input.context.emit('model_fallback_triggered', {
+          from: event.from,
+          to: event.to,
+          reason: event.reason ?? 'unavailable',
+          partialText: event.partial?.text ?? false,
+          partialTools: event.partial?.tools ?? 0,
+        });
+        model = event.to;
+      } else if (event.type === 'warning' && event.code === 'context_preparation_pending')
+        input.context.emit('context_preparation_pending', { reason: 'summary_in_background' });
+      else if (event.type === 'agent_end')
+        input.context.emit(
+          'model_attempt_finished',
+          { model, result: event.reason, totalTokens: event.usage.totalTokens },
+          event.reason === 'stop' ? 'succeeded' : 'failed',
+          { durationMs: event.duration },
+        );
     }
     input.context.signal.throwIfAborted();
     if (error && !text) throw error;

@@ -60,6 +60,17 @@ import {
   toolsForTurn,
   prepareAdaptiveContext,
 } from './core/adaptive-context.js';
+import {
+  planSummary,
+  runSummaryPlan,
+  type SummaryOutcome,
+  type SummaryPlan,
+} from './core/working-context.js';
+import { createContextSummaryWriter } from './core/context-summary-writer.js';
+import type {
+  ContextLifecycleEvent,
+  ConversationCheckpoint,
+} from './contracts/entities/working-context.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -116,6 +127,9 @@ export class Agent {
   private readonly turnEndHooks: TurnEndHook[] = [];
   /** AbortControllers for background forks — aborted in destroy(). */
   private readonly backgroundForks = new Set<AbortController>();
+  /** One background summary chain per conversation: updates never overlap. */
+  private readonly summaryQueue = new Map<string, Promise<SummaryOutcome | undefined>>();
+  private readonly summaryPlans = new Map<string, string>();
 
   private constructor(config: AgentConfig) {
     this.config = config;
@@ -509,6 +523,9 @@ export class Agent {
       traceId,
       signal: options?.signal,
       telemetry,
+      ...(contextPolicy?.summaryMode === 'background' && {
+        schedule: (plan: SummaryPlan) => void this.enqueueSummary(threadId, plan, traceId),
+      }),
     });
     const { toolSchemaTokens, inputBudget, summaryCalls, summarize, history } = adaptive;
     const contextResult = buildContext({
@@ -637,6 +654,11 @@ export class Agent {
       maxContextTokens: inputBudget ?? this.config.maxContextTokens,
       compactionThreshold: this.config.compactionThreshold,
       fallbackModel: this.config.fallbackModel,
+      // Routed to the fast model: switch to the requested one when it stalls or is down.
+      ...(model === this.config.routing?.fastModel &&
+        model !== requestedModel && {
+          latencyFallback: { to: requestedModel, afterMs: this.config.routing.fallbackAfterMs },
+        }),
       maxOutputTokens: this.config.maxOutputTokens,
       escalatedMaxOutputTokens: this.config.escalatedMaxOutputTokens,
       // Token budget
@@ -789,6 +811,8 @@ export class Agent {
         threadId,
       );
     }
+    // Background mode: prepare the next turn's summary now, without waiting.
+    if (contextPolicy?.summaryMode === 'background') void this.prepareContext(threadId, ctx.traceId);
 
     // Accumulate cost
     this.costAccumulator.inputTokens += terminal.usage.inputTokens;
@@ -1074,6 +1098,13 @@ export class Agent {
     return this.conversations.getHistory(threadId ?? 'default');
   }
 
+  /** The persisted working summary of a conversation, if any (never altered by reading). */
+  getCheckpoint(threadId?: string): ConversationCheckpoint | undefined {
+    return this.conversations.supportsWorkingContext()
+      ? this.conversations.getCheckpoint(threadId ?? 'default')
+      : undefined;
+  }
+
   clearHistory(threadId?: string): void {
     const tid = threadId ?? 'default';
     this.conversations.clearThread(tid);
@@ -1225,8 +1256,79 @@ export class Agent {
     return usage ? { ...usage } : { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
   }
 
+  /**
+   * Summarizes the part of a conversation that outgrew the recent window, in
+   * the background and serialized with other summaries of the same thread.
+   * Used after each turn in background mode and to prepare old conversations
+   * when the policy is turned on. Resolves when this conversation's queued
+   * summaries have settled; `undefined` when nothing needed summarizing.
+   */
+  prepareContext(threadId = 'default', traceId = `context:${randomUUID()}`): Promise<SummaryOutcome | undefined> {
+    const policy = this.config.context?.enabled ? this.config.context : undefined;
+    if (!policy || !this.conversations.supportsWorkingContext()) return Promise.resolve(undefined);
+    const plan = planSummary(
+      this.conversations.getHistory(threadId),
+      this.conversations.getCheckpoint(threadId)?.through ?? 0,
+      policy,
+    );
+    return plan ? this.enqueueSummary(threadId, plan, traceId) : (this.summaryQueue.get(threadId) ?? Promise.resolve(undefined));
+  }
+
+  private enqueueSummary(threadId: string, plan: SummaryPlan, traceId: string): Promise<SummaryOutcome | undefined> {
+    const key = `${plan.through}:${plan.end}:${plan.endCreatedAt}`;
+    const queued = this.summaryQueue.get(threadId);
+    // The same range already waiting: one summary is enough.
+    if (queued && this.summaryPlans.get(threadId) === key) return queued;
+    this.summaryPlans.set(threadId, key);
+    const policy = this.config.context!;
+    const notify = (event: Omit<ContextLifecycleEvent, 'threadId' | 'through' | 'end' | 'traceId'>) => {
+      try {
+        this.config.contextEvents?.({ threadId, through: plan.through, end: plan.end, traceId, ...event });
+      } catch {
+        // Observers never affect the conversation.
+      }
+    };
+    notify({ type: 'summary_scheduled' });
+    const run = async (): Promise<SummaryOutcome | undefined> => {
+      if (this.destroyed) return undefined;
+      const started = Date.now();
+      const telemetry = this.ensureTelemetry();
+      const summarize = createContextSummaryWriter({
+        client: this.client,
+        model: policy.summaryModel ?? this.config.model,
+        maxTokens: policy.summaryTokens,
+        traceId,
+        records: [],
+        onRecord: (record) => telemetry?.write(record),
+      });
+      const outcome = await runSummaryPlan({
+        manager: this.conversations,
+        threadId,
+        policy,
+        summarize,
+        plan,
+      }).catch((error: unknown): SummaryOutcome => ({ status: 'failed', reason: error instanceof Error ? error.message : String(error) }));
+      notify({
+        type: outcome.status === 'finished' ? 'summary_finished' : outcome.status === 'discarded' ? 'summary_discarded' : 'summary_failed',
+        durationMs: Date.now() - started,
+        ...(outcome.status !== 'finished' && { reason: outcome.reason }),
+      });
+      return outcome;
+    };
+    const next = (queued ?? Promise.resolve(undefined)).then(run, run);
+    this.summaryQueue.set(threadId, next);
+    void next.finally(() => {
+      if (this.summaryQueue.get(threadId) === next) {
+        this.summaryQueue.delete(threadId);
+        this.summaryPlans.delete(threadId);
+      }
+    });
+    return next;
+  }
+
   async destroy(): Promise<void> {
     this.destroyed = true;
+    await Promise.allSettled([...this.summaryQueue.values()]);
     for (const ctrl of this.backgroundForks) ctrl.abort();
     this.backgroundForks.clear();
     this.skillManager?.clearAllStickySessions();

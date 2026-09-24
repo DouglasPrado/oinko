@@ -5,6 +5,7 @@ import type { VectorStore, ConversationStore } from '../contracts/entities/store
 import type { ConversationSearchScope } from '../contracts/entities/conversation-search.js';
 import type { Decider } from '../contracts/entities/decider.js';
 import type { TelemetrySink } from '../contracts/entities/telemetry.js';
+import type { ContextLifecycleEvent } from '../contracts/entities/working-context.js';
 import { isValidTimeZone } from '../utils/local-date.js';
 
 /**
@@ -141,6 +142,13 @@ export const AgentConfigSchema = z.object({
   fetch: z
     .custom<(request: Request) => Promise<Response>>((v) => typeof v === 'function')
     .optional(),
+  /**
+   * Observer of background context work (summaries scheduled, finished,
+   * discarded as stale, failed). Never called with message content.
+   */
+  contextEvents: z
+    .custom<(event: ContextLifecycleEvent) => void>((v) => typeof v === 'function')
+    .optional(),
   systemPrompt: z.string().optional(),
   /**
    * IANA time zone for the date and time the model is told ("America/Sao_Paulo").
@@ -224,6 +232,12 @@ export const AgentConfigSchema = z.object({
     .object({
       fastModel: z.string().min(1),
       minConfidence: z.number().min(0).max(1).default(0.7),
+      /**
+       * A turn routed to the fast model switches once to the requested model
+       * after this long without useful output (0 disables); provider
+       * unavailability switches as well.
+       */
+      fallbackAfterMs: z.number().int().min(0).max(120_000).default(15_000),
     })
     .optional(),
 

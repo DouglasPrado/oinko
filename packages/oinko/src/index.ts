@@ -12,6 +12,7 @@ export type { ContextPolicy } from './config/context-policy.js';
 export type {
   ConversationCheckpoint,
   ArchivedToolResult,
+  ContextLifecycleEvent,
 } from './contracts/entities/working-context.js';
 export type {
   AgentConfig,

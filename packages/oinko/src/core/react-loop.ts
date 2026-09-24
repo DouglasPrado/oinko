@@ -22,8 +22,10 @@ import {
   PromptTooLongError,
   OverloadedError,
   InsufficientCreditsError,
+  LatencyTimeoutError,
   classifyAPIError,
 } from '../llm/errors.js';
+import type { StreamChunk } from '../llm/message-types.js';
 import { SKILL_TOOL_NAME } from '../tools/skill-tool.js';
 import { normalizeMessagesForAPI } from './message-normalize.js';
 import { estimateTokens } from '../utils/token-counter.js';
@@ -87,7 +89,17 @@ export interface ReactLoopConfig {
   toolDefinitions?: () => ToolDefinition[];
   oldToolResultChars?: number;
   summarize?: (transcript: string, previous: string) => Promise<string>;
+  /**
+   * While the current model is not `to` (a fast model), an attempt without
+   * useful output after `afterMs` is cancelled and retried once on `to`.
+   * Provider unavailability falls back to `to` as well.
+   */
+  latencyFallback?: { to: string; afterMs: number };
 }
+
+/** Sent to the next model when an attempt stopped after delivering partial text. */
+export const CONTINUE_AFTER_FALLBACK =
+  '[System: The previous attempt stopped mid-answer. Continue exactly where the text above ends, without repeating any of it.]';
 
 /** O que uma chamada de LLM deixa para a telemetria. */
 export interface LLMCallTelemetry {
@@ -114,6 +126,9 @@ export interface LLMCallTelemetry {
   requestTools?: readonly ToolDefinition[];
   /** Tool calls que o modelo pediu nesta chamada, em JSON. */
   responseToolCalls?: string;
+  /** Tentativa interrompida (fallback por latencia ou indisponibilidade). */
+  cancelled?: boolean;
+  error?: { name: string; message: string };
 }
 
 /**
@@ -148,6 +163,12 @@ export async function* executeReactLoop(
 
   let currentModel = config.model;
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  const latencyFallback = config.latencyFallback;
+  // Identity of each provider attempt, including interrupted ones.
+  let callSeq = 0;
+  // One automatic switch per logical call.
+  let switchedThisCall = false;
+  let carriedText = '';
 
   // DI: use injected callModel or default to client.streamChat
   const callModel = deps?.callModel ?? ((params) => client.streamChat(params));
@@ -297,7 +318,9 @@ export async function* executeReactLoop(
     // --- Turn start ---
     yield { type: 'turn_start', iteration: turnCount - 1 };
 
-    let fullText = '';
+    // Text delivered by an interrupted attempt of this same logical call.
+    let fullText = carriedText;
+    carriedText = '';
     let finishReason = '';
     let turnOutputTokens = 0;
     const callStartedAt = Date.now();
@@ -315,24 +338,51 @@ export async function* executeReactLoop(
       config.turnStartedAt,
     );
     const effectiveMaxTokens = state.maxOutputTokensOverride ?? maxOutputTokens;
+    // Latency watchdog: only useful output (content or a tool call) counts.
+    // Heartbeats and empty deltas never reset it.
+    const attempt = new AbortController();
+    const attemptSignal = signal ? AbortSignal.any([signal, attempt.signal]) : attempt.signal;
+    let useful = false;
+    const watchdog =
+      latencyFallback && currentModel !== latencyFallback.to && !switchedThisCall && latencyFallback.afterMs > 0
+        ? setTimeout(() => {
+            if (!useful) attempt.abort(new LatencyTimeoutError(latencyFallback.afterMs));
+          }, latencyFallback.afterMs)
+        : undefined;
+    let iterator: AsyncIterator<StreamChunk> | undefined;
 
+    // Normalize messages before API call (remove orphaned tool results/calls, empty messages)
+    let normalizedMessages: LLMMessage[] = [];
     try {
-      // Normalize messages before API call (remove orphaned tool results/calls, empty messages)
-      const normalizedMessages = normalizeMessagesForAPI(compactedMessages);
+      normalizedMessages = normalizeMessagesForAPI(compactedMessages);
 
-      for await (const chunk of callModel({
+      iterator = callModel({
         messages: normalizedMessages,
         tools: toolDefs,
         model: currentModel,
-        signal,
+        signal: attemptSignal,
         maxTokens: effectiveMaxTokens,
-      })) {
+      })[Symbol.asyncIterator]();
+      // Racing the abort means a late answer from a cancelled attempt is never read.
+      const aborted = new Promise<never>((_, reject) => {
+        const fail = () =>
+          reject(attemptSignal.reason instanceof Error ? attemptSignal.reason : new Error('aborted', { cause: attemptSignal.reason }));
+        if (attemptSignal.aborted) fail();
+        else attemptSignal.addEventListener('abort', fail, { once: true });
+      });
+      aborted.catch(() => undefined);
+      for (;;) {
+        const next = await Promise.race([iterator.next(), aborted]);
+        if (next.done) break;
+        const chunk = next.value;
         switch (chunk.type) {
           case 'content':
+            if (chunk.data) useful = true;
             fullText += chunk.data;
             yield { type: 'text_delta', content: chunk.data };
             break;
           case 'tool_call':
+            useful = true;
             toolCalls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments });
             yield {
               type: 'tool_call_start',
@@ -355,7 +405,7 @@ export async function* executeReactLoop(
             if (config.onLLMCall) {
               try {
                 config.onLLMCall({
-                  seq: turnCount - 1,
+                  seq: callSeq,
                   model: currentModel,
                   finishReason: chunk.finishReason,
                   usage: chunk.usage,
@@ -409,6 +459,9 @@ export async function* executeReactLoop(
           }
         }
       }
+      clearTimeout(watchdog);
+      callSeq++;
+      switchedThisCall = false;
 
       // --- Build assistant message ---
       const assistantMessage: LLMMessage = { role: 'assistant', content: fullText };
@@ -648,7 +701,108 @@ export async function* executeReactLoop(
       };
       continue;
     } catch (error) {
-      const classified = classifyAPIError(error);
+      clearTimeout(watchdog);
+      void iterator?.return?.(undefined).catch(() => undefined);
+      const latency = error instanceof LatencyTimeoutError;
+      const classified = latency ? error : classifyAPIError(error);
+
+      // --- Fast → main: no useful output in time, or provider unavailable ---
+      const target = latency
+        ? latencyFallback?.to
+        : classified instanceof OverloadedError
+          ? fallbackModel && currentModel !== fallbackModel
+            ? fallbackModel
+            : latencyFallback && currentModel !== latencyFallback.to
+              ? latencyFallback.to
+              : undefined
+          : undefined;
+      if (target && !switchedThisCall && !signal?.aborted) {
+        // The interrupted attempt still counts in latency and usage records.
+        try {
+          config.onLLMCall?.({
+            seq: callSeq,
+            model: currentModel,
+            finishReason: latency ? 'latency_timeout' : 'unavailable',
+            startedAt: callStartedAt,
+            endedAt: Date.now(),
+            durationMs: Date.now() - callStartedAt,
+            responseText: fullText,
+            requestMessages: normalizedMessages,
+            ...(toolDefs && { requestTools: toolDefs }),
+            cancelled: true,
+            error: {
+              name: (classified as Error).name ?? 'Error',
+              message: (classified as Error).message ?? String(classified),
+            },
+          });
+        } catch {
+          // Instrumentacao nunca derruba o turno.
+        }
+        callSeq++;
+        switchedThisCall = true;
+        const from = currentModel;
+        currentModel = target;
+        yield {
+          type: 'model_fallback',
+          from,
+          to: target,
+          reason: latency ? 'latency' : 'unavailable',
+          ...((fullText || toolCalls.length) && {
+            partial: { text: fullText.length > 0, tools: toolCalls.length },
+          }),
+        };
+        if (toolCalls.length > 0) {
+          // Tools already started finish exactly once; their results carry over
+          // to the next model instead of running again.
+          const results: LLMMessage[] = [...earlyToolResults];
+          for await (const completed of streamingExecutor.getRemainingResults()) {
+            yield {
+              type: 'tool_call_end',
+              toolCallId: completed.id,
+              result: completed.result,
+              duration: completed.duration,
+            };
+            results.push({ role: 'tool', content: completed.result.content, tool_call_id: completed.id });
+          }
+          yield { type: 'turn_end', iteration: turnCount - 1, hasToolCalls: true };
+          state = {
+            ...state,
+            messages: [
+              ...messages,
+              {
+                role: 'assistant',
+                content: fullText,
+                tool_calls: toolCalls.map((tc) => ({
+                  id: tc.id,
+                  type: 'function' as const,
+                  function: { name: tc.name, arguments: tc.arguments },
+                })),
+              },
+              ...results,
+            ],
+            turnCount: turnCount + 1,
+            transition: { reason: 'model_fallback' },
+          };
+          switchedThisCall = false;
+          continue;
+        }
+        if (fullText) {
+          // Delivered text stays; the next model continues it, never repeats it.
+          carriedText = fullText;
+          state = {
+            ...state,
+            messages: [
+              ...messages,
+              { role: 'assistant', content: fullText },
+              { role: 'user', content: CONTINUE_AFTER_FALLBACK },
+            ],
+            transition: { reason: 'model_fallback' },
+          };
+          continue;
+        }
+        state = { ...state, transition: { reason: 'model_fallback' } };
+        continue;
+      }
 
       // --- PTL Recovery (413) ---
       if (classified instanceof PromptTooLongError && !state.hasAttemptedCompaction) {
@@ -691,22 +845,6 @@ export async function* executeReactLoop(
       if (classified instanceof InsufficientCreditsError) {
         yield { type: 'error', error: classified, recoverable: false };
         return { reason: 'error', usage, error: classified };
-      }
-
-      // --- Model Fallback (529/503) ---
-      if (
-        classified instanceof OverloadedError &&
-        fallbackModel &&
-        currentModel !== fallbackModel
-      ) {
-        yield { type: 'model_fallback', from: currentModel, to: fallbackModel };
-        currentModel = fallbackModel;
-
-        state = {
-          ...state,
-          transition: { reason: 'model_fallback' },
-        };
-        continue;
       }
 
       // --- Generic error recovery ---

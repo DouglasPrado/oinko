@@ -143,6 +143,10 @@ export interface ModelFallbackEvent {
   type: 'model_fallback';
   from: string;
   to: string;
+  /** `latency`: no useful output in time; `unavailable`: provider overloaded or down. */
+  reason?: 'latency' | 'unavailable';
+  /** What the interrupted attempt had already delivered (kept, never repeated). */
+  partial?: { text: boolean; tools: number };
 }
 
 export interface AgentEndEvent {

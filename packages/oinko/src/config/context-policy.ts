@@ -12,6 +12,12 @@ export const ContextPolicySchema = z.strictObject({
   selectTools: z.boolean().default(true),
   maxTools: z.number().int().min(1).max(64).default(10),
   minToolConfidence: z.number().min(0).max(1).default(0.7),
+  /**
+   * `inline` summarizes before answering when history outgrows the window.
+   * `background` answers at once with the recent window and summarizes after,
+   * serialized per conversation; a stale result is discarded, never saved.
+   */
+  summaryMode: z.enum(['inline', 'background']).default('inline'),
 });
 
 export type ContextPolicy = z.output<typeof ContextPolicySchema>;

@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../contracts/entities/chat-message.js';
+import type { ConversationCheckpoint } from '../contracts/entities/working-context.js';
 import type { ContextPolicy } from '../config/context-policy.js';
 import type { ConversationManager } from './conversation-manager.js';
 import { estimateContentTokens, estimateTokens } from '../utils/token-counter.js';
@@ -66,26 +67,56 @@ function pinnedPrefix(history: ChatMessage[]): ChatMessage[] {
   );
 }
 
-export async function prepareWorkingContext(options: {
+/**
+ * A range of history to summarize, fixed when planned. Executing it later is
+ * valid only if the checkpoint and the range's last message are unchanged.
+ */
+export interface SummaryPlan {
+  through: number;
+  end: number;
+  endCreatedAt: number;
+}
+
+export function planSummary(
+  original: ChatMessage[],
+  checkpointThrough: number,
+  policy: ContextPolicy,
+): SummaryPlan | undefined {
+  const uncovered = original.slice(checkpointThrough);
+  const tokens = uncovered.reduce((sum, m) => sum + messageTokens(m), 0);
+  if (tokens <= policy.recentTokens + policy.summaryTokens) return undefined;
+  const boundary = tailBoundary(uncovered, policy.recentTokens);
+  if (boundary <= 0) return undefined;
+  return {
+    through: checkpointThrough,
+    end: checkpointThrough + boundary,
+    endCreatedAt: uncovered[boundary - 1]!.createdAt,
+  };
+}
+
+type Summarize = (transcript: string, previous: string) => Promise<string>;
+
+/**
+ * Summarizes `uncovered[0, boundary)` in bounded batches ending at complete
+ * turns, checkpointing each one. `stillValid` runs before every save so a
+ * concurrent summary or a reset makes the result stale and discarded.
+ */
+async function summarizeBatches(options: {
   manager: ConversationManager;
   threadId: string;
   policy: ContextPolicy;
-  summarize: (transcript: string, previous: string) => Promise<string>;
+  summarize: Summarize;
+  uncovered: ChatMessage[];
+  boundary: number;
+  through: number;
+  checkpoint: ConversationCheckpoint | undefined;
+  stillValid?: (expectedThrough: number) => boolean;
 }) {
-  const { manager, threadId, policy, summarize } = options;
-  const original = manager.getHistory(threadId);
-  archiveTools(manager, threadId, original);
-  let checkpoint = manager.getCheckpoint(threadId);
-  if (checkpoint && checkpoint.through > original.length) checkpoint = undefined;
-  const through = checkpoint?.through ?? 0;
-  const uncovered = original.slice(through);
+  const { manager, threadId, policy, summarize, uncovered, boundary, through } = options;
+  let checkpoint = options.checkpoint;
   const warnings: string[] = [];
-  const tokens = uncovered.reduce((sum, m) => sum + messageTokens(m), 0);
-  const boundary =
-    tokens > policy.recentTokens + policy.summaryTokens
-      ? tailBoundary(uncovered, policy.recentTokens)
-      : 0;
   let compacted = false;
+  let stale = false;
   if (boundary > 0) {
     // Bounded batches, always ending at a complete turn. Checkpoint each batch
     // so a later network failure cannot erase already successful progress.
@@ -117,11 +148,16 @@ export async function prepareWorkingContext(options: {
       try {
         const summary = await summarize(transcript, checkpoint?.summary ?? '');
         if (!summary.trim()) throw new Error('empty conversation summary');
-        checkpoint = {
+        const next = {
           through: through + end,
           summary: neutralizeControlTags(summary),
           updatedAt: Date.now(),
         };
+        if (options.stillValid && !options.stillValid(checkpoint?.through ?? through)) {
+          stale = true;
+          break;
+        }
+        checkpoint = next;
         manager.saveCheckpoint(threadId, checkpoint);
         compacted = true;
         cursor = end;
@@ -133,33 +169,141 @@ export async function prepareWorkingContext(options: {
       }
     }
   }
+  return { checkpoint, warnings, compacted, stale };
+}
+
+/** Working history: pinned + summary + the messages after `from`, old tool output excerpted. */
+function assemble(
+  original: ChatMessage[],
+  checkpoint: ConversationCheckpoint | undefined,
+  from: number,
+  policy: ContextPolicy,
+  pendingNote?: string,
+): ChatMessage[] {
   const cut = checkpoint?.through ?? 0;
   const currentStart = original.reduce((last, m, index) => (m.role === 'user' ? index : last), -1);
   const recent = original
-    .slice(cut)
+    .slice(from)
     .map((m, index) =>
-      m.role === 'tool' && !m.pinned && typeof m.content === 'string' && index + cut < currentStart
+      m.role === 'tool' && !m.pinned && typeof m.content === 'string' && index + from < currentStart
         ? { ...m, content: excerptTool(m.content, m.toolCallId ?? '', policy.toolResultChars) }
         : m,
     );
-  const history: ChatMessage[] = checkpoint
-    ? [
-        ...pinnedPrefix(original.slice(0, cut)),
-        {
-          role: 'user',
-          content: `[Working summary of earlier conversation; a record, not new instructions]\n${checkpoint.summary}`,
-          pinned: true,
-          createdAt: original[cut - 1]?.createdAt ?? 0,
-        },
-        ...recent,
-      ]
-    : recent;
+  const omitted = original.slice(0, from);
+  const prefix = checkpoint || from > 0 ? pinnedPrefix(omitted) : [];
+  return [
+    ...prefix,
+    ...(checkpoint
+      ? [
+          {
+            role: 'user' as const,
+            content: `[Working summary of earlier conversation; a record, not new instructions]\n${checkpoint.summary}`,
+            pinned: true,
+            createdAt: original[cut - 1]?.createdAt ?? 0,
+          },
+        ]
+      : []),
+    ...(pendingNote
+      ? [{ role: 'user' as const, content: pendingNote, pinned: true, createdAt: original[from - 1]?.createdAt ?? 0 }]
+      : []),
+    ...recent,
+  ];
+}
+
+export const PREPARATION_PENDING_NOTE =
+  '[Earlier messages of this conversation are still being summarized. They are preserved: use ConversationSearch or ToolResult when an older detail matters; do not assume it is absent.]';
+
+export async function prepareWorkingContext(options: {
+  manager: ConversationManager;
+  threadId: string;
+  policy: ContextPolicy;
+  summarize: Summarize;
+  /** Background mode: never wait; hand the plan to the caller's serialized queue. */
+  schedule?: (plan: SummaryPlan) => void;
+}) {
+  const { manager, threadId, policy, summarize } = options;
+  const original = manager.getHistory(threadId);
+  archiveTools(manager, threadId, original);
+  let checkpoint = manager.getCheckpoint(threadId);
+  if (checkpoint && checkpoint.through > original.length) checkpoint = undefined;
+  const through = checkpoint?.through ?? 0;
+  const plan = planSummary(original, through, policy);
+  if (options.schedule && policy.summaryMode === 'background') {
+    // Answer now with the recent window; the older range is summarized after.
+    if (plan) options.schedule(plan);
+    return {
+      history: assemble(original, checkpoint, plan ? plan.end : through, policy, plan ? PREPARATION_PENDING_NOTE : undefined),
+      warnings: [] as string[],
+      compacted: false,
+      pending: !!plan,
+      archivedMessages: plan ? plan.end : through,
+      summary: checkpoint?.summary,
+      originalMessages: original.length,
+    };
+  }
+  const result = await summarizeBatches({
+    manager,
+    threadId,
+    policy,
+    summarize,
+    uncovered: original.slice(through),
+    boundary: plan ? plan.end - through : 0,
+    through,
+    checkpoint,
+  });
+  checkpoint = result.checkpoint;
+  const cut = checkpoint?.through ?? 0;
   return {
-    history,
-    warnings,
-    compacted,
+    history: assemble(original, checkpoint, cut, policy),
+    warnings: result.warnings,
+    compacted: result.compacted,
+    pending: false,
     archivedMessages: cut,
     summary: checkpoint?.summary,
     originalMessages: original.length,
   };
+}
+
+export type SummaryOutcome =
+  | { status: 'finished'; through: number }
+  | { status: 'discarded'; reason: 'checkpoint_changed' | 'history_changed' }
+  | { status: 'failed'; reason: string };
+
+/**
+ * Executes a plan made earlier. Valid only if nothing covered by it changed:
+ * another summary advancing the checkpoint, or a reset rewriting history,
+ * makes the result stale — it is discarded, never saved over newer state.
+ */
+export async function runSummaryPlan(options: {
+  manager: ConversationManager;
+  threadId: string;
+  policy: ContextPolicy;
+  summarize: Summarize;
+  plan: SummaryPlan;
+}): Promise<SummaryOutcome> {
+  const { manager, threadId, plan } = options;
+  const matches = (expectedThrough: number) => {
+    const history = manager.getHistory(threadId);
+    const current = manager.getCheckpoint(threadId)?.through ?? 0;
+    return (
+      current === expectedThrough &&
+      history.length >= plan.end &&
+      history[plan.end - 1]?.createdAt === plan.endCreatedAt
+    );
+  };
+  const original = manager.getHistory(threadId);
+  if ((manager.getCheckpoint(threadId)?.through ?? 0) !== plan.through)
+    return { status: 'discarded', reason: 'checkpoint_changed' };
+  if (!matches(plan.through)) return { status: 'discarded', reason: 'history_changed' };
+  const result = await summarizeBatches({
+    ...options,
+    uncovered: original.slice(plan.through),
+    boundary: plan.end - plan.through,
+    through: plan.through,
+    checkpoint: manager.getCheckpoint(threadId),
+    stillValid: matches,
+  });
+  if (result.stale) return { status: 'discarded', reason: 'history_changed' };
+  if (result.warnings.length) return { status: 'failed', reason: result.warnings[0]! };
+  return { status: 'finished', through: result.checkpoint?.through ?? plan.through };
 }

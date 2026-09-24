@@ -164,8 +164,22 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
                     routing: {
                       fastModel: policy.models.fast,
                       minConfidence: bot.intelligence?.minConfidence ?? 0.85,
+                      fallbackAfterMs: policy.models.fallbackAfterMs,
                     },
                   }),
+                // Long run threads summarize in the background: cycles never wait for it.
+                ...(bot.context?.enabled && { context: { ...bot.context, summaryMode: 'background' as const } }),
+                contextEvents: (event) => {
+                  const runId = event.threadId.startsWith('programming:') ? event.threadId.slice('programming:'.length) : undefined;
+                  if (!runId || !programming) return;
+                  const type = event.type === 'summary_failed' ? 'summary_discarded' : event.type;
+                  programming.journal.record(
+                    type,
+                    { botId: bot.id, runId, ...(event.traceId && { traceId: event.traceId }) },
+                    { reason: event.reason ?? event.type, through: event.through, end: event.end, result: event.type },
+                    event.type === 'summary_failed' ? 'failed' : 'info',
+                  );
+                },
               },
             },
           }),
