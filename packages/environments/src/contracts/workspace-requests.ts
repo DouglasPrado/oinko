@@ -101,3 +101,4 @@ export const WORKSPACE_COMMANDS = [
   z.object({ action: z.literal('inspectJob'), jobId: Id }),
   z.object({ action: z.literal('stopJob'), jobId: Id, graceSeconds: z.number().int().min(0).max(60).default(5) }),
 ] as const;
+export type WorkspaceCommandValue = z.output<(typeof WORKSPACE_COMMANDS)[number]>;

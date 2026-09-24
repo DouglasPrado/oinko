@@ -14,6 +14,12 @@ import { WorkspaceExtension } from '../workspace/extension.js';
 import { BrowserExtension } from '../browser/extension.js';
 import { PublicationExtension } from '../publication/extension.js';
 
+/** Crash tests only: set by the test harness in the runner's own environment, never by callers. */
+function faultInjection(): number | undefined {
+  const value = process.env.OINKO_FAULT_EDIT_AFTER_WRITES;
+  return value && /^\d+$/.test(value) ? Number(value) : undefined;
+}
+
 export class EnvironmentController {
   readonly workspaces: WorkspaceStore;
   readonly environments: EnvironmentStore;
@@ -21,13 +27,20 @@ export class EnvironmentController {
   readonly previews: PreviewManager;
   private readonly queue = new Map<string, Promise<void>>();
   readonly extensions: RunnerExtension[];
-  constructor(readonly root: string) {
+  constructor(
+    readonly root: string,
+    options: { extensions?: RunnerExtension[] } = {},
+  ) {
     this.workspaces = new WorkspaceStore(root);
     this.environments = new EnvironmentStore(root);
     this.sandbox = new DockerSandbox(root, (id) => this.environments.environment(id));
     this.previews = new PreviewManager(root, this.environments, this.sandbox);
     mkdirSync(join(root, '.harness/runtime/jobs'), { recursive: true, mode: 0o700 });
-    this.extensions = [new WorkspaceExtension(), new BrowserExtension(), new PublicationExtension()];
+    this.extensions = options.extensions ?? [
+      new WorkspaceExtension({ faultAfterWrites: faultInjection() }),
+      new BrowserExtension(),
+      new PublicationExtension(),
+    ];
   }
   /** Shared runner facilities handed to extensions; authority stays here. */
   context(botId?: string, correlation?: RunnerCorrelationValue): RunnerContext {
