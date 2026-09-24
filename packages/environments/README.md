@@ -87,12 +87,39 @@ Ao reiniciar o gerenciador, prévias existentes são verificadas e as rotas são
 
 O gerenciador inicia sob demanda. Não há instalação automática de serviço de login do sistema. Repositórios privados sem credencial disponível no sandbox devem ser importados de um clone local; o Oinko não encaminha automaticamente o SSH agent ou credenciais pessoais do host. Publicar commits exige configurar essa autorização no ambiente. Parar um sandbox preserva as worktrees e a próxima operação pode iniciá-lo novamente.
 
+## Navegador isolado (prévias e documentação)
+
+O gerenciador mantém um Chromium próprio para bots testarem prévias e lerem documentação pública. Não há perfil pessoal, credencial ou arquivo do host no navegador.
+
+- **Imagem fixada**: `mcr.microsoft.com/playwright:v1.63.0-noble`, igual ao `playwright-core` do gerenciador. A imagem derivada `oinko-browser:1.63.0-<hash>` só acrescenta o `playwright-core` do próprio gerenciador e dois scripts. O primeiro uso baixa cerca de 1 GB; enquanto isso as sessões respondem `browser_unavailable` (`reason: image_pulling`, `retryable: true`). Para baixar antes: `docker pull mcr.microsoft.com/playwright:v1.63.0-noble`. Ao iniciar, o gerenciador confere a versão do Chromium, o `/ms-playwright/.docker-info` e a sandbox; qualquer divergência vira `browser_unavailable`.
+- **Container**: usuário `pwuser` (não root), `--cap-drop=ALL`, `no-new-privileges`, raiz somente leitura, `/tmp` em tmpfs, 2 CPUs, 2 GB, 1024 PIDs, sem bind mounts, sem socket Docker. A sandbox do Chromium fica **ligada**: usa o perfil seccomp documentado pelo Playwright com uma regra extra para `chroot` (o kernel continua exigindo a capability, que só existe no namespace criado pelo Chromium). Sem a sandbox, o navegador não é usado (`reason: sandbox_unavailable`).
+- **Rede**: o navegador fica numa rede Docker `--internal`. O único vizinho é um relay que encaminha apenas para o proxy de saída do gerenciador e expõe o controle Playwright em `127.0.0.1`. Cada sessão tem credencial própria no proxy; o proxy resolve DNS uma vez e conecta ao IP validado.
+- **Sessões**: uma por bot + run + projeto + tipo (`docs` ou `test`), cada uma com contexto próprio de cookies, storage e cache; downloads desabilitados. Só o mesmo bot e run agem na sessão; o administrador consulta (`browserStatus`) e encerra (`browserClose`). Revogar o bot do projeto ou desabilitar o navegador encerra a sessão na próxima requisição.
+- **Ciclo de vida**: o container sobe na primeira sessão e para 10 minutos após a última (`OINKO_BROWSER_IDLE_MS`). Sessões sem ação por 20 minutos expiram (`OINKO_BROWSER_SESSION_IDLE_MS`). Queda do container marca as sessões `failed` (`browser_crashed`); reinício do gerenciador remove containers órfãos do namespace e marca sessões ativas `failed` (`runner_restarted`).
+
+Configuração no projeto (`programming.browser`): `enabled`, `allowedOrigins`, `publicDocs` e `credentials` (nomes habilitados).
+
+| Destino                                                            | `test` | `docs`                | Regra/código                             |
+| ------------------------------------------------------------------ | ------ | --------------------- | ---------------------------------------- |
+| Prévia `ready` do próprio projeto (via Traefik local)              | sim    | sim                   | `preview`                                |
+| Origem de `allowedOrigins` (IP privado só se escrito como IP)      | sim    | sim                   | `allowed_origin`                         |
+| Internet pública (portas 80/443, todos os IPs resolvidos públicos) | não    | sim, com `publicDocs` | `public_docs`                            |
+| Loopback, RFC 1918, CGNAT, ULA, IPv4 mapeado privado               | não    | não                   | `private_address`                        |
+| Metadados, link-local, 0.0.0.0/8, multicast, reservados            | nunca  | nunca                 | `metadata_address` / `forbidden_address` |
+| Prévia de outro projeto ou prévia parada                           | não    | não                   | negado como qualquer endereço privado    |
+
+Credenciais de teste (somente administrador): `browserSaveCredential { projectId, name, username, password }` (mínimo de 4 caracteres), `browserCredentials`, `browserDeleteCredential`. Ficam em `.harness/browser.db` cifradas com `.harness/browser.key` (AES-256-GCM, permissão 600, ligadas ao projeto e ao nome). Nenhum comando devolve os valores. `browserFill { credential: { name, field } }` só funciona em sessão `test` do projeto e com o nome listado em `programming.browser.credentials`; o resultado traz só o nome. Valores atuais e anteriores são mascarados em textos, URLs, console e rede, e os campos preenchidos são mascarados nas capturas.
+
+Comandos (todos com `sessionId` e `runId`, explícito ou vindo da correlação): `browserSession`, `browserNavigate`, `browserSnapshot` (texto limitado, elementos com refs `e1…` ligadas ao `snapshotId`; `full: text|html` devolve o conteúdo em `artifact`), `browserClick`, `browserFill`, `browserWait`, `browserScreenshot` (`artifact` PNG/JPEG em base64, até 1 MB), `browserDiagnostics` (erros de console e requisições com falha/4xx/5xx desde a última chamada), `browserClose`, `browserStatus`. Falhas voltam como `{ error: { code, message, retryable, ... } }`; os códigos estão em `src/browser/errors.ts`. Ref de snapshot antigo ou de página alterada falha com `stale_element`; envio interrompido volta `uncertain: true`. Cada resultado traz `decisions` (`origin`, `rule`, `allowed`, `code`, `count`) para os eventos `browser_navigation_allowed/denied`; navegações para prévias trazem `preview` (`previewId`, `taskId`, `environmentId`, `serviceId`, `previewRevision`, `previewCreatedAt`).
+
+Limites conhecidos: as sessões compartilham um processo de navegador (um comprometimento do processo principal do Chromium, além do renderer, alcançaria outras sessões). Em Linux, o proxy escuta no gateway da rede `bridge` (`OINKO_BROWSER_PROXY_HOST` altera); esse caminho não foi validado nesta entrega, apenas Docker Desktop no macOS.
+
 ## Verificação
 
 ```bash
 pnpm build:packages
 pnpm --filter @oinko/environments test
-pnpm --filter @oinko/environments test:docker
+pnpm --filter @oinko/environments test:docker   # inclui tests/browser.e2e.test.ts
 OINKO_DOCKER_TEST=1 pnpm --filter @oinko/bots exec vitest run tests/programming.test.ts
 OINKO_RAILPACK_TEST=1 pnpm --filter @oinko/environments exec vitest run tests/railpack.test.ts
 OINKO_DOCKER_TEST=1 pnpm --filter @oinko/dashboard exec playwright test --trace=off
