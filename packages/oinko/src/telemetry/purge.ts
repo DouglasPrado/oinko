@@ -3,6 +3,7 @@ import type { TelemetryDatabase } from './telemetry-database.js';
 /** Tabela e a coluna de tempo pela qual ela expira. Ordem importa: filhas primeiro. */
 const SCHEDULE: readonly { table: string; column: string }[] = [
   { table: 'events', column: 'created_at' },
+  { table: 'telemetry_events', column: 'occurred_at' },
   { table: 'decisions', column: 'created_at' },
   { table: 'mcp_calls', column: 'started_at' },
   { table: 'tool_calls', column: 'started_at' },

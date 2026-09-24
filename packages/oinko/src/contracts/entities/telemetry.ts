@@ -49,6 +49,8 @@ export interface TelemetryExecutionStart {
   threadId: string;
   /** Rotulo do app host, para separar bots no mesmo banco. */
   app?: string;
+  /** Identificadores opacos do host (ex.: job duravel e passo), gravados sem interpretacao. */
+  correlation?: Record<string, string>;
   model: string;
   requestedModel?: string;
   providerKind: 'openrouter' | 'other';

@@ -68,6 +68,12 @@ export interface ChatOptions {
   model?: string;
   temperature?: number;
   signal?: AbortSignal;
+  /**
+   * Opaque identifiers the host attaches to this execution's telemetry
+   * (e.g. a durable job and its step). The SDK stores them verbatim and
+   * never interprets them.
+   */
+  correlation?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -548,6 +554,7 @@ export class Agent {
       kind: 'execution_start',
       traceId: ctx.traceId,
       threadId,
+      ...(options?.correlation !== undefined && { correlation: { ...options.correlation } }),
       ...(this.config.telemetry?.app !== undefined && { app: this.config.telemetry.app }),
       model,
       // O que a config pediu, ao lado do que de fato rodou. Quando o

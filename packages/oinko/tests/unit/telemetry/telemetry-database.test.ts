@@ -60,6 +60,28 @@ describe('TelemetryDatabase', () => {
       output_tokens: null,
     });
   });
+  it('upgrades a v2 database to host events and correlation, keeping old executions readable', async () => {
+    const path = await tempPath();
+    const old = new TelemetryDatabase(path, { migrations: TELEMETRY_MIGRATIONS.slice(0, 2) });
+    old.initialize();
+    old.db.exec(
+      "INSERT INTO executions (trace_id, thread_id, model, provider_kind, status, started_at) VALUES ('t-old', 'th', 'm', 'other', 'ok', 1)",
+    );
+    old.close();
+    const upgraded = track(new TelemetryDatabase(path));
+    upgraded.initialize();
+    expect(
+      upgraded.db.prepare('SELECT trace_id, correlation_json FROM executions').get(),
+    ).toEqual({ trace_id: 't-old', correlation_json: null });
+    const insert = upgraded.db.prepare(
+      `INSERT OR IGNORE INTO telemetry_events (event_id, schema_version, type, producer, seq, status,
+        envelope_json, occurred_at, received_at) VALUES (?, 1, 'run_created', 'runtime:a', 1, 'info', '{}', 1, 1)`,
+    );
+    insert.run('e1');
+    insert.run('e1');
+    expect(upgraded.db.prepare('SELECT COUNT(*) AS n FROM telemetry_events').get()).toEqual({ n: 1 });
+  });
+
   it('creates the full v1 schema in memory', () => {
     const db = track(new TelemetryDatabase(':memory:'));
     db.initialize();
@@ -87,7 +109,7 @@ describe('TelemetryDatabase', () => {
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all() as unknown as { version: number; name: string }[];
 
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(TELEMETRY_MIGRATIONS.length);
     expect(rows[0]?.version).toBe(1);
     expect(rows[0]?.name).toBeTruthy();
   });
@@ -105,7 +127,7 @@ describe('TelemetryDatabase', () => {
 
     const count = second.db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as
       { n: number } | undefined;
-    expect(count?.n).toBe(2);
+    expect(count?.n).toBe(TELEMETRY_MIGRATIONS.length);
   });
 
   it('opens file databases in WAL with incremental auto_vacuum', async () => {

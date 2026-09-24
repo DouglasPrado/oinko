@@ -229,4 +229,39 @@ export const TELEMETRY_MIGRATIONS: readonly TelemetryMigration[] = [
       'ALTER TABLE decisions ADD COLUMN output_tokens INTEGER',
     ],
   },
+  {
+    // Aditiva: execucoes antigas ficam com correlacao nula e continuam legiveis.
+    version: 3,
+    name: 'host-events-and-correlation',
+    up: [
+      'ALTER TABLE executions ADD COLUMN correlation_json TEXT',
+      // Eventos versionados de um host (ex.: execucoes de programacao). O SDK
+      // apenas guarda o envelope; event_id deduplica reenvios de um outbox.
+      `CREATE TABLE IF NOT EXISTS telemetry_events (
+         event_id        TEXT    PRIMARY KEY,
+         schema_version  INTEGER NOT NULL,
+         type            TEXT    NOT NULL,
+         producer        TEXT    NOT NULL,
+         seq             INTEGER NOT NULL,
+         status          TEXT    NOT NULL,
+         bot_id          TEXT,
+         project_id      TEXT,
+         task_id         TEXT,
+         run_id          TEXT,
+         step_id         TEXT,
+         operation_id    TEXT,
+         trace_id        TEXT,
+         span_id         TEXT,
+         parent_span_id  TEXT,
+         duration_ms     INTEGER,
+         envelope_json   TEXT    NOT NULL,
+         occurred_at     INTEGER NOT NULL,
+         received_at     INTEGER NOT NULL
+       )`,
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_telemetry_events_producer ON telemetry_events(producer, seq)',
+      'CREATE INDEX IF NOT EXISTS idx_telemetry_events_run ON telemetry_events(run_id, occurred_at)',
+      'CREATE INDEX IF NOT EXISTS idx_telemetry_events_trace ON telemetry_events(trace_id)',
+      'CREATE INDEX IF NOT EXISTS idx_telemetry_events_type ON telemetry_events(type, occurred_at)',
+    ],
+  },
 ];

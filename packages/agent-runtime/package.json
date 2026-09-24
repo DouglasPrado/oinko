@@ -17,6 +17,10 @@
     "./connections": {
       "types": "./dist/connections.d.ts",
       "import": "./dist/connections.js"
+    },
+    "./programming": {
+      "types": "./dist/programming/index.d.ts",
+      "import": "./dist/programming/index.js"
     }
   },
   "files": [
@@ -30,7 +34,8 @@
   },
   "dependencies": {
     "@oinko/core": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@oinko/workspaces": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

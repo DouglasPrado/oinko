@@ -215,6 +215,9 @@ importers:
       '@oinko/core':
         specifier: workspace:*
         version: link:../oinko
+      '@oinko/workspaces':
+        specifier: workspace:*
+        version: link:../workspaces
       zod:
         specifier: ^4.4.3
         version: 4.6.5

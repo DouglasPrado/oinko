@@ -337,3 +337,42 @@ describe('decisoes do decider', () => {
     }
   });
 });
+
+describe('host correlation', () => {
+  it('records opaque host correlation on execution_start and persists it with the execution', async () => {
+    mockProvider(WITH_COST);
+    const { sink, records } = collectingSink();
+    const agent = Agent.create({
+      apiKey: 'sk-test-key-0123456789abcdef',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      telemetry: { sink },
+    });
+    const correlation = { runId: 'run-1', stepId: 'step-1', botId: 'alpha' };
+    for await (const _ of agent.stream('Hi', { threadId: 'run:1', correlation })) {
+      /* drain */
+    }
+    await agent.destroy();
+    const start = records.find((record) => record.kind === 'execution_start');
+    expect(start).toMatchObject({ correlation });
+  });
+
+  it('stores correlation_json in SQLite and leaves it null without correlation', async () => {
+    mockProvider(WITH_COST);
+    const agent = Agent.create({
+      apiKey: 'fake',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      telemetry: { dbPath: ':memory:' },
+    });
+    await agent.chat('Hi', { correlation: { runId: 'run-9' } });
+    mockProvider(WITH_COST);
+    await agent.chat('Again');
+    const db = (agent as unknown as { telemetryDatabase: { db: DatabaseSync } }).telemetryDatabase.db;
+    const rows = db
+      .prepare('SELECT correlation_json FROM executions ORDER BY started_at')
+      .all() as { correlation_json: string | null }[];
+    await agent.destroy();
+    expect(rows.map((row) => row.correlation_json)).toEqual([JSON.stringify({ runId: 'run-9' }), null]);
+  });
+});

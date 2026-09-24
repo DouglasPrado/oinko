@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContextPolicySchema } from '@oinko/core/context-policy';
+import { ProgrammingPolicySchema } from '@oinko/agent-runtime/programming';
 
 export const BotId = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const HttpUrl = z.url().refine((value) => {
@@ -36,6 +37,11 @@ export const BotDefinitionSchema = z
       .optional(),
     cli: z.boolean().default(true),
     programming: z.boolean().default(false),
+    /**
+     * Durable programming runs (queue, cycles, evidence, draft PR). Separate from
+     * the legacy `programming` sandbox tools: omitted means disabled.
+     */
+    programmingPolicy: ProgrammingPolicySchema.optional(),
     /** Lets the bot search earlier messages of the same conversation. */
     conversationSearch: z.boolean().default(false),
     telegram: z

@@ -220,6 +220,7 @@ export class SqliteTelemetrySink implements TelemetrySink {
       trace_id: record.traceId,
       thread_id: record.threadId,
       app: record.app ?? null,
+      correlation_json: record.correlation ? JSON.stringify(record.correlation) : null,
       model: record.model,
       requested_model: record.requestedModel ?? null,
       provider_kind: record.providerKind,
