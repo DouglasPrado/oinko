@@ -173,7 +173,7 @@ for (const [environment, title] of Object.entries(byEnvironment)) {
   for (const item of items.filter((entry) => entry.findings)) lines.push('```', item.findings, '```', '');
 }
 lines.push('## Comandos', '', ...recorded.filter((item) => item.command !== '—').map((item) => `- \`${item.command}\``), '');
-const reportPath = values.report ?? join(repo, 'docs/milestones/programming-agents/reports', `validation-${sha.slice(0, 12)}.md`);
+const reportPath = values.report ?? join(repo, 'docs/milestones/programming-agents/validation-reports', `validation-${sha.slice(0, 12)}.md`);
 mkdirSync(dirname(reportPath), { recursive: true });
 writeFileSync(reportPath, `${lines.join('\n')}\n`);
 console.log(`\nRelatório: ${relative(repo, reportPath)}\nLogs: ${work}\nEventos: ${join(root, '.harness/programming.db')}`);

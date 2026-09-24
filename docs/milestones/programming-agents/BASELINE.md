@@ -52,4 +52,4 @@ Leitura honesta:
 
 ## Evidência ainda necessária
 
-Na escrita do plano (23/09/2026) nada estava implementado. O estado de cada story, com implementação, testes e pendências reais, está registrado na própria story e no [relatório de validação](reports/) mais recente. Continuam pendentes: baseline e comparação com provedor real (3 repetições), GitHub App real, jornada Telegram real e aceite humano do operador.
+Na escrita do plano (23/09/2026) nada estava implementado. O estado de cada story, com implementação, testes e pendências reais, está registrado na própria story e no [relatório de validação](validation-reports/) mais recente. Continuam pendentes: baseline e comparação com provedor real (3 repetições), GitHub App real, jornada Telegram real e aceite humano do operador.

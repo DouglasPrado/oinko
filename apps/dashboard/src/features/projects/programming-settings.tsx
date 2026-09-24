@@ -156,7 +156,7 @@ export function ProjectProgrammingSettings({
             .map((bot) => (
               <SwitchField
                 key={bot.id}
-                label={bot.name}
+                label={`Publicar como ${bot.name}`}
                 description="Merge e deploy nunca são automáticos."
                 checked={programming.publisherBotIds.includes(bot.id)}
                 onChange={(event) =>

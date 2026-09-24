@@ -14,7 +14,7 @@ Guia para quem administra uma instalação Oinko e quer que **qualquer bot** ace
 | Avaliação, candidatos, promoção e rollback | implementado e testado (simulado e Docker); **baseline com provedor real pendente** |
 | Telegram | adaptador testado; **jornada real pendente** |
 
-Pendências reais estão no [relatório de validação](reports/) mais recente e nas próprias stories.
+Pendências reais estão no [relatório de validação](validation-reports/) mais recente e nas próprias stories.
 
 ## 2. Pré-requisitos
 
@@ -104,7 +104,7 @@ Cada tentativa roda numa raiz isolada, sem GitHub App e sem publicador; a CLI re
 
 ## 11. Validação da instalação
 
-`pnpm validate:programming` roda gates agregados, suítes por pacote, Docker quando disponível, e2e da dashboard e o gate de IDs de piloto; grava `validation_suite_*` e um relatório em `docs/milestones/programming-agents/reports/`. Provedor real, GitHub real, Telegram real e aceite humano aparecem como pendentes até serem executados de fato.
+`pnpm validate:programming` roda gates agregados, suítes por pacote, Docker quando disponível, e2e da dashboard e o gate de IDs de piloto; grava `validation_suite_*` e um relatório em `docs/milestones/programming-agents/validation-reports/`. Provedor real, GitHub real, Telegram real e aceite humano aparecem como pendentes até serem executados de fato.
 
 ## 12. Solução de problemas
 
