@@ -23,8 +23,21 @@ export const ProgrammingPolicySchema = z.strictObject({
       main: z.string().trim().min(1).max(200).optional(),
       fast: z.string().trim().min(1).max(200).optional(),
       fallbackAfterMs: z.number().int().min(1000).max(120_000).default(15_000),
+      /** Jev confidence needed to route a cycle to the fast model; default: the bot's. */
+      minConfidence: z.number().min(0.5).max(1).optional(),
+    })
+    .refine((models) => !models.fast || models.fast !== models.main, {
+      message: 'O modelo rápido deve ser diferente do principal.',
+      path: ['fast'],
     })
     .default({ fallbackAfterMs: 15_000 }),
+  /** Progressive context for runs: tool schemas loaded on demand (needs Jev). */
+  context: z
+    .strictObject({
+      selectTools: z.boolean().default(false),
+      maxTools: z.number().int().min(4).max(64).default(16),
+    })
+    .default({ selectTools: false, maxTools: 16 }),
   capabilities: z
     .strictObject({
       browser: z.boolean().default(true),

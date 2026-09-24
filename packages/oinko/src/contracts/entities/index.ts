@@ -34,6 +34,7 @@ export type {
 export type {
   AgentEvent,
   AgentStartEvent,
+  ContextAssembly,
   TextDeltaEvent,
   TextDoneEvent,
   ToolCallStartEvent,

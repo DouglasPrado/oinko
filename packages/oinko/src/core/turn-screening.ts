@@ -37,7 +37,7 @@ export interface TurnScreeningConfig {
   logger?: Logger;
   taskContext?: string;
   tools?: {
-    catalog: readonly { name: string; description: string }[];
+    catalog: readonly { name: string; description: string; alwaysAvailable?: boolean }[];
     maxTools: number;
     minConfidence: number;
   };
@@ -65,13 +65,15 @@ export async function screenTurn(
   config: TurnScreeningConfig,
 ): Promise<TurnScreeningResult> {
   const routing = config.routing;
+  // Essential tools are always exposed: asking about them would only cost tokens.
+  const catalog = config.tools?.catalog.filter((tool) => !tool.alwaysAvailable) ?? [];
   const jailbreakOn = config.jailbreak !== undefined && config.jailbreak.mode !== 'off';
 
   const fallback: TurnScreeningResult = {
     jailbreakSuspected: false,
     ...(routing !== undefined && { model: routing.capableModel }),
     ...(config.tools && {
-      toolNames: config.tools.catalog.map((t) => t.name),
+      toolNames: catalog.map((t) => t.name),
       toolSelectionFallback: true,
     }),
   };
@@ -90,17 +92,18 @@ export async function screenTurn(
     };
   }
   if (jailbreakOn) questions.jailbreak = JAILBREAK_QUESTION;
-  config.tools?.catalog.forEach((tool, index) => {
-    questions[`tool${index}`] = {
-      kind: 'bool',
-      instructions: `Is this tool likely needed to fulfill the CURRENT request, including prerequisite steps? ${tool.name}: ${tool.description.slice(0, 320)}`,
-      criteria: {
-        true: 'Needed for the current task or to continue pending work.',
-        false:
-          'Unrelated, or request only asks for conversation/confirmation and needs no external action.',
-      },
-    };
-  });
+  if (config.tools)
+    catalog.forEach((tool, index) => {
+      questions[`tool${index}`] = {
+        kind: 'bool',
+        instructions: `Is this tool likely needed to fulfill the CURRENT request, including prerequisite steps? ${tool.name}: ${tool.description.slice(0, 320)}`,
+        criteria: {
+          true: 'Needed for the current task or to continue pending work.',
+          false:
+            'Unrelated, or request only asks for conversation/confirmation and needs no external action.',
+        },
+      };
+    });
 
   if (Object.keys(questions).length === 0) return fallback;
 
@@ -113,7 +116,7 @@ export async function screenTurn(
     const result: TurnScreeningResult = { jailbreakSuspected: false };
     if (config.tools) {
       const selection = config.tools;
-      const ranked = selection.catalog.map((tool, index) => ({
+      const ranked = catalog.map((tool, index) => ({
         tool,
         answer: answers[`tool${index}`],
       }));

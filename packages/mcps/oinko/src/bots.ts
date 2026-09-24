@@ -29,7 +29,7 @@ const BotChanges = z.strictObject({
   programmingPolicy: fields.programmingPolicy
     .nullable()
     .describe(
-      'Política completa de trabalhos de programação duráveis: enabled, autonomy (analysis|edit|draft_pr), autoResume, cycle, models (main, fast, fallbackAfterMs), capabilities (browser, publication) e notifications. null desabilita. Não existe teto de gasto.',
+      'Política completa de trabalhos de programação duráveis: enabled, autonomy (analysis|edit|draft_pr), autoResume, cycle, models (main, fast, fallbackAfterMs, minConfidence do Jev), context (selectTools, maxTools), capabilities (browser, publication) e notifications. Modelo rápido e seleção de ferramentas exigem o Jev. null desabilita. Não existe teto de gasto.',
     ),
   conversationSearch: fields.conversationSearch.removeDefault().optional(),
   telegram: z

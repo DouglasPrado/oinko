@@ -32,6 +32,10 @@ export type {
   SaveMemoryInput,
 } from './memory/memory-types.js';
 
+// Model knowledge (capabilities by family, endpoint naming)
+export { findModelFamily, checkModelSuitsEndpoint } from './llm/model-registry.js';
+export type { ModelFamily } from './llm/model-registry.js';
+
 // Pluggable stores (for custom implementations)
 export { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
 export { SQLiteConversationStore } from './storage/sqlite-conversation-store.js';

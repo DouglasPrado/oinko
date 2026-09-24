@@ -39,7 +39,8 @@ export type EffectivePolicy = {
   allowBrowser: boolean;
   autoResume: boolean;
   cycle: ProgrammingPolicy['cycle'];
-  models: { main: string; fast?: string; fallbackAfterMs: number };
+  models: { main: string; fast?: string; fallbackAfterMs: number; minConfidence?: number };
+  context: { selectTools: boolean; maxTools: number };
   notifications: ProgrammingPolicy['notifications'];
   commands: ProjectProgramming['commands'];
   browser: { allowedOrigins: string[]; publicDocs: boolean; credentials: string[] };
@@ -98,7 +99,9 @@ export function resolveEffectivePolicy(
       main: bot.programming.models.main ?? bot.model,
       ...(bot.programming.models.fast !== undefined && { fast: bot.programming.models.fast }),
       fallbackAfterMs: bot.programming.models.fallbackAfterMs,
+      ...(bot.programming.models.minConfidence !== undefined && { minConfidence: bot.programming.models.minConfidence }),
     },
+    context: bot.programming.context,
     notifications: bot.programming.notifications,
     commands: programming?.commands ?? [],
     browser: {

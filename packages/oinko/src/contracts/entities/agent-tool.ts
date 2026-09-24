@@ -59,6 +59,12 @@ export interface AgentTool {
    */
   untrustedOutput?: boolean;
 
+  /**
+   * Stays exposed when context selection reduces the tool set (essential
+   * controls). Exposure only: execution keeps validation and permissions.
+   */
+  alwaysAvailable?: boolean;
+
   /** Whether this tool performs irreversible operations (delete, send, overwrite). */
   isDestructive?: boolean | ((args: unknown) => boolean);
 

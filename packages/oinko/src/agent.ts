@@ -568,7 +568,27 @@ export class Agent {
     const turnStartMs = Date.now();
 
     // Emit start
-    yield { type: 'agent_start', traceId: ctx.traceId, threadId, model };
+    yield {
+      type: 'agent_start',
+      traceId: ctx.traceId,
+      threadId,
+      model,
+      ...(contextPolicy && {
+        context: {
+          tools: toolDefinitions().map((tool) => tool.function.name),
+          selected: !!contextPolicy.selectTools && !!screening.toolNames && !screening.toolSelectionFallback,
+          components: [
+            ...adaptive.injections.map((injection) => ({
+              source: injection.source,
+              tokens: injection.tokens,
+              applied: appliedInjections.has(injection),
+            })),
+            ...adaptive.composition().map(({ source, tokens, applied }) => ({ source, tokens, applied })),
+          ],
+          totalTokens: contextResult.totalTokens + toolSchemaTokens,
+        },
+      }),
+    };
     for (const event of adaptive.events(contextResult.totalTokens, screening.toolSelectionFallback))
       yield event;
 

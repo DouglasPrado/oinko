@@ -14,6 +14,8 @@ export function createToolSelection(source: ToolExecutor, initial: string[], max
   const executor = source.scope();
   const selected = new Set(initial);
   const initialNames = new Set(source.listTools().map((t) => t.name));
+  // Essential controls (e.g. declaring completion) never depend on being selected.
+  const essential = new Set(source.listTools().filter((t) => t.alwaysAvailable).map((t) => t.name));
   const parameters = z.object({
     names: z.array(z.string()).max(64).optional(),
     query: z.string().max(500).optional(),
@@ -32,7 +34,7 @@ export function createToolSelection(source: ToolExecutor, initial: string[], max
         .toLowerCase()
         .split(/[^\p{L}\p{N}_]+/u)
         .filter(Boolean);
-      const catalog = source.listTools().filter((t) => !ALWAYS_AVAILABLE.has(t.name));
+      const catalog = source.listTools().filter((t) => !ALWAYS_AVAILABLE.has(t.name) && !essential.has(t.name));
       const ranked = catalog
         .map((tool) => ({
           tool,
@@ -69,6 +71,7 @@ export function createToolSelection(source: ToolExecutor, initial: string[], max
           (t) =>
             selected.has(t.function.name) ||
             ALWAYS_AVAILABLE.has(t.function.name) ||
+            essential.has(t.function.name) ||
             !initialNames.has(t.function.name),
         ),
   };

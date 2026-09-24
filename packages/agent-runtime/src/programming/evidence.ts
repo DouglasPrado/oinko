@@ -14,7 +14,13 @@ import type { TelemetryJournal } from './telemetry/journal.js';
  */
 export type Evidence =
   | { kind: 'edit'; repositoryId: string; paths: string[]; revision: string; operationId?: string }
-  | { kind: 'information'; source: string; fingerprint: string }
+  | {
+      kind: 'information';
+      source: string;
+      fingerprint: string;
+      /** Essential context (e.g. project instructions) repeated in every cycle prompt. */
+      pin?: { title: string; text: string };
+    }
   | {
       kind: 'check';
       checkKind: string;

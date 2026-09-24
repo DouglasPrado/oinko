@@ -84,3 +84,37 @@ describe('E2E adaptive context', () => {
     expect(requests[0]!.tools.some((t) => t.function.name === 'read')).toBe(true);
   });
 });
+
+describe('E2E context composition on agent_start', () => {
+  it('reports the exposed tools, whether they were selected and tokens per component', async () => {
+    const decider = {
+      decide: async (_state: string, questions: Record<string, Question>) =>
+        Object.fromEntries(Object.keys(questions).map((key) => [key, { value: false, confidence: 1 }])),
+    } as Decider;
+    const agent = Agent.create({
+      apiKey: 'test',
+      model: 'test',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      logLevel: 'silent',
+      context: { enabled: true },
+      decider,
+      fetch: async () => text('ok'),
+    });
+    agents.push(agent);
+    agent.addTool({ name: 'hidden_calculator', description: 'Sums two numbers', parameters: z.object({ a: z.number() }), execute: async () => '1' });
+    agent.addTool({ name: 'finish', description: 'Declare completion', parameters: z.object({}), alwaysAvailable: true, execute: async () => 'done' });
+    const events = [];
+    for await (const event of agent.stream('Olá')) events.push(event);
+    const start = events.find((event) => event.type === 'agent_start');
+    expect(start?.type === 'agent_start' && start.context).toMatchObject({
+      selected: true,
+      tools: expect.arrayContaining(['finish', 'ToolSearch']),
+      totalTokens: expect.any(Number),
+    });
+    const context = start?.type === 'agent_start' ? start.context! : undefined;
+    expect(context!.tools).not.toContain('hidden_calculator');
+    expect(context!.components.find((component) => component.source === 'tools:schema')?.tokens).toBeGreaterThan(0);
+    expect(context!.components.find((component) => component.source === 'history:recent')).toBeDefined();
+  });
+});

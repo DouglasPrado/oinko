@@ -41,6 +41,18 @@ export interface AgentStartEvent {
   traceId: string;
   threadId: string;
   model: string;
+  /** How the prompt was assembled, when the adaptive context is enabled. */
+  context?: ContextAssembly;
+}
+
+/** Tools exposed to the model and tokens per prompt component. */
+export interface ContextAssembly {
+  /** Tool names exposed on the first call (selection may expand them later). */
+  tools: string[];
+  /** True when a decider reduced the tool set; false when all tools are exposed. */
+  selected: boolean;
+  components: { source: string; tokens: number; applied: boolean }[];
+  totalTokens: number;
 }
 
 export interface TextDeltaEvent {

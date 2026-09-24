@@ -39,8 +39,12 @@ export function ProgrammingSettings({
   botId?: string;
 }) {
   const policy = definition.programmingPolicy ?? ProgrammingPolicySchema.parse({});
-  const change = (values: Partial<ProgrammingPolicy>) =>
-    onChange({ programmingPolicy: ProgrammingPolicySchema.parse({ ...policy, ...values }) });
+  // Invalid combinations stay editable; the reason is shown and the server refuses to save them.
+  const change = (values: Partial<ProgrammingPolicy>) => {
+    const parsed = ProgrammingPolicySchema.safeParse({ ...policy, ...values });
+    onChange({ programmingPolicy: parsed.success ? parsed.data : { ...policy, ...values } });
+  };
+  const problem = ProgrammingPolicySchema.safeParse(policy).error?.issues[0]?.message;
   const effective = useQuery({
     queryKey: ['programming-policy', botId],
     queryFn: async () => (await (await fetch(`/api/programming/policy?botId=${encodeURIComponent(botId!)}`, { cache: 'no-store' })).json()) as EffectiveView,
@@ -109,6 +113,29 @@ export function ProgrammingSettings({
                 onChange={(event) => change({ models: { ...policy.models, fallbackAfterMs: number(event.target.value, 15) * 1000 } })}
               />
             </Field>
+            <Field label="Confiança mínima do Jev" help="Para rotear um ciclo ao modelo rápido. Em branco usa a do bot.">
+              <input
+                type="number"
+                min={0.5}
+                max={1}
+                step={0.05}
+                className={inputStyle}
+                value={policy.models.minConfidence ?? ''}
+                onChange={(event) =>
+                  change({ models: { ...policy.models, minConfidence: event.target.value === '' ? undefined : number(event.target.value, 0.85) } })
+                }
+              />
+            </Field>
+            <Field label="Máximo de ferramentas carregadas" help="Com seleção progressiva; o agente pode buscar outras quando precisar.">
+              <input
+                type="number"
+                min={4}
+                max={64}
+                className={inputStyle}
+                value={policy.context.maxTools}
+                onChange={(event) => change({ context: { ...policy.context, maxTools: number(event.target.value, 16) } })}
+              />
+            </Field>
             <Field label="Iterações por ciclo" help="Limite técnico de um ciclo; o trabalho continua no próximo.">
               <input
                 type="number"
@@ -140,6 +167,17 @@ export function ProgrammingSettings({
               />
             </Field>
           </div>
+          {problem && (
+            <p role="alert" className="text-xs text-error-ink">
+              {problem}
+            </p>
+          )}
+          <SwitchField
+            label="Carregar ferramentas sob demanda"
+            description="O Jev escolhe as ferramentas de cada ciclo pelo catálogo compacto; controles do trabalho ficam sempre disponíveis. Escolha não autoriza execução."
+            checked={policy.context.selectTools}
+            onChange={(event) => change({ context: { ...policy.context, selectTools: event.target.checked } })}
+          />
           <SwitchField
             label="Retomar automaticamente após reinício"
             description="Depois de reconciliar operações incertas e conferir permissões."

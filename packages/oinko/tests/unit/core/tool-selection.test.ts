@@ -139,3 +139,32 @@ describe('tool selection and discovery', () => {
     expect(JSON.parse(result.content).found).toBe(true);
   });
 });
+
+describe('essential tools under selection', () => {
+  const complete: AgentTool = {
+    name: 'complete_work',
+    description: 'Declare completion',
+    parameters: z.object({}),
+    alwaysAvailable: true,
+    execute: async () => 'ok',
+  };
+
+  it('keeps tools marked alwaysAvailable exposed even when none was selected', () => {
+    const executor = new ToolExecutor();
+    executor.register(read);
+    executor.register(write);
+    executor.register(complete);
+    const selection = createToolSelection(executor, [], 2);
+    expect(selection.definitions().map((t) => t.function.name)).toEqual(['complete_work', 'ToolSearch']);
+  });
+
+  it('does not ask the decider about essential tools', async () => {
+    const decide = vi.fn().mockResolvedValue({ tool0: { value: true, confidence: 1 } });
+    const result = await screenTurn('fix', { decide } as Decider, {
+      tools: { catalog: [read, complete], maxTools: 5, minConfidence: 0.7 },
+    });
+    expect(Object.keys(decide.mock.calls[0]![1])).toEqual(['tool0']);
+    expect(String(decide.mock.calls[0]![1].tool0.instructions)).toContain('read');
+    expect(result.toolNames).toEqual(['read']);
+  });
+});

@@ -10,6 +10,7 @@ import {
   type BotProfile,
   type BotSecrets,
 } from './schema.js';
+import { modelPolicyProblems } from './programming/models.js';
 
 interface Paths {
   dataDir: string;
@@ -112,6 +113,8 @@ export class BotStore {
   }
   save(input: unknown, secretInput: unknown, expectedRevision: number): BotProfile {
     const definition = BotDefinitionSchema.parse(input);
+    const problems = modelPolicyProblems(definition);
+    if (problems.length) throw new BotError(problems.join(' '));
     const changes = BotSecretsSchema.parse(secretInput);
     this.db.exec('BEGIN IMMEDIATE');
     try {

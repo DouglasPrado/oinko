@@ -51,6 +51,8 @@ export interface CycleInput {
   /** Why a proposed completion was not accepted, to guide the next cycle. */
   feedback?: string;
   previousSummary?: string;
+  /** Essential context kept across cycles even when history is reduced (latest per title). */
+  pinned?: { title: string; text: string }[];
   context: RunContext;
 }
 
@@ -576,6 +578,8 @@ export class ProgrammingRunService {
       if (this.applySafePoint(execution, run)) return;
       if (!this.stillAllowed(run)) return;
       const directions = this.consumeDirections(run);
+      const pins = new Map<string, string>();
+      for (const item of this.store.evidence<Evidence>(run.id)) if (item.value.kind === 'information' && item.value.pin) pins.set(item.value.pin.title, item.value.pin.text);
       const plan = this.store.planRevisions(run.id).at(-1)!;
       const criteria = this.store.criteria(run.id);
       const cycle = run.cycleCount + 1;
@@ -630,6 +634,7 @@ export class ProgrammingRunService {
             criteria,
             ...(feedback && { feedback }),
             ...(previousSummary && { previousSummary }),
+            ...(pins.size && { pinned: [...pins].map(([title, text]) => ({ title, text })) }),
             context,
           }),
         );

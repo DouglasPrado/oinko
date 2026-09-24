@@ -136,3 +136,27 @@ test('configures a durable programming policy per bot and shows the effective po
   await expect(page.getByLabel('Política efetiva por projeto')).toContainText('loja');
   await expect(page.getByLabel('Autonomia', { exact: true })).toHaveValue('edit');
 });
+
+test('validates the run model policy before activation and keeps it across reloads', async ({ page }) => {
+  await page.goto('/bots/alpha');
+  await page.getByRole('button', { name: 'Configurar', exact: true }).first().click();
+  const settings = page.getByLabel('Trabalhos de programação', { exact: true });
+  await settings.getByLabel('Modelo principal').fill('model-main');
+  await settings.getByLabel('Modelo rápido').fill('model-main');
+  await expect(settings.getByRole('alert')).toHaveText('O modelo rápido deve ser diferente do principal.');
+  // A fast model without Jev routing would never run: the server refuses to save it.
+  await settings.getByLabel('Modelo rápido').fill('model-fast');
+  await page.getByRole('button', { name: 'Salvar bot' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Jev' }).first()).toBeVisible();
+  await settings.getByLabel('Modelo rápido').fill('');
+  await settings.getByLabel('Confiança mínima do Jev').fill('0.9');
+  await settings.getByLabel('Máximo de ferramentas carregadas').fill('20');
+  await page.getByRole('button', { name: 'Salvar bot' }).click();
+  await expect(page.getByRole('button', { name: 'Salvar bot' })).toBeHidden();
+  await page.reload();
+  await page.getByRole('button', { name: 'Configurar', exact: true }).first().click();
+  const reloaded = page.getByLabel('Trabalhos de programação', { exact: true });
+  await expect(reloaded.getByLabel('Modelo principal')).toHaveValue('model-main');
+  await expect(reloaded.getByLabel('Confiança mínima do Jev')).toHaveValue('0.9');
+  await expect(reloaded.getByLabel('Máximo de ferramentas carregadas')).toHaveValue('20');
+});

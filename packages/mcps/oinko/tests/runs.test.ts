@@ -142,10 +142,21 @@ describe('Oinko MCP run tools', () => {
     expect((await call('oinko_run_start', { botId: 'beta', projectId: 'loja', request: 'x' })).error).toBe(true);
     const stale = await call('oinko_update_bot', { botId: 'beta', revision: current.revision, changes: { programmingPolicy: { enabled: true } } });
     expect(stale.error).toBe(true);
+    // An incompatible model policy is refused with a verifiable message and nothing changes.
+    const invalid = await call('oinko_update_bot', { botId: 'beta', revision: updated.data.bot.revision, changes: { programmingPolicy: { enabled: true, models: { fast: 'model-fast' } } } });
+    expect(invalid.error).toBe(true);
+    expect(JSON.stringify(invalid)).toContain('Jev');
+    const tuned = await call('oinko_update_bot', { botId: 'beta', revision: updated.data.bot.revision, changes: { programmingPolicy: { enabled: true, models: { minConfidence: 0.9 }, context: { maxTools: 24 } } } });
+    expect(tuned.error).toBe(false);
+    expect(tuned.data.bot.programmingPolicy).toMatchObject({ models: { minConfidence: 0.9 }, context: { selectTools: false, maxTools: 24 } });
     const observer = openProgramming({ root, producer: 'observer' });
     try {
       const capability = readJournal(observer.database, { type: 'capability_changed' }).map((event) => event.envelope.payload);
-      expect(capability).toEqual([expect.objectContaining({ capability: 'programming', action: 'disabled' })]);
+      expect(capability).toEqual([
+        expect.objectContaining({ capability: 'programming', action: 'disabled' }),
+        expect.objectContaining({ capability: 'programming', action: 'enabled' }),
+      ]);
+      expect(readJournal(observer.database, { type: 'model_policy_changed' }).length).toBeGreaterThan(0);
       expect(readJournal(observer.database, { type: 'bot_configuration_changed' })[0]?.envelope.payload?.fields).toContain('programmingPolicy.enabled');
     } finally {
       await observer.close();

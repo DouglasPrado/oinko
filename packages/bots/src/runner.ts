@@ -175,12 +175,21 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
                   policy.models.fast && {
                     routing: {
                       fastModel: policy.models.fast,
-                      minConfidence: bot.intelligence?.minConfidence ?? 0.85,
+                      minConfidence: policy.models.minConfidence ?? bot.intelligence?.minConfidence ?? 0.85,
                       fallbackAfterMs: policy.models.fallbackAfterMs,
                     },
                   }),
                 // Long run threads summarize in the background: cycles never wait for it.
-                ...(bot.context?.enabled && { context: { ...bot.context, summaryMode: 'background' as const } }),
+                // Tool schemas load on demand only when the run policy asks and Jev can choose.
+                ...((bot.context?.enabled || (decider && policy.context.selectTools)) && {
+                  context: {
+                    ...bot.context,
+                    enabled: true,
+                    summaryMode: 'background' as const,
+                    selectTools: !!decider && policy.context.selectTools,
+                    maxTools: policy.context.maxTools,
+                  },
+                }),
                 contextEvents: (event) => {
                   const runId = event.threadId.startsWith('programming:') ? event.threadId.slice('programming:'.length) : undefined;
                   if (!runId || !programming) return;
