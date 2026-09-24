@@ -85,7 +85,92 @@ O gerenciador usa socket Unix privado com permissão 600. A dashboard exige sess
 
 Ao reiniciar o gerenciador, prévias existentes são verificadas e as rotas são restabelecidas. Operações interrompidas ficam com falha explícita; tarefas parcialmente preparadas podem ser tentadas novamente com o mesmo ID e branch. Fechar a dashboard não interrompe operações. Builds têm prazo máximo de 15 minutos, comandos do bot de 10 minutos e a preparação da prévia verifica a disponibilidade antes de marcá-la como pronta.
 
-O gerenciador inicia sob demanda. Não há instalação automática de serviço de login do sistema. Repositórios privados sem credencial disponível no sandbox devem ser importados de um clone local; o Oinko não encaminha automaticamente o SSH agent ou credenciais pessoais do host. Publicar commits exige configurar essa autorização no ambiente. Parar um sandbox preserva as worktrees e a próxima operação pode iniciá-lo novamente.
+O gerenciador inicia sob demanda. Não há instalação automática de serviço de login do sistema. Repositórios privados sem credencial disponível no sandbox devem ser importados de um clone local; o Oinko não encaminha automaticamente o SSH agent ou credenciais pessoais do host. A publicação no GitHub usa a GitHub App da instância, pelo processo do gerenciador e nunca pelo sandbox (seção seguinte). Parar um sandbox preserva as worktrees e a próxima operação pode iniciá-lo novamente.
+
+## Publicação no GitHub (GitHub App)
+
+O gerenciador publica o trabalho de uma tarefa como **draft PR**, com credenciais curtas da GitHub App da instância. Merge, aprovação, "ready for review" e deploy nunca fazem parte da operação, e não existe force push.
+
+### Fluxo
+
+1. **Revisão no sandbox**: calcula o hash da árvore da worktree (`tree:<sha>`, o mesmo das operações de workspace) e recusa com `revision_changed` se diferir de `expectedRevision`. Cria o objeto de commit dessa árvore exata com `git commit-tree` (sem hooks), determinístico por operação, e aponta uma ref temporária para ele. O ramo ainda não se move.
+2. **Espelho do gerenciador**: `.harness/publication/<projeto>/<repo>.git` (bare, sem template, nunca montado em container) busca esse commit. Em produção, o `git upload-pack` roda **dentro do sandbox** (`ext::docker exec … git upload-pack`), então a configuração do clone — gravável pelo agente — nunca é lida no host. O espelho confere: árvore igual à revisão, fast-forward do ramo remoto (ou histórico comum com o ramo base quando o ramo ainda não existe), arquivos incluídos e segredos em **todos** os commits a enviar (linhas adicionadas, nomes de arquivo e mensagens). Achados bloqueiam com `secret_detected` e listam só caminhos e regras.
+3. **Avanço local**: compare-and-swap do ramo da tarefa para o commit revisado (`update-ref novo antigo`); só o índice é atualizado, arquivos nunca.
+4. **Push**: do espelho, refspec `<sha>:refs/heads/<ramo>` sem `+` nem `--force`. Não fast-forward vira `remote_conflict`, com o remoto intacto.
+5. **Draft PR**: procura PRs com `head=<owner>:<ramo>` (state=all). Aberto → atualiza só título e corpo. Fechado/mesclado → `pr_closed`, exige decisão explícita (`replaceClosed=<número>`). Nenhum → cria com `draft: true`. Tarefa com vários repositórios: um PR por repositório, ligados por uma seção "Pull requests relacionados".
+
+Autorização é lida a cada chamada e de novo antes de cada efeito: o bot precisa estar em `allowedBotIds` **e** em `programming.publisherBotIds`; só repositórios em `programming.github.repositories` podem receber push/PR. O administrador (sem `botId`) só configura a App e consulta status/instalação.
+
+### Configurar a App
+
+1. No GitHub, crie uma GitHub App própria da instância, sem webhook, com permissões de repositório: **Contents: Read and write**, **Pull requests: Read and write**, **Checks: Read**, **Commit statuses: Read** (Metadata: Read é automática). Nada além disso é pedido nos tokens.
+2. Instale a App só nos repositórios do projeto (seleção de repositórios) e anote o **installation ID**.
+3. Gere uma chave privada e envie como administrador: `{ action: 'saveGithubApp', appId, privateKeyPem }` (`apiUrl`, `webUrl` e `gitUrl` só para GitHub Enterprise ou testes). A resposta traz apenas metadados (`appId`, `fingerprint` SHA256 igual ao exibido pelo GitHub, `rotatedAt`). Apague o arquivo `.pem` baixado depois de salvar.
+4. No projeto, preencha `programming.github.installationId`, `programming.github.repositories` (`repositoryId`, `owner`, `name`, `baseBranch`) e `programming.publisherBotIds`.
+5. Confira com `{ action: 'githubAppStatus', verify: true }` e `{ action: 'githubInstallation', projectId }`. O resultado distingue instalação existente (`installed`) de acesso efetivo por repositório (`repositories[].access: valid | denied | unknown`) e aponta `installation_not_found`, `installation_suspended`, `insufficient_permissions`, `repositories_not_accessible`, `app_auth_failed` ou `clock_skew`. Nunca é pedido token pessoal (PAT).
+
+### Rotação, backup e recuperação
+
+- **Rotacionar a chave da App**: gere uma nova chave no GitHub, salve com `saveGithubApp` (substitui a anterior, descarta tokens em cache), confirme com `githubAppStatus { verify: true }` e só então exclua a chave antiga no GitHub.
+- **Backup**: guarde `.harness/publication.key` (chave mestra AES-256-GCM, 32 bytes, permissão 600) **junto** com `.harness/publication.db`. A chave privada da App só existe cifrada no banco; a chave mestra nunca vai para o banco, logs ou containers. Não versione nenhum dos dois.
+- **Chave mestra perdida**: `githubAppStatus` mostra `keyAvailable: false` e a publicação falha com `master_key_missing`. Restaure o backup do arquivo; sem backup, salve a App de novo com uma chave nova (a antiga fica ilegível).
+- **Reinício do gerenciador**: recibos sem resultado final viram `uncertain`. Repita a operação com o mesmo `operationId` ou chame `reconcilePublication`: o remoto e os PRs são consultados antes de qualquer novo efeito.
+
+```text
+.harness/
+  publication.db                  App (chave cifrada), recibos, publicações, eventos
+  publication.key                 chave mestra, permissão 600
+  publication/<projeto>/<repo>.git espelho bare do gerenciador (sem hooks, sem template)
+  publication/.home               HOME vazio dos processos Git do gerenciador
+```
+
+### Comandos
+
+Todos retornam `{ ok: true, … }` ou `{ ok: false, error: { code, message, retryable, operationId?, details? } }`.
+
+| Comando                                 | Entrada                                                                                                                                   | Saída                                                                                                                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `saveGithubApp`                         | `appId`, `privateKeyPem`, `apiUrl?`, `webUrl?`, `gitUrl?` (admin)                                                                         | metadados como `githubAppStatus`                                                                                                                                                                |
+| `githubAppStatus` / `publicationStatus` | `verify?`                                                                                                                                 | admin: `configured`, `appId`, `fingerprint`, `rotatedAt`, `keyAvailable`, `verified?`; bot: só `configured`                                                                                     |
+| `githubInstallation`                    | `projectId` (admin ou bot publicador)                                                                                                     | `status`, `installed`, `installation.missingPermissions`, `repositories[].access/code`                                                                                                          |
+| `reviewPublication`                     | `taskId`, `repositoryId`, `expectedRevision`                                                                                              | `verdict: ready/blocked`, `blockers`, `files`, `secrets`, `remote`, `fastForward`, `mergeBase`, `commits`                                                                                       |
+| `publish`                               | `taskId`, `repositoryId`, `operationId`, `expectedRevision`, `commitMessage`, `title`, `body`, `checks?[]` (`kind`, `result`, `revision`) | `commitSha`, `commitCreated`, `push: created/fast_forward/up_to_date/reconciled`, `files`, `pullRequest`, `replayed?`, `reconciled?`                                                            |
+| `ensureDraftPullRequest`                | `taskId`, `repositoryId`, `operationId`, `title`, `body`, `replaceClosed?`                                                                | `number`, `url`, `state`, `draft`, `resolution: created/updated/reconciled`, `related[]`                                                                                                        |
+| `reconcilePublication`                  | `taskId`, `repositoryId`                                                                                                                  | `state: synced/differs/unpublished/unknown`, `remote`, `local`, `pullRequest`, `pullRequests`, `receipts`, `related`                                                                            |
+| `inspectChecks`                         | `taskId`, `repositoryId`, `sha`                                                                                                           | `state: queued/running/passed/failed/cancelled/unknown`, `reason`, `checks[]`, `required` (lista ou `unknown`), `missingRequired`, `current`, `supersededBy?`, `fullyValidated`, `unavailable?` |
+| `publicationEvents`                     | `projectId?`, `after?`, `limit?`                                                                                                          | eventos persistidos (só identificadores) e `next`                                                                                                                                               |
+
+`publish` inclui no corpo do PR a seção de validações locais (somente checks da revisão publicada; outra revisão → `checks_stale`) e avisa que o draft não está validado integralmente até o CI concluir. `inspectChecks` nunca atribui o resultado de um SHA a outro: `current: false` e `supersededBy` quando o ramo avançou; ausência de checks é `unknown` (`reason: none`), nunca `passed`; limite de requisições e instalação revogada viram `unavailable` explícito e retomável.
+
+### Códigos de erro
+
+| Código                                                                                                                                                                                                                | Significado                                                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `admin_only`, `publisher_required`, `not_found`, `task_not_ready`, `repository_not_linked`                                                                                                                            | autorização e endereçamento (ID adivinhado recebe o mesmo `not_found` de um inexistente) |
+| `github_app_not_configured`, `master_key_missing`, `invalid_private_key`                                                                                                                                              | configuração da App                                                                      |
+| `installation_not_configured`, `installation_not_found` (404), `installation_suspended`, `insufficient_permissions` (403/422 de permissões), `repository_not_accessible`                                              | instalação e acesso                                                                      |
+| `app_auth_failed` (401 do JWT), `clock_skew` (401 com relógio defasado > 30 s), `github_unauthorized`, `permission_denied`                                                                                            | credenciais recusadas                                                                    |
+| `rate_limited` (`retryAfterSeconds`, `resetAt`), `github_timeout`, `github_unavailable`, `github_redirect`, `github_validation_failed`                                                                                | GitHub                                                                                   |
+| `revision_changed`, `branch_mismatch`, `branch_moved`, `unborn_branch`, `checks_stale`, `secret_detected`, `remote_conflict`, `base_not_found`, `no_changes`, `review_too_large`, `integrity_failed`, `push_rejected` | revisão e push (bloqueios, sem efeito remoto)                                            |
+| `operation_uncertain`                                                                                                                                                                                                 | o efeito pode ter ocorrido: repita com o mesmo `operationId` para reconciliar            |
+| `idempotency_conflict`                                                                                                                                                                                                | mesmo `operationId` com outros parâmetros ou outro bot                                   |
+| `branch_not_published`, `pr_closed`, `draft_not_supported`, `commit_not_found`                                                                                                                                        | PR e checks                                                                              |
+| `sandbox_failed`, `git_failed`                                                                                                                                                                                        | falhas locais, normalmente retomáveis                                                    |
+
+### Decisões de segurança
+
+- Token só em variável de ambiente do processo Git do host (`GIT_CONFIG_COUNT/KEY/VALUE` → `http.<origem>.extraHeader`), restrito à origem configurada; nunca em argumentos, arquivo, config Git, log, resultado ou sandbox. Tokens pedem um único repositório e as quatro permissões mínimas, ficam só em memória e são renovados 5 min antes de expirar.
+- Git do host com `GIT_CONFIG_NOSYSTEM`, `GIT_CONFIG_GLOBAL=/dev/null`, `HOME` vazio do gerenciador (sem `.netrc`/credenciais do usuário), `core.hooksPath=/dev/null`, `core.fsmonitor=false`, `credential.helper=` vazio, `protocol.allow=never` com liberação só do transporte da chamada, redirects desligados, submódulos desligados e `fetch.fsckObjects`. Nenhum hook, helper, filtro, `insteadOf` ou comando do repositório roda com credenciais.
+- O conteúdo publicado é o objeto conferido no espelho (endereçado por conteúdo), não o que o sandbox declara.
+- Idempotência: recibo persistido antes de cada efeito e resultado depois; mesmo `operationId` devolve o resultado gravado ou reconcilia (consulta ref remota e PRs) em vez de repetir. Criação de PR com resposta perdida é sempre seguida de busca antes de nova tentativa; o GitHub também recusa um segundo PR aberto para o mesmo `head`.
+- Telemetria (`github_*`, `publication_*`, `git_*`, `*_pull_request_*`, `ci_*`, `operation_*`) persistida em `publication.db` com envelope `schemaVersion 1`, só identificadores (`capture: none`), retenção de 30 dias; recibos não expiram.
+
+### Limitações
+
+- Validação com uma GitHub App real exige credenciais do operador e um repositório de testes; os testes automatizados usam uma API simulada e um remoto `file://` local (nesse modo o cabeçalho de autenticação é omitido, mas o token da instalação ainda é emitido e todo o isolamento se mantém).
+- Chamadas longas (primeiro push de um histórico grande) podem ultrapassar o prazo de 90 s do cliente; a operação continua no gerenciador e a repetição com o mesmo `operationId` devolve o resultado.
+- Objetos Git LFS e repositórios de submódulos não são enviados (só os ponteiros versionados); proxies HTTP do host não são repassados ao Git de publicação.
+- CI é consultado sob demanda (`inspectChecks`), sem webhook; a frequência de polling é decisão de quem chama.
 
 ## Navegador isolado (prévias e documentação)
 
@@ -120,6 +205,7 @@ Limites conhecidos: as sessões compartilham um processo de navegador (um compro
 pnpm build:packages
 pnpm --filter @oinko/environments test
 pnpm --filter @oinko/environments test:docker   # inclui tests/browser.e2e.test.ts
+OINKO_DOCKER_TEST=1 pnpm --filter @oinko/environments exec vitest run tests/publication-docker.e2e.test.ts
 OINKO_DOCKER_TEST=1 pnpm --filter @oinko/bots exec vitest run tests/programming.test.ts
 OINKO_RAILPACK_TEST=1 pnpm --filter @oinko/environments exec vitest run tests/railpack.test.ts
 OINKO_DOCKER_TEST=1 pnpm --filter @oinko/dashboard exec playwright test --trace=off
