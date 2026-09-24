@@ -266,6 +266,62 @@ const LEASES = [
    )`,
 ];
 
+const EVALUATION = [
+  // Immutable versioned datasets: the version is the hash of the content.
+  `CREATE TABLE evaluation_datasets (
+     version       TEXT PRIMARY KEY,
+     name          TEXT NOT NULL,
+     dataset_json  TEXT NOT NULL,
+     created_by    TEXT NOT NULL,
+     created_at    INTEGER NOT NULL
+   )`,
+  // One execution of a dataset for one subject (baseline or candidate).
+  `CREATE TABLE evaluation_batches (
+     id                 TEXT PRIMARY KEY,
+     dataset_version    TEXT NOT NULL REFERENCES evaluation_datasets(version),
+     bot_id             TEXT NOT NULL,
+     subject            TEXT NOT NULL,
+     policy_version     TEXT NOT NULL,
+     environment        TEXT NOT NULL,
+     repetitions        INTEGER NOT NULL,
+     manifest_json      TEXT NOT NULL,
+     status             TEXT NOT NULL,
+     started_at         INTEGER NOT NULL,
+     finished_at        INTEGER
+   )`,
+  'CREATE INDEX idx_batches_bot ON evaluation_batches(bot_id, started_at)',
+  `CREATE TABLE evaluation_results (
+     id            TEXT PRIMARY KEY,
+     batch_id      TEXT NOT NULL REFERENCES evaluation_batches(id),
+     case_id       TEXT NOT NULL,
+     repetition    INTEGER NOT NULL,
+     run_id        TEXT,
+     verdict       TEXT NOT NULL,
+     result_json   TEXT NOT NULL,
+     created_at    INTEGER NOT NULL,
+     UNIQUE (batch_id, case_id, repetition)
+   )`,
+  `CREATE TABLE evaluation_candidates (
+     id                    TEXT PRIMARY KEY,
+     bot_id                TEXT NOT NULL,
+     kind                  TEXT NOT NULL,
+     status                TEXT NOT NULL,
+     revision              INTEGER NOT NULL DEFAULT 1,
+     candidate_json        TEXT NOT NULL,
+     created_at            INTEGER NOT NULL,
+     updated_at            INTEGER NOT NULL
+   )`,
+  'CREATE INDEX idx_candidates_bot ON evaluation_candidates(bot_id, created_at)',
+  `CREATE TABLE evaluation_comparisons (
+     id              TEXT PRIMARY KEY,
+     baseline_batch  TEXT NOT NULL REFERENCES evaluation_batches(id),
+     candidate_batch TEXT NOT NULL REFERENCES evaluation_batches(id),
+     candidate_id    TEXT,
+     comparison_json TEXT NOT NULL,
+     created_at      INTEGER NOT NULL
+   )`,
+];
+
 export const PROGRAMMING_MIGRATIONS: readonly ProgrammingMigration[] = [
   {
     version: 1,
@@ -284,4 +340,5 @@ export const PROGRAMMING_MIGRATIONS: readonly ProgrammingMigration[] = [
       ...LEASES,
     ],
   },
+  { version: 2, name: 'evaluation', additive: true, up: EVALUATION },
 ];

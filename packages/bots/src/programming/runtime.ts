@@ -11,6 +11,8 @@ import {
   ProgrammingStore,
   RunNotifier,
   RunQueries,
+  EvaluationService,
+  EvaluationStore,
   SqliteTelemetryRepository,
   TelemetryDeliverer,
   TelemetryJournal,
@@ -22,6 +24,7 @@ import {
 import { BotStore } from '../store.js';
 import { StoreAccess } from './access.js';
 import { RunnerReconciler } from './reconciler.js';
+import { botConfigPort } from './evaluation/bot-config.js';
 import type { RunnerPort } from './run-tools.js';
 
 export interface ProgrammingRuntimeOptions {
@@ -35,6 +38,8 @@ export interface ProgrammingRuntimeOptions {
   bots?: BotStore;
   /** Literal secrets to scrub from events and artifacts (API keys, tokens). */
   secrets?: () => readonly string[];
+  /** Executor lease; short in evaluation harnesses that simulate restarts. */
+  leaseTtlMs?: number;
   /** Dashboard base URL for run links in final messages (default: OINKO_DASHBOARD_URL). */
   dashboardUrl?: string;
   now?: () => number;
@@ -116,6 +121,7 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
     ...(options.executor && { executor: options.executor }),
     ...(options.runner && { reconciler: new RunnerReconciler(options.runner) }),
     serves: (botId) => botId === options.executeFor,
+    ...(options.leaseTtlMs && { leaseTtlMs: options.leaseTtlMs }),
     onCycleFinished: (run, outcome) => {
       const path = telemetryPath(run.botId);
       if (path) usage.collectFromTelemetry(run, path, outcome.traceIds);
@@ -127,6 +133,7 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
     ...(options.now && { now: options.now }),
   });
   const queries = new RunQueries(store, access, journal, usage);
+  const evaluation = new EvaluationService({ store: new EvaluationStore(database), runs: store, journal, bots: botConfigPort(bots), artifacts, ...(options.now && { now: options.now }) });
   const commands = options.executeFor
     ? new ChannelCommands({ botId: options.executeFor, service, queries, access, journal })
     : undefined;
@@ -144,6 +151,7 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
     notifier,
     service,
     queries,
+    evaluation,
     commands,
     bots,
     workspaces,

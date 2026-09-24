@@ -118,6 +118,8 @@ export interface RunListFilter {
   taskId?: string;
   conversationId?: string;
   states?: readonly RunState[];
+  /** Only runs created at or after this instant. */
+  createdAfter?: number;
   /** Opaque cursor from a previous page; stable for the same data. */
   cursor?: string;
   limit?: number;
@@ -270,6 +272,10 @@ export class ProgrammingStore {
       params.push(filter.conversationId);
     }
     if (filter.states) inList('state', filter.states);
+    if (filter.createdAfter !== undefined) {
+      clauses.push('created_at >= ?');
+      params.push(filter.createdAfter);
+    }
     if (filter.cursor) {
       const [createdAt, id] = decodeCursor(filter.cursor);
       clauses.push('(created_at < ? OR (created_at = ? AND id < ?))');

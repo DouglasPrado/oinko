@@ -4,3 +4,9 @@ export { OINKO_MCP_TOOLS, OINKO_TOOL_EQUIVALENTS, isOinkoMcp, scopeOinkoMcp } fr
 export { RunnerReconciler } from './reconciler.js';
 export { programmingRunTools, PROGRAMMING_TOOL_NAMES, type RunnerPort } from './run-tools.js';
 export { openProgramming, type ProgrammingRuntime, type ProgrammingRuntimeOptions } from './runtime.js';
+export { deliveryTools, DELIVERY_TOOL_NAMES } from './delivery-tools.js';
+export { modelPolicyProblems } from './models.js';
+export { botConfigPort } from './evaluation/bot-config.js';
+export { LocalRunner } from './evaluation/local-runner.js';
+export { simulatedProvider } from './evaluation/simulated-provider.js';
+export { runEvaluation, assertIsolatedRoot, materializeFixture, type EvaluationRunOptions } from './evaluation/harness.js';

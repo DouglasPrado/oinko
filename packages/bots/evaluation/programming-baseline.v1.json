@@ -1,0 +1,434 @@
+{
+  "name": "programming-baseline",
+  "description": "Cenários congelados do M00-S03: bug com teste, funcionalidade em monorepo, alteração visual e trabalho longo interrompido. Critérios verificáveis por evidência antes da execução; `simulation` é o modelo determinístico do ambiente simulado.",
+  "cases": [
+    {
+      "id": "bug-sum",
+      "title": "Corrigir bug comprovado por teste",
+      "kind": "bug_fix",
+      "split": "validation",
+      "request": {
+        "text": "A função sum de sum.cjs retorna valores errados. Reproduza com o teste, corrija e valide.",
+        "mode": "change"
+      },
+      "fixture": {
+        "files": {
+          "package.json": "{\n  \"name\": \"calc\",\n  \"private\": true,\n  \"scripts\": {\n    \"test\": \"node sum.test.cjs\"\n  }\n}\n",
+          "sum.cjs": "module.exports = (a, b) => a - b;\n",
+          "sum.test.cjs": "const sum = require('./sum.cjs');\nif (sum(2, 3) !== 5) { console.error('esperado 5, recebido ' + sum(2, 3)); process.exit(1); }\nconsole.log('ok');\n",
+          "AGENTS.md": "Rode os testes com `node sum.test.cjs` antes de concluir.\n"
+        }
+      },
+      "criteria": [
+        {
+          "id": "changes",
+          "kind": "diff",
+          "description": "Correção aplicada na worktree"
+        },
+        {
+          "id": "checks",
+          "kind": "check",
+          "description": "Teste aprovado na revisão final"
+        }
+      ],
+      "expectedArtifacts": [
+        "diff",
+        "log"
+      ],
+      "requires": [],
+      "interruptions": [],
+      "limits": {
+        "maxCycles": 5
+      },
+      "simulation": {
+        "steps": [
+          {
+            "tool": "workspace_prepare_task",
+            "args": {
+              "name": "Corrigir sum"
+            }
+          },
+          {
+            "tool": "workspace_context",
+            "args": {
+              "targets": [
+                "sum.cjs"
+              ]
+            }
+          },
+          {
+            "tool": "workspace_check",
+            "args": {
+              "kind": "test",
+              "command": "node sum.test.cjs"
+            }
+          },
+          {
+            "tool": "workspace_read_range",
+            "args": {
+              "path": "sum.cjs"
+            }
+          },
+          {
+            "tool": "workspace_replace",
+            "args": {
+              "path": "sum.cjs",
+              "expectedHash": "{{last.hash}}",
+              "oldText": "a - b",
+              "newText": "a + b"
+            }
+          },
+          {
+            "tool": "workspace_check",
+            "args": {
+              "kind": "test",
+              "command": "node sum.test.cjs"
+            }
+          },
+          {
+            "tool": "workspace_diff",
+            "args": {}
+          },
+          {
+            "tool": "programming_complete",
+            "args": {
+              "summary": "sum usa +; o teste falhava antes e passa na revisão final."
+            }
+          },
+          {
+            "text": "Concluído: bug reproduzido, corrigido e validado."
+          }
+        ]
+      }
+    },
+    {
+      "id": "monorepo-slugify",
+      "title": "Funcionalidade em monorepo com instruções por pacote",
+      "kind": "monorepo_feature",
+      "split": "validation",
+      "request": {
+        "text": "Adicione slugify(texto) ao pacote packages/utils, com teste, seguindo as instruções do pacote.",
+        "mode": "change"
+      },
+      "fixture": {
+        "files": {
+          "package.json": "{\n  \"name\": \"shop\",\n  \"private\": true,\n  \"workspaces\": [\n    \"packages/*\"\n  ]\n}\n",
+          "AGENTS.md": "Monorepo: cada pacote tem suas instruções. Não altere packages/web neste trabalho.\n",
+          "packages/utils/package.json": "{\n  \"name\": \"@shop/utils\",\n  \"version\": \"1.0.0\",\n  \"main\": \"src/index.cjs\",\n  \"scripts\": {\n    \"test\": \"node test/run.cjs\"\n  }\n}\n",
+          "packages/utils/AGENTS.md": "Exporte novas funções em src/index.cjs e cubra com teste em test/. Teste: node packages/utils/test/run.cjs\n",
+          "packages/utils/src/index.cjs": "module.exports = { capitalize: (text) => text.charAt(0).toUpperCase() + text.slice(1) };\n",
+          "packages/utils/test/run.cjs": "const assert = require('assert');\nconst utils = require('../src/index.cjs');\nassert.strictEqual(utils.capitalize('loja'), 'Loja');\nif (utils.slugify) assert.strictEqual(utils.slugify('Frete Grátis Já'), 'frete-gratis-ja');\nelse { console.error('slugify ausente'); process.exit(1); }\nconsole.log('ok');\n",
+          "packages/web/package.json": "{\n  \"name\": \"@shop/web\",\n  \"private\": true,\n  \"dependencies\": {\n    \"@shop/utils\": \"1.0.0\"\n  }\n}\n",
+          "packages/web/index.cjs": "const { capitalize } = require('@shop/utils');\nmodule.exports = () => capitalize('vitrine');\n"
+        }
+      },
+      "criteria": [
+        {
+          "id": "changes",
+          "kind": "diff",
+          "description": "slugify implementada e exportada em packages/utils"
+        },
+        {
+          "id": "checks",
+          "kind": "check",
+          "description": "Teste do pacote utils aprovado na revisão final"
+        }
+      ],
+      "expectedArtifacts": [
+        "diff",
+        "log"
+      ],
+      "requires": [],
+      "interruptions": [],
+      "limits": {
+        "maxCycles": 5
+      },
+      "simulation": {
+        "steps": [
+          {
+            "tool": "workspace_prepare_task",
+            "args": {
+              "name": "slugify"
+            }
+          },
+          {
+            "tool": "workspace_context",
+            "args": {
+              "targets": [
+                "packages/utils/src/index.cjs"
+              ]
+            }
+          },
+          {
+            "tool": "workspace_find_files",
+            "args": {
+              "query": "index",
+              "path": "packages/utils"
+            }
+          },
+          {
+            "tool": "workspace_read_range",
+            "args": {
+              "path": "packages/utils/src/index.cjs"
+            }
+          },
+          {
+            "tool": "workspace_replace",
+            "args": {
+              "path": "packages/utils/src/index.cjs",
+              "expectedHash": "{{last.hash}}",
+              "oldText": "module.exports = { capitalize: (text) => text.charAt(0).toUpperCase() + text.slice(1) };",
+              "newText": "const slugify = (text) =>\n  text.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nmodule.exports = { capitalize: (text) => text.charAt(0).toUpperCase() + text.slice(1), slugify };"
+            }
+          },
+          {
+            "tool": "workspace_check",
+            "args": {
+              "kind": "test",
+              "command": "node packages/utils/test/run.cjs"
+            }
+          },
+          {
+            "tool": "workspace_diff",
+            "args": {}
+          },
+          {
+            "tool": "programming_complete",
+            "args": {
+              "summary": "slugify exportada em packages/utils com teste aprovado; packages/web intocado."
+            }
+          },
+          {
+            "text": "Concluído."
+          }
+        ]
+      }
+    },
+    {
+      "id": "visual-selo",
+      "title": "Alteração visual validada na prévia",
+      "kind": "visual_change",
+      "split": "validation",
+      "request": {
+        "text": "Mostre o selo 'Frete grátis' no topo da vitrine e valide na prévia.",
+        "mode": "change"
+      },
+      "fixture": {
+        "files": {
+          "package.json": "{\n  \"name\": \"vitrine\",\n  \"private\": true,\n  \"scripts\": {\n    \"test\": \"node check.cjs\"\n  }\n}\n",
+          "index.html": "<!doctype html>\n<html lang=\"pt-BR\">\n  <body>\n    <header><h1>Vitrine</h1></header>\n    <main>Produtos</main>\n  </body>\n</html>\n",
+          "check.cjs": "const html = require('fs').readFileSync('index.html', 'utf8');\nif (!/<header>[\\s\\S]*Frete grátis[\\s\\S]*<\\/header>/.test(html)) { console.error('selo ausente no topo'); process.exit(1); }\nconsole.log('ok');\n"
+        }
+      },
+      "criteria": [
+        {
+          "id": "changes",
+          "kind": "diff",
+          "description": "Selo adicionado ao topo"
+        },
+        {
+          "id": "checks",
+          "kind": "check",
+          "description": "Teste estático aprovado na revisão final"
+        },
+        {
+          "id": "selo_visivel",
+          "kind": "functional",
+          "description": "Prévia da revisão final mostra o selo Frete grátis"
+        }
+      ],
+      "expectedArtifacts": [
+        "diff",
+        "screenshot",
+        "report"
+      ],
+      "requires": [
+        "preview"
+      ],
+      "interruptions": [],
+      "limits": {
+        "maxCycles": 5
+      },
+      "simulation": {
+        "steps": [
+          {
+            "tool": "workspace_prepare_task",
+            "args": {
+              "name": "Selo frete"
+            }
+          },
+          {
+            "tool": "workspace_read_range",
+            "args": {
+              "path": "index.html"
+            }
+          },
+          {
+            "tool": "workspace_replace",
+            "args": {
+              "path": "index.html",
+              "expectedHash": "{{last.hash}}",
+              "oldText": "<h1>Vitrine</h1>",
+              "newText": "<h1>Vitrine</h1><div class=\"selo\">Frete grátis</div>"
+            }
+          },
+          {
+            "tool": "workspace_check",
+            "args": {
+              "kind": "test",
+              "command": "node check.cjs"
+            }
+          },
+          {
+            "tool": "browser_open",
+            "args": {
+              "kind": "test"
+            }
+          },
+          {
+            "tool": "workspace_preview",
+            "args": {}
+          },
+          {
+            "tool": "browser_navigate",
+            "args": {
+              "url": "{{last.urls.0.url}}"
+            }
+          },
+          {
+            "tool": "functional_check",
+            "args": {
+              "criterionId": "selo_visivel",
+              "description": "Prévia da revisão final mostra o selo Frete grátis",
+              "expect": {
+                "text": [
+                  "Frete grátis"
+                ]
+              }
+            }
+          },
+          {
+            "tool": "workspace_diff",
+            "args": {}
+          },
+          {
+            "tool": "programming_complete",
+            "args": {
+              "summary": "Selo no topo, teste estático e verificação na prévia aprovados."
+            }
+          },
+          {
+            "text": "Concluído."
+          }
+        ]
+      }
+    },
+    {
+      "id": "long-interrupted",
+      "title": "Trabalho longo interrompido por reinício do processo",
+      "kind": "long_interrupted",
+      "split": "validation",
+      "request": {
+        "text": "Padronize as mensagens de erro de a.cjs e b.cjs para começarem com 'Erro:' e valide.",
+        "mode": "change"
+      },
+      "fixture": {
+        "files": {
+          "package.json": "{\n  \"name\": \"msgs\",\n  \"private\": true,\n  \"scripts\": {\n    \"test\": \"node test.cjs\"\n  }\n}\n",
+          "a.cjs": "module.exports = () => 'falha ao salvar';\n",
+          "b.cjs": "module.exports = () => 'falha ao carregar';\n",
+          "test.cjs": "const a = require('./a.cjs')();\nconst b = require('./b.cjs')();\nfor (const text of [a, b]) if (!text.startsWith('Erro:')) { console.error('fora do padrão: ' + text); process.exit(1); }\nconsole.log('ok');\n"
+        }
+      },
+      "criteria": [
+        {
+          "id": "changes",
+          "kind": "diff",
+          "description": "Mensagens de a.cjs e b.cjs padronizadas"
+        },
+        {
+          "id": "checks",
+          "kind": "check",
+          "description": "Teste aprovado depois da retomada"
+        }
+      ],
+      "expectedArtifacts": [
+        "diff",
+        "log"
+      ],
+      "requires": [],
+      "interruptions": [
+        {
+          "afterCycle": 1,
+          "kind": "process_restart"
+        }
+      ],
+      "limits": {
+        "maxCycles": 6
+      },
+      "simulation": {
+        "steps": [
+          {
+            "tool": "workspace_prepare_task",
+            "args": {
+              "name": "Padronizar erros"
+            }
+          },
+          {
+            "tool": "workspace_read_range",
+            "args": {
+              "path": "a.cjs"
+            }
+          },
+          {
+            "tool": "workspace_replace",
+            "args": {
+              "path": "a.cjs",
+              "expectedHash": "{{last.hash}}",
+              "oldText": "'falha ao salvar'",
+              "newText": "'Erro: falha ao salvar'"
+            }
+          },
+          {
+            "text": "Parte 1: a.cjs padronizado. Falta b.cjs e validar."
+          },
+          {
+            "tool": "workspace_read_range",
+            "args": {
+              "path": "b.cjs"
+            }
+          },
+          {
+            "tool": "workspace_replace",
+            "args": {
+              "path": "b.cjs",
+              "expectedHash": "{{last.hash}}",
+              "oldText": "'falha ao carregar'",
+              "newText": "'Erro: falha ao carregar'"
+            }
+          },
+          {
+            "tool": "workspace_check",
+            "args": {
+              "kind": "test",
+              "command": "node test.cjs"
+            }
+          },
+          {
+            "tool": "workspace_diff",
+            "args": {}
+          },
+          {
+            "tool": "programming_complete",
+            "args": {
+              "summary": "As duas mensagens seguem o padrão; teste aprovado após a retomada."
+            }
+          },
+          {
+            "text": "Concluído."
+          }
+        ]
+      }
+    }
+  ]
+}

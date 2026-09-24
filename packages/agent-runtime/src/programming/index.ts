@@ -20,3 +20,7 @@ export * from './service.js';
 export * from './agent-executor.js';
 export * from './channel.js';
 export * from './notifier.js';
+export * from './evaluation/dataset.js';
+export * from './evaluation/aggregate.js';
+export * from './evaluation/store.js';
+export * from './evaluation/service.js';
