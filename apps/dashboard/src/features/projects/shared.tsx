@@ -50,9 +50,6 @@ export function Field({
     </div>
   );
 }
-/** Opcao de liga/desliga em linha, com o rotulo exato como nome acessivel. */
-export const checkRowStyle =
-  'flex min-h-10 cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-ink transition-colors hover:bg-paper';
 export async function workspaceRequest<T = unknown>(command?: RunnerCommandInput): Promise<T> {
   const response = await fetch('/api/workspaces', {
     cache: 'no-store',

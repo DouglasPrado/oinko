@@ -62,7 +62,11 @@ test('creates a bot, preserves secrets on edit and controls the shared executor'
     .fill('Ajude a pessoa com perguntas sobre o produto.');
   await page.getByLabel('Modelo de IA', { exact: true }).fill('test-model');
   await page.getByLabel('Chave da API', { exact: true }).fill('fake-key-for-browser-test');
-  await page.screenshot({ path: test.info().outputPath('bot-editor.png'), fullPage: true });
+  await page.screenshot({
+    path: test.info().outputPath('bot-editor.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
   await page.getByRole('button', { name: 'Salvar bot' }).click();
   const card = page.getByRole('article', { name: 'Suporte de teste' });
   try {
@@ -72,7 +76,11 @@ test('creates a bot, preserves secrets on edit and controls the shared executor'
     await card.getByRole('button', { name: 'Iniciar', exact: true }).click();
     await expect(card.getByText('Em execução', { exact: true })).toBeVisible();
     await expect(card.getByText('CLI · conectado')).toBeVisible();
-    await page.screenshot({ path: test.info().outputPath('bots-overview.png'), fullPage: true });
+    await page.screenshot({
+      path: test.info().outputPath('bots-overview.png'),
+      fullPage: true,
+      animations: 'disabled',
+    });
     await card.getByRole('button', { name: 'Configurar' }).click();
     await expect(page.getByLabel('Chave da API', { exact: true })).toHaveValue('');
     await page

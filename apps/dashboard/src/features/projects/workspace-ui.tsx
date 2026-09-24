@@ -11,8 +11,6 @@ import { StatusDot, stateTone } from '@/components/shared/status-dot';
 import { cn } from '@/lib/utils/cn';
 import { stateLabel } from './shared';
 
-export { Trail } from '@/components/shared/page-header';
-
 export function Status({ state, className }: { state: string; className?: string }) {
   const { tone, pulse } = stateTone(state);
   return (

@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils/cn';
 /** `className` substitui o tamanho padrao de 16px; sem tailwind-merge, os dois nao somam. */
 type IconProps = { className?: string };
 
-export function TelegramIcon({ className }: IconProps) {
+function TelegramIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={cn('shrink-0', className ?? 'size-4')}>
       <circle cx="12" cy="12" r="12" fill="#229ED9" />
@@ -22,7 +22,7 @@ export function TelegramIcon({ className }: IconProps) {
   );
 }
 
-export function TerminalIcon({ className }: IconProps) {
+function TerminalIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={cn('shrink-0', className ?? 'size-4')}>
       <rect width="24" height="24" rx="6" fill="#333333" />
@@ -39,7 +39,7 @@ export function TerminalIcon({ className }: IconProps) {
   );
 }
 
-export function McpIcon({ className }: IconProps) {
+function McpIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={cn('shrink-0', className ?? 'size-4')}>
       <rect width="24" height="24" rx="6" fill="#6E56CF" />
@@ -52,7 +52,7 @@ export function McpIcon({ className }: IconProps) {
   );
 }
 
-export function HiggsfieldIcon({ className }: IconProps) {
+function HiggsfieldIcon({ className }: IconProps) {
   // Copia local do /icon.png do proprio site, a mesma usada em Integracoes.
   return (
     <Image

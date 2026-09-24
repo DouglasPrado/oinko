@@ -16,7 +16,7 @@ export interface TrailItem {
 }
 
 /** Escopo da pagina, do mais amplo ao atual, separado por barras. */
-export function Trail({ items }: { items: TrailItem[] }) {
+function Trail({ items }: { items: TrailItem[] }) {
   return (
     <Breadcrumb>
       <BreadcrumbList>

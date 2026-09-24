@@ -30,16 +30,6 @@ function PigHead({ maskId }: { maskId: string }) {
   );
 }
 
-/** So a cabeca do porco: favicon, avatar da marca e espacos quadrados. */
-export function BrandMark({ className }: { className?: string }) {
-  const id = useId();
-  return (
-    <svg viewBox="104 228 428 450" aria-hidden className={cn('size-5 shrink-0', className)}>
-      <PigHead maskId={`${id}-ears`} />
-    </svg>
-  );
-}
-
 /** Logotipo completo "Oinko", com a tagline opcional da arte original. */
 export function Logo({ className, tagline = false }: { className?: string; tagline?: boolean }) {
   const id = useId();

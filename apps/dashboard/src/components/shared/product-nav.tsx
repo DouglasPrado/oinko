@@ -17,7 +17,7 @@ export function currentSection(pathname: string) {
 }
 
 /** Item de navegacao lateral: selecao por superficie cinza e contraste, nunca por cor de marca. */
-export const navItemStyle =
+const navItemStyle =
   'flex h-11 w-full items-center gap-2 rounded-md px-2.5 text-sm transition-colors lg:h-9 [&_svg]:size-4 [&_svg]:shrink-0';
 
 export function ProductNav({ pathname }: { pathname: string }) {
