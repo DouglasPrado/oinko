@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCriteria, evaluateCriteria, type CycleOutcome, type Evidence } from '../../src/programming/index.js';
+import { defaultCriteria, deliveryReport, evaluateCriteria, type CycleOutcome, type Evidence } from '../../src/programming/index.js';
 import { tempRoot, twoBotMatrix } from './helpers.js';
 import { ScriptedExecutor, check, createService, edit, operator } from './service-helpers.js';
 
@@ -100,5 +100,63 @@ describe('service adoption of functional checks and publication records', () => 
     expect(updated).toMatchObject({ id: created.id, originatingRunId: first, contributingRunIds: [second], prNumber: 5, draft: true, remoteSha: 'b'.repeat(40) });
     expect(() => harness.service.recordPublication(harness.service.start(operator, { botId: 'alpha', projectId: 'two', text: 'sem tarefa' }).run.id, { repositoryId: 'app', branch: 'x' })).toThrow(/sem tarefa/);
     void harness.close();
+  });
+});
+
+describe('M06-S03 final message lists real validations and links', () => {
+  const publication = (overrides: Record<string, unknown> = {}) => ({
+    id: 'pub-1',
+    botId: 'alpha',
+    projectId: 'two',
+    taskId: 'fix',
+    repositoryId: 'app',
+    branch: 'task/fix',
+    originatingRunId: 'run-1',
+    contributingRunIds: [],
+    prNumber: 12,
+    prUrl: 'https://github.com/acme/app/pull/12',
+    draft: true as const,
+    prState: 'open' as const,
+    checkRefs: [],
+    reconciliationState: 'synced' as const,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  });
+
+  it('never presents skipped, infrastructure or pending CI as success', () => {
+    const text = deliveryReport({
+      criteria: [
+        { id: 'checks', kind: 'check', description: 'Verificações aprovadas', status: 'satisfied', evidenceRefs: [] },
+        { id: 'manual', kind: 'manual', description: 'Aceite do usuário', status: 'pending', evidenceRefs: [] },
+      ],
+      evidence: [
+        check('r1', 'passed'),
+        check('r1', 'skipped', 'lint'),
+        check('r1', 'infrastructure', 'build'),
+        functional({ app: 'r1' }, 'passed'),
+        { kind: 'publication', repositoryId: 'app', sha: 'a'.repeat(40), prNumber: 12, ci: 'running', validated: false, fingerprint: 'p' },
+      ],
+      publications: [publication()],
+      link: 'http://dashboard/bots/alpha/trabalhos/run-1',
+    });
+    expect(text).toContain('test aprovado');
+    expect(text).toContain('lint não executado (skipped)');
+    expect(text).toContain('build falha de infraestrutura');
+    expect(text).toContain('Fluxo Checkout mostra o erro do formulário: aprovado (1280x800)');
+    expect(text).toContain('https://github.com/acme/app/pull/12 — CI em andamento — draft não validado integralmente');
+    expect(text).toContain('Pendências: Aceite do usuário (pending)');
+    expect(text).toContain('Detalhes: http://dashboard/bots/alpha/trabalhos/run-1');
+  });
+
+  it('labels a draft as fully validated only when CI of its commit passed', () => {
+    const passed = deliveryReport({
+      criteria: [],
+      evidence: [{ kind: 'publication', repositoryId: 'app', sha: 'a'.repeat(40), prNumber: 12, ci: 'passed', validated: true, fingerprint: 'p' }],
+      publications: [publication()],
+    });
+    expect(passed).toContain('CI aprovado (validado integralmente)');
+    const none = deliveryReport({ criteria: [], evidence: [], publications: [publication()] });
+    expect(none).toContain('sem resultado de CI — draft não validado integralmente');
   });
 });

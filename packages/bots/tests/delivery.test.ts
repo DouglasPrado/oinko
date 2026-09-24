@@ -95,6 +95,7 @@ function setup(options: { steps: Step[]; publish?: boolean; browser?: boolean; p
     runner,
     executor: { runCycle: (input) => cycles.current!.runCycle(input) },
     secrets: () => ['sk-test-key-0123456789abcdef'],
+    dashboardUrl: 'http://127.0.0.1:3000/',
   });
   const agent = Agent.create({
     apiKey: 'sk-test-key-0123456789abcdef',
@@ -165,8 +166,8 @@ describe('M05/M06 delivery tools in a real agent loop with a simulated runner', 
     const functional = store.evidence<Evidence>(id).map((item) => item.value).find((item) => item.kind === 'functional') as Extract<Evidence, { kind: 'functional' }>;
     expect(functional).toMatchObject({ result: 'passed', previewId: 'fix', viewport: '1280x800', url: PREVIEW });
     expect(functional.revisions).toMatchObject({ app: expect.stringMatching(/^tree:/), 'env:web': expect.stringMatching(/^cfg:/) });
-    const report = context.programming.artifacts.read(operator, functional.artifactId!);
-    expect(JSON.parse(report.content.toString())).toMatchObject({
+    const content = context.programming.artifacts.read(operator, functional.artifactId!);
+    expect(JSON.parse(content.content.toString())).toMatchObject({
       preconditions: expect.arrayContaining(['prévia saudável da revisão atual']),
       steps: [`navegar ${PREVIEW}`, 'clicar e1'],
       network: [{ status: 422 }],
@@ -178,6 +179,12 @@ describe('M05/M06 delivery tools in a real agent loop with a simulated runner', 
     expect(published.expectedRevision).toBe(functional.revisions!.app);
     expect(published.body).toContain('aprovada: Checkout mostra erro de CEP inválido');
     expect(store.publicationsForRun(id)).toEqual([expect.objectContaining({ prNumber: 12, draft: true, branch: 'task/fix', checkRefs: ['a'.repeat(40) + ':passed'] })]);
+    // The final message lists the real validations, the PR link and the authorized run page.
+    const report = context.programming.service.report(id);
+    expect(report).toContain('test aprovado');
+    expect(report).toContain('Fluxo Checkout mostra erro de CEP inválido: aprovado (1280x800)');
+    expect(report).toContain('https://github.com/acme/shop/pull/12 — CI aprovado (validado integralmente)');
+    expect(report).toContain(`Detalhes: http://127.0.0.1:3000/bots/alpha/trabalhos/${id}`);
     const events = types(context, id);
     const names = events.map((event) => event.type);
     for (const type of ['preview_started', 'preview_ready', 'browser_session_created', 'browser_action_started', 'browser_action_finished', 'browser_navigation_allowed', 'browser_navigation_denied', 'browser_network_error', 'functional_check_finished', 'draft_pull_request_created', 'git_push_finished', 'ci_poll_finished'])

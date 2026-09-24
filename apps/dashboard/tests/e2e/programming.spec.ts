@@ -4,6 +4,7 @@ import { test, expect } from './auth';
 
 interface Seed {
   completed: string;
+  delivered: string;
   blocked: string;
   running: string;
   queued: string;
@@ -18,7 +19,7 @@ test('lists the queue per bot and never shows another bot’s run by guessed id'
   await expect(page.getByRole('heading', { name: 'Trabalhos', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Todos', exact: true }).click();
   const list = page.getByRole('list', { name: 'Lista de trabalhos' });
-  await expect(list.getByRole('link')).toHaveCount(4);
+  await expect(list.getByRole('link')).toHaveCount(5);
   await page.goto('/bots/beta/trabalhos');
   await page.getByRole('tab', { name: 'Todos', exact: true }).click();
   await expect(list.getByText('Analisar a cobertura de testes')).toBeVisible();
@@ -54,6 +55,25 @@ test('explains a completed run with criteria, delivery level, evidence and a tim
   const body = await response.text();
   expect(body).toContain('PASS cart.test.ts');
   expect(body).not.toContain('sk-seed-0123456789abcdef');
+});
+
+test('shows a draft PR with its CI state, the functional check revision and the screenshot', async ({ page }) => {
+  const { delivered } = seed();
+  await page.goto(`/bots/alpha/trabalhos/${delivered}`);
+  await expect(page.getByText('Entregue em draft PR').first()).toBeVisible();
+  const criteria = page.getByRole('list', { name: 'Critérios' });
+  const flow = criteria.getByRole('listitem').filter({ hasText: 'Vitrine mostra o selo de frete grátis no celular' });
+  await expect(flow.getByText('atendido')).toBeVisible();
+  await expect(flow.getByText('rev 7')).toBeVisible();
+  // Published while CI still runs: never labeled as fully validated.
+  await expect(page.getByRole('link', { name: 'app · draft #12' })).toHaveAttribute('href', 'https://github.com/acme/vitrine/pull/12');
+  await expect(page.getByText('CI em andamento · não validado integralmente')).toBeVisible();
+  const evidence = page.getByRole('list', { name: 'Evidências' });
+  const shot = evidence.getByRole('link', { name: 'captura de tela' });
+  const response = await page.request.get((await shot.getAttribute('href'))!);
+  expect(response.ok()).toBe(true);
+  expect(response.headers()['content-type']).toContain('image/png');
+  await expect(evidence.getByRole('link', { name: 'relatório' })).toBeVisible();
 });
 
 test('shows why a run is blocked and requires a note to resume it', async ({ page }) => {

@@ -17,8 +17,11 @@ import { formatDuration } from '@/lib/utils/format-duration';
 import { cn } from '@/lib/utils/cn';
 import { RunStatus } from './run-list';
 import {
+  ARTIFACT_LABEL,
+  CI_LABEL,
   CRITERION_LABEL,
   DELIVERY_LABEL,
+  ciState,
   programmingRequest,
   shortRunId,
   type RunDetail as Detail,
@@ -339,6 +342,11 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
                   <span className={cn('ml-2 text-xs', criterion.status === 'satisfied' ? 'text-ready' : criterion.status === 'failed' || criterion.status === 'invalidated' ? 'text-error-ink' : 'text-ink-muted')}>
                     {CRITERION_LABEL[criterion.status] ?? criterion.status}
                   </span>
+                  {criterion.revision && (
+                    <span className="ml-2 font-mono text-[11px] text-ink-muted" title={criterion.revision}>
+                      rev {criterion.revision.replace(/^tree:/, '').slice(0, 8)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -353,7 +361,7 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
                     <span className="text-ink-muted">{artifact.type} · conteúdo não capturado ({artifact.capturePolicy})</span>
                   ) : (
                     <a className="text-info-ink underline-offset-4 hover:underline" href={`/api/artifacts/${encodeURIComponent(artifact.id)}`} target="_blank" rel="noreferrer">
-                      {artifact.type}
+                      {ARTIFACT_LABEL[artifact.type] ?? artifact.type}
                     </a>
                   )}
                   <span className="text-ink-muted tabular-nums">{artifact.size.toLocaleString('pt-BR')} B</span>
@@ -374,7 +382,9 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
                     ) : (
                       <span>{publication.repositoryId} · {publication.branch}</span>
                     )}
-                    <span className="ml-2 text-ink-muted">{publication.reconciliationState}</span>
+                    <span className={cn('ml-2', ciState(publication.checkRefs) === 'passed' ? 'text-ready' : 'text-ink-muted')}>
+                      {CI_LABEL[ciState(publication.checkRefs)] ?? ciState(publication.checkRefs)}
+                    </span>
                   </li>
                 ))}
               </ul>

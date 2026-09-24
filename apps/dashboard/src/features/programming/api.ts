@@ -33,6 +33,27 @@ export const CRITERION_LABEL: Record<string, string> = {
   invalidated: 'invalidado',
 };
 
+export const ARTIFACT_LABEL: Record<string, string> = {
+  screenshot: 'captura de tela',
+  report: 'relatório',
+};
+
+/** CI of the published commit; anything but a pass is never "validated". */
+export const CI_LABEL: Record<string, string> = {
+  passed: 'CI aprovado',
+  failed: 'CI reprovado',
+  cancelled: 'CI cancelado',
+  queued: 'CI na fila · não validado integralmente',
+  running: 'CI em andamento · não validado integralmente',
+  unknown: 'sem resultado de CI · não validado integralmente',
+  unavailable: 'CI indisponível · não validado integralmente',
+  superseded: 'CI de commit anterior',
+};
+
+export function ciState(checkRefs: readonly string[]): string {
+  return checkRefs.at(-1)?.split(':').at(-1) ?? 'unknown';
+}
+
 export const DELIVERY_LABEL: Record<string, string> = {
   technical: 'Concluído tecnicamente',
   draft_pr: 'Entregue em draft PR',

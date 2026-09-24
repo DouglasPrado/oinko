@@ -24,6 +24,18 @@ const workspaces = new WorkspaceStore(root);
 for (const [id, allowed] of [['loja', ['alpha', 'beta']], ['interno', ['alpha']]])
   if (!workspaces.projects().some((project) => project.id === id))
     workspaces.saveProject({ id, name: id, repositories: [{ id: 'app', source: 'https://example.com/app.git' }], allowedBotIds: allowed }, 0);
+// A project that publishes: previews, browser and draft PRs for alpha.
+if (!workspaces.projects().some((project) => project.id === 'vitrine'))
+  workspaces.saveProject(
+    {
+      id: 'vitrine',
+      name: 'vitrine',
+      repositories: [{ id: 'app', source: 'https://example.com/vitrine.git' }],
+      allowedBotIds: ['alpha'],
+      programming: { browser: { enabled: true }, github: { repositories: [{ repositoryId: 'app', owner: 'acme', name: 'vitrine' }] }, publisherBotIds: ['alpha'] },
+    },
+    0,
+  );
 workspaces.close();
 
 let script = [];
@@ -56,6 +68,21 @@ const completed = await execute('Corrigir o total do carrinho com desconto', [
     return { summary: 'Corrigido e testado.', traceIds: [] };
   },
 ]);
+// Delivered as a draft PR with a functional check on the preview and CI still running.
+const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+const delivered = await execute('Mostrar o selo de frete grátis na vitrine', [
+  (input) => {
+    input.context.record({ kind: 'edit', repositoryId: 'app', paths: ['banner.tsx'], revision: 'tree:7' });
+    input.context.record({ kind: 'check', checkKind: 'test', repositoryId: 'app', result: 'passed', revision: 'tree:7', fingerprint: 'test:tree:7:passed' });
+    const shot = input.context.saveArtifact({ type: 'screenshot', content: PNG, mediaType: 'image/png', treeHash: 'tree:7' });
+    const report = input.context.saveArtifact({ type: 'report', content: JSON.stringify({ url: 'http://vitrine.preview/', viewport: '390x844', screenshot: shot?.id }), mediaType: 'application/json', treeHash: 'tree:7' });
+    input.context.record({ kind: 'functional', criterionId: 'selo_frete', description: 'Vitrine mostra o selo de frete grátis no celular', result: 'passed', revision: 'tree:7', revisions: { app: 'tree:7', 'env:web': 'cfg:1' }, previewId: 'vitrine', url: 'http://vitrine.preview/', viewport: '390x844', fingerprint: 'selo:tree:7', artifactId: report?.id });
+    service.recordPublication(input.run.id, { repositoryId: 'app', branch: 'task/carrinho', remoteSha: 'a'.repeat(40), prNumber: 12, prUrl: 'https://github.com/acme/vitrine/pull/12', prState: 'open', reconciliationState: 'synced', checkRefs: [`${'a'.repeat(40)}:running`] });
+    input.context.record({ kind: 'publication', repositoryId: 'app', sha: 'a'.repeat(40), revision: 'tree:7', prNumber: 12, prUrl: 'https://github.com/acme/vitrine/pull/12', ci: 'running', validated: false, fingerprint: 'pr-12' });
+    input.context.signals.completion = { summary: 'Selo publicado em draft; CI ainda em andamento.' };
+    return { summary: 'Selo implementado e validado na prévia.', traceIds: [] };
+  },
+], 'vitrine');
 const noProgress = () => {
   throw new Error('pnpm test falhou: Cannot find module "@loja/config"');
 };
@@ -76,6 +103,6 @@ await passive.close();
 bots.close();
 writeFileSync(
   join(root, 'programming-seed.json'),
-  JSON.stringify({ completed: completed.id, blocked: blocked.id, running: running.id, queued: queued.id, states: [completed.state, blocked.state] }),
+  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, states: [completed.state, delivered.state, blocked.state] }),
 );
-console.log(`seeded programming runs: ${completed.state}, ${blocked.state}, running, queued`);
+console.log(`seeded programming runs: ${completed.state}, ${delivered.state}, ${blocked.state}, running, queued`);

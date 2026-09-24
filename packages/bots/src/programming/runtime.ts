@@ -35,6 +35,8 @@ export interface ProgrammingRuntimeOptions {
   bots?: BotStore;
   /** Literal secrets to scrub from events and artifacts (API keys, tokens). */
   secrets?: () => readonly string[];
+  /** Dashboard base URL for run links in final messages (default: OINKO_DASHBOARD_URL). */
+  dashboardUrl?: string;
   now?: () => number;
 }
 
@@ -103,6 +105,7 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
     return view?.telemetry.enabled && path ? new SqliteTelemetryRepository(botId, path) : undefined;
   });
   const notifier = new RunNotifier(journal);
+  const dashboardUrl = (options.dashboardUrl ?? process.env.OINKO_DASHBOARD_URL)?.replace(/\/+$/, '');
   const service = new ProgrammingRunService({
     store,
     journal,
@@ -119,6 +122,8 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
       usage.publish(run);
     },
     onRunEvent: (run, event) => void notifier.notify(run, event),
+    // The dashboard page enforces its own access; the link only points to it.
+    runLink: (run) => (dashboardUrl ? `${dashboardUrl}/bots/${encodeURIComponent(run.botId)}/trabalhos/${encodeURIComponent(run.id)}` : undefined),
     ...(options.now && { now: options.now }),
   });
   const queries = new RunQueries(store, access, journal, usage);

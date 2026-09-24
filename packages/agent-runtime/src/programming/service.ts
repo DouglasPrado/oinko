@@ -27,6 +27,7 @@ import {
   type RunContext,
 } from './evidence.js';
 import type { OperationRecorder } from './operations.js';
+import { deliveryReport } from './delivery-report.js';
 import type { ArtifactStore } from './artifacts.js';
 import {
   canAccessRun,
@@ -127,6 +128,8 @@ export interface ProgrammingRunServiceOptions {
   onCycleFinished?: (run: ProgrammingRun, outcome: CycleOutcome) => void | Promise<void>;
   /** Called on relevant state changes, e.g. to notify the originating channel. */
   onRunEvent?: (run: ProgrammingRun, event: { type: string; message: string }) => void;
+  /** Authorized page of a run (e.g. the dashboard), included in final messages. */
+  runLink?: (run: ProgrammingRun) => string | undefined;
   now?: () => number;
 }
 
@@ -727,7 +730,7 @@ export class ProgrammingRunService {
           const publication = evaluation.criteria.some((criterion) => criterion.kind === 'publication' && criterion.status === 'satisfied');
           this.finish(run, 'completed', { summary: outcome.completion.summary, delivery: publication ? 'draft_pr' : 'technical', uncertainOperations: [] });
           this.journal.record('run_completed', correlationOf(run), { outcome: 'completed', delivery: publication ? 'draft_pr' : 'technical' });
-          this.notify(this.store.requireRun(run.id), 'run_completed', outcome.completion.summary);
+          this.notify(this.store.requireRun(run.id), 'run_completed', `${outcome.completion.summary}\n${this.report(run.id)}`.trim());
           return;
         }
         feedback = `A conclusão não foi aceita. Pendências: ${blockers
@@ -822,7 +825,19 @@ export class ProgrammingRunService {
       this.journal.record('run_state_changed', correlationOf(current), { from: current.state, to: 'blocked', code: reason.code });
       this.journal.record('run_blocked', correlationOf(current), { code: reason.code, reason: reason.message, needs: reason.needs ?? '' });
     });
-    this.notify(this.store.requireRun(run.id), 'run_blocked', reason.needs ? `${reason.message} ${reason.needs}` : reason.message);
+    this.notify(this.store.requireRun(run.id), 'run_blocked', `${reason.needs ? `${reason.message} ${reason.needs}` : reason.message}\n${this.report(run.id)}`.trim());
+  }
+
+  /** Real validations, draft links and pending criteria of a run, for final messages. */
+  report(runId: string): string {
+    const run = this.store.requireRun(runId);
+    const link = this.options.runLink?.(run);
+    return deliveryReport({
+      criteria: this.store.criteria(runId),
+      evidence: this.store.evidence<Evidence>(runId).map((item) => item.value),
+      publications: this.store.publicationsForRun(runId),
+      ...(link && { link }),
+    });
   }
 
   private finish(run: ProgrammingRun, state: 'completed' | 'failed' | 'cancelled', outcome: Omit<NonNullable<ProgrammingRun['finalOutcome']>, 'outcome'>): ProgrammingRun {

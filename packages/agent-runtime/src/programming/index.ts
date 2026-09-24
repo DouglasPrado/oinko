@@ -15,6 +15,7 @@ export * from './artifacts.js';
 export * from './usage.js';
 export * from './query.js';
 export * from './evidence.js';
+export * from './delivery-report.js';
 export * from './service.js';
 export * from './agent-executor.js';
 export * from './channel.js';
