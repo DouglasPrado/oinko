@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { test, expect } from './auth';
 
 interface Seed {
+  candidate: string;
   completed: string;
   delivered: string;
   blocked: string;
@@ -159,4 +160,41 @@ test('validates the run model policy before activation and keeps it across reloa
   await expect(reloaded.getByLabel('Modelo principal')).toHaveValue('model-main');
   await expect(reloaded.getByLabel('Confiança mínima do Jev')).toHaveValue('0.9');
   await expect(reloaded.getByLabel('Máximo de ferramentas carregadas')).toHaveValue('20');
+});
+
+test('approves, promotes and rolls back an evaluated candidate and exports a redacted history', async ({ page }) => {
+  await page.goto('/bots/beta/avaliacoes');
+  const candidate = page.getByRole('listitem', { name: `Candidato ${seed().candidate}` });
+  await expect(candidate.getByText('Prompt mais direto reduz tokens sem perder qualidade')).toBeVisible();
+  await expect(candidate.getByText('recomenda promover')).toBeVisible();
+  await expect(candidate.getByText(/não prova causa/)).toBeVisible();
+  const batches = page.getByRole('region', { name: 'Lotes de avaliação' });
+  await expect(batches.getByText('custo desconhecido').first()).toBeVisible();
+  // Approval needs a recorded reason.
+  await candidate.getByRole('button', { name: 'Aprovar' }).click();
+  await expect(page.getByText('Registre o motivo da aprovação.')).toBeVisible();
+  await candidate.getByLabel('Motivo da aprovação').fill('Economia sem perda de qualidade no lote simulado.');
+  await candidate.getByRole('button', { name: 'Aprovar' }).click();
+  await expect(candidate.getByText('aprovado', { exact: true })).toBeVisible();
+  await candidate.getByRole('button', { name: 'Promover' }).click();
+  await expect(candidate.getByText('promovido', { exact: true })).toBeVisible();
+  await candidate.getByRole('button', { name: 'Reverter' }).click();
+  await expect(candidate.getByText('revertido', { exact: true })).toBeVisible();
+  await expect(candidate.getByText(/trabalho\(s\) afetado\(s\)/)).toBeVisible();
+  const exported = await page.request.get('/api/evaluations/export?botId=beta');
+  expect(exported.ok()).toBe(true);
+  const body = await exported.text();
+  expect(JSON.parse(body)).toMatchObject({ botId: 'beta', schemaVersion: 1 });
+  expect(body).not.toContain('sk-seed-0123456789abcdef');
+});
+
+test('refuses anonymous access to evaluations', async ({ browser }) => {
+  const anonymous = await browser.newContext();
+  try {
+    expect((await anonymous.request.get('http://127.0.0.1:3112/api/evaluations?botId=beta')).status()).toBe(403);
+    expect((await anonymous.request.get('http://127.0.0.1:3112/api/evaluations/export?botId=beta')).status()).toBe(403);
+    expect((await anonymous.request.post('http://127.0.0.1:3112/api/evaluations/candidates/cand-x/promote', { data: {} })).status()).toBe(403);
+  } finally {
+    await anonymous.close();
+  }
 });

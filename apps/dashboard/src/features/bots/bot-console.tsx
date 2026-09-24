@@ -980,6 +980,14 @@ function BotOverview({ bot, pending }: { bot: ListedBot; pending: boolean }) {
                   {bot.programmingPolicy?.enabled ? 'Habilitados · ver fila' : 'Desabilitados · histórico'}
                 </Link>
               </Detail>
+              <Detail label="Avaliações">
+                <Link
+                  href={`/bots/${encodeURIComponent(bot.id)}/avaliacoes`}
+                  className="text-info-ink underline-offset-4 hover:underline"
+                >
+                  Candidatos, lotes e promoções
+                </Link>
+              </Detail>
             </dl>
           </section>
           <section className="rounded-xl border border-rule">

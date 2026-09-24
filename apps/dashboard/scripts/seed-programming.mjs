@@ -99,10 +99,40 @@ passive.store.acquireLease(running.id, 'seed-worker', 3_600_000);
 const claimed = passive.store.transitionRun(running.id, passive.store.getRun(running.id).revision, 'running', { phase: 'working', startedAt: Date.now() }).run;
 passive.service.control(operator, claimed.id, 'pause', {}, 'seed');
 const queued = passive.service.start(operator, { botId: 'beta', projectId: 'loja', text: 'Analisar a cobertura de testes', mode: 'analysis' }).run;
+// Evaluation history for beta: a baseline and a prompt candidate that saves tokens.
+const { evaluation } = passive;
+const evalCase = {
+  id: 'bug',
+  title: 'Bug com teste',
+  kind: 'bug_fix',
+  request: { text: 'Corrija sum', mode: 'change' },
+  fixture: { files: { 'sum.cjs': 'module.exports = (a, b) => a - b;\n' } },
+  criteria: [{ id: 'changes', kind: 'diff', description: 'Correção aplicada' }],
+};
+const { version } = evaluation.createDataset(operator, { name: 'seed-eval', cases: [evalCase] });
+const attempt = (tokens) => ({
+  caseId: 'bug',
+  repetition: 1,
+  verdict: 'passed',
+  criteria: [{ id: 'changes', status: 'satisfied' }],
+  metrics: { durationMs: 42_000, calls: 6, cycles: 1, tokens: { total: tokens, byRole: { main: tokens } }, cost: { confirmedUsd: 0, pendingCalls: 6, unavailableCalls: 0, confirmedCalls: 0 }, interventions: 0, restarts: 0, fallbacks: 0 },
+  evidenceRefs: [],
+  traceIds: [],
+});
+const batchOf = (subject, tokens) => {
+  const batch = evaluation.startBatch(operator, { datasetVersion: version, botId: 'beta', subject, policyVersion: `cfg:${subject.slice(0, 12)}`, environment: 'simulated', repetitions: 1, manifest: { platformCommit: 'seed' } });
+  evaluation.caseStarted(batch.id, 'bug', 1);
+  evaluation.caseFinished(batch.id, attempt(tokens));
+  evaluation.finishBatch(batch.id);
+  return batch;
+};
+const baselineBatch = batchOf('baseline', 2000);
+const candidate = evaluation.createCandidate(operator, { botId: 'beta', kind: 'prompt', hypothesis: 'Prompt mais direto reduz tokens sem perder qualidade', change: { systemPrompt: 'Bot Beta Revisor. Seja direto.' } });
+evaluation.compare(operator, baselineBatch.id, batchOf(candidate.id, 1200).id);
 await passive.close();
 bots.close();
 writeFileSync(
   join(root, 'programming-seed.json'),
-  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, states: [completed.state, delivered.state, blocked.state] }),
+  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, candidate: candidate.id, states: [completed.state, delivered.state, blocked.state] }),
 );
 console.log(`seeded programming runs: ${completed.state}, ${delivered.state}, ${blocked.state}, running, queued`);

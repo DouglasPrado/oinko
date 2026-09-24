@@ -32,7 +32,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "evaluate": "node dist/evaluate.js"
   },
   "dependencies": {
     "@oinko/core": "workspace:*",

@@ -133,7 +133,7 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
     ...(options.now && { now: options.now }),
   });
   const queries = new RunQueries(store, access, journal, usage);
-  const evaluation = new EvaluationService({ store: new EvaluationStore(database), runs: store, journal, bots: botConfigPort(bots), artifacts, ...(options.now && { now: options.now }) });
+  const evaluation = new EvaluationService({ store: new EvaluationStore(database), runs: store, journal, bots: botConfigPort(bots, journal), artifacts, ...(options.now && { now: options.now }) });
   const commands = options.executeFor
     ? new ChannelCommands({ botId: options.executeFor, service, queries, access, journal })
     : undefined;
