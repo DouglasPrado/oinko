@@ -22,7 +22,8 @@ import {
   type ProgrammingPolicy,
   type RunExecutor,
 } from '@oinko/agent-runtime/programming';
-import { EnvironmentClient } from '@oinko/environments/client';
+import { EnvironmentClient, environmentRequest } from '@oinko/environments/client';
+import { runCommand } from '@oinko/environments/command';
 import { WorkspaceStore } from '@oinko/workspaces';
 import type { BotDefinition } from '../../schema.js';
 import { BotStore } from '../../store.js';
@@ -317,8 +318,25 @@ async function attempt(testCase: EvaluationCase, repetition: number, definition:
     await programming.close().catch(() => undefined);
     await agent.destroy().catch(() => undefined);
     bots.close();
+    if (options.environment !== 'simulated') await stopSandbox(root);
     if (!options.keep) rmSync(root, { recursive: true, force: true });
   }
+}
+
+/** Stops the attempt root's runner and removes only that root's containers. */
+async function stopSandbox(root: string): Promise<void> {
+  const health = await environmentRequest<{ pid: number }>(root, '/health', undefined, 1000).catch(() => undefined);
+  if (health?.pid) {
+    try {
+      process.kill(health.pid, 'SIGTERM');
+    } catch {
+      /* already gone */
+    }
+    await delay(500);
+  }
+  const namespace = `oinko-${createHash('sha256').update(root).digest('hex').slice(0, 10)}`;
+  const ids = (await runCommand('docker', ['ps', '-aq', '--filter', `name=^${namespace}-`]).catch(() => ({ stdout: '' }))).stdout.trim().split(/\s+/).filter(Boolean);
+  if (ids.length) await runCommand('docker', ['rm', '-f', ...ids]).catch(() => undefined);
 }
 
 async function prepareRunner(root: string, botId: string, source: string, options: EvaluationRunOptions): Promise<RunnerPort> {
