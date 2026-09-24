@@ -76,11 +76,12 @@ OINKO_EVAL_CONTEXT='{"enabled":true}' node packages/oinko/scripts/context-evalua
 ## Validação do repositório
 
 - Núcleo: **1.635 testes passaram**, 1 ignorado; cobertura de linhas **94,42%**. Inclui persistência SQLite após reinício, isolamento, falha do Jev, descoberta durante o loop, arquivo completo antes do corte, recuperação de campos antigos, orçamento e contabilização de resumo vazio/falho.
-- Demais pacotes e dashboard: **159 testes passaram**, 52 ignorados nos cenários opcionais de infraestrutura. O agregado `test:coverage` passou; a cobertura do núcleo foi repetida depois das últimas regressões.
-- Dashboard E2E: salvou limites de contexto, recarregou e confirmou persistência; alterou a seleção de ferramentas e confirmou pela API. Passou duas vezes.
+- Demais pacotes e dashboard: **164 testes passaram**, 52 ignorados nos cenários opcionais de infraestrutura, na preparação final do PR, incluindo os testes de espera do Telegram. O agregado `test:coverage` passou; a cobertura do núcleo foi repetida depois das últimas regressões.
+- Dashboard E2E: **25 testes passaram**, 3 cenários Docker opcionais ignorados na preparação do PR. A configuração de contexto salvou limites, recarregou e confirmou persistência; alterou a seleção de ferramentas e confirmou pela API. Esse cenário também passou duas vezes durante a avaliação inicial.
 - `build`, `typecheck`, `lint`, `lint:dup`, `size`, `docs:api:check` e `validate:publish` passaram. Auditoria de segredos das alterações: nenhum vazamento encontrado. `git diff --check` passou.
 - O tamanho total do SDK passou de aproximadamente 611 KB para 665,21 KB, sem adicionar dependências diretas. O orçamento total foi ajustado para 670 KB; os limites de 5 KB para a entrada e 50 KB para a classe Agent foram mantidos e passaram.
-- Dois checks globais ainda apontam material preexistente da reformulação visual: `format:check` sinaliza somente `vercel-DESIGN.md`; `lint:deadcode` aponta 9 exports sem uso em componentes da dashboard (`BrandMark`, quatro ícones, `Trail` em dois locais, `navItemStyle`, `checkRowStyle`). Essas alterações foram preservadas. Não se declara o repositório inteiro livre de pendências.
+- Na avaliação inicial, dois checks globais apontavam material preexistente da reformulação visual: `format:check` sinalizava `vercel-DESIGN.md`; `lint:deadcode` apontava 9 exports sem uso na dashboard. A preparação do PR preservou esse trabalho no checkout original e integrou os controles de contexto sobre a interface já versionada. No checkout isolado do PR, ambos os checks passaram.
+- A auditoria de dependências de produção não encontrou vulnerabilidades. Os commits novos passaram no commitlint. Os checks locais acima validam o conteúdo preparado para o PR; o CI remoto tem execução própria.
 
 Depois das medições, os scripts do avaliador receberam somente formatação. Os arquivos originais e seus hashes estão nos snapshots privados `confirmation-source` e anteriores. Os critérios e dados dos cenários permanecem iguais. A versão original do núcleo usada na base era `1bdfba8`; rodar agora com a política desabilitada mede o núcleo atual, não reconstitui automaticamente aquele checkout.
 
@@ -98,3 +99,9 @@ A conferência local no próprio Dev fez uma consulta real `oinko_bots`, confirm
 A telemetria registrou seleção e roteamento juntos pelo Jev, com 4.626/600 tokens de entrada/saída na primeira decisão e 4.835/599 na segunda. O inspetor foi conferido no navegador com os tokens separados dos do LLM. A rota free funcionou, mas demorou **65 segundos** nessa verificação; menor contexto não garante baixa latência do provedor gratuito. A consulta pelo modelo principal levou cerca de 4 segundos, além da seleção inicial.
 
 Os dois últimos ensaios completos passaram **16/16 cada**, após corrigir a regressão de detalhe antigo. As falhas intermediárias permanecem no relatório e nos dados brutos.
+
+### Verificação no Telegram
+
+A primeira saudação na conversa existente levou 77,9 segundos: três chamadas de resumo consumiram aproximadamente 75 segundos, seguidas pela resposta da rota fast em aproximadamente 2 segundos. O resumo foi persistido cobrindo 76 mensagens. Esse custo inicial confirma que ativar a política em uma conversa longa pode aumentar a espera mesmo para uma saudação.
+
+O canal passou a renovar a indicação “digitando” enquanto processa a mensagem, encerrando-a antes da resposta ou no cancelamento. Falhas e demora na indicação não bloqueiam a resposta. Os 19 testes do adaptador passaram; o Dev foi reiniciado preservando configuração e resumo. O usuário confirmou que a nova mensagem funcionou no Telegram. Essa confirmação é separada da bateria de 16 cenários e não altera seus resultados.
