@@ -1,12 +1,14 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ProjectProgrammingSchema,
   type Project,
   type ProjectProgramming,
 } from '@oinko/workspaces/contracts';
 import { SwitchField, SwitchList } from '@/components/shared/switch-field';
+import { Button } from '@/components/ui/button';
 import { Field, inputStyle, panelStyle, textareaStyle } from './shared';
+import { describeGithubAccess, type GithubInstallationResult } from './github-access';
 
 const KINDS = ['install', 'test', 'lint', 'build', 'typecheck', 'format'] as const;
 
@@ -47,8 +49,19 @@ export function ProjectProgrammingSettings({
   bots: { id: string; name: string }[];
 }) {
   const programming = definition.programming ?? ProjectProgrammingSchema.parse({});
-  const [commands, setCommands] = useState(commandsText(programming.commands));
+  const saved = commandsText(programming.commands);
+  const [commands, setCommands] = useState(saved);
   const [commandError, setCommandError] = useState('');
+  // The project may load after the editor opens: follow it unless the text being typed already says the same.
+  useEffect(() => {
+    setCommands((current) => {
+      try {
+        return commandsText(parseCommands(current)) === saved ? current : saved;
+      } catch {
+        return current;
+      }
+    });
+  }, [saved]);
   const update = (values: Partial<ProjectProgramming>) => onChange({ ...programming, ...values });
   const github = (repositoryId: string) => programming.github.repositories.find((entry) => entry.repositoryId === repositoryId);
   return (
@@ -148,6 +161,7 @@ export function ProjectProgrammingSettings({
           );
         })}
       </div>
+      <GithubAccess projectId={definition.id} />
       <div className="border-t border-rule pt-4">
         <p className="text-[13px] font-medium">Bots que podem publicar draft PR</p>
         <SwitchList className="-my-2">
@@ -171,5 +185,44 @@ export function ProjectProgrammingSettings({
         </SwitchList>
       </div>
     </section>
+  );
+}
+
+/** Checks the saved project against GitHub: installed is not the same as reachable. */
+function GithubAccess({ projectId }: { projectId: string }) {
+  const [view, setView] = useState<ReturnType<typeof describeGithubAccess>>();
+  const [pending, setPending] = useState(false);
+  const verify = async () => {
+    setPending(true);
+    try {
+      const response = await fetch(`/api/programming/github?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+      setView(describeGithubAccess((await response.json()) as GithubInstallationResult));
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <div className="space-y-2 border-t border-rule pt-4" aria-label="Acesso do GitHub">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-[13px] font-medium">Acesso da GitHub App</p>
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={() => void verify()}>
+          {pending ? 'Verificando…' : 'Verificar acesso'}
+        </Button>
+      </div>
+      {view && (
+        <div className="space-y-1 text-xs">
+          <p className={view.ready ? 'text-ready' : 'text-warning-ink'}>{view.summary}</p>
+          <p className="text-ink-muted">Instalada: {view.installed}</p>
+          {view.missingPermissions.length > 0 && <p className="text-ink-muted">Permissões faltando: {view.missingPermissions.join(', ')}</p>}
+          <ul>
+            {view.repositories.map((repository) => (
+              <li key={repository.repositoryId}>
+                <span className="font-mono">{repository.label}</span>: {repository.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }

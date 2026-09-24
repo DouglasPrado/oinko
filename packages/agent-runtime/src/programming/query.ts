@@ -55,7 +55,16 @@ export interface RunDetail {
   publications: Publication[];
   levels: DeliveryLevels;
   metrics: RunMetrics;
-  telemetry: { pendingDelivery: number; gaps: { producer: string; missing: number }[] };
+  telemetry: { pendingDelivery: number; gaps: { producer: string; missing: number }[]; degraded: boolean };
+  /** How the last cycle's prompt was assembled and which model paths were taken. */
+  context: {
+    assembled?: Record<string, unknown>;
+    tools?: Record<string, unknown>;
+    expansions: number;
+    retrievals: number;
+    fallbacks: number;
+    lastRouting?: Record<string, unknown>;
+  };
 }
 
 export interface TimelineEntry {
@@ -219,7 +228,28 @@ export class RunQueries {
         acceptedByUser: accepted,
       },
       metrics: this.usage.metrics(run.id),
-      telemetry: { pendingDelivery: pending.n, gaps: this.gaps(run.id) },
+      telemetry: {
+        pendingDelivery: pending.n,
+        gaps: this.gaps(run.id),
+        degraded: readJournal(this.store.database, { runId: run.id, type: 'telemetry_delivery_degraded' }).length > readJournal(this.store.database, { runId: run.id, type: 'telemetry_recovered' }).length,
+      },
+      context: this.context(run.id),
+    };
+  }
+
+  private context(runId: string): RunDetail['context'] {
+    const events = (type: string) => readJournal(this.store.database, { runId, type });
+    const last = (type: string) => events(type).at(-1)?.envelope.payload;
+    const assembled = last('context_assembled');
+    const tools = last('tools_selected');
+    const lastRouting = last('routing_decision');
+    return {
+      ...(assembled && { assembled }),
+      ...(tools && { tools }),
+      expansions: events('tools_expanded').length,
+      retrievals: events('history_retrieved').length,
+      fallbacks: events('model_fallback_triggered').length,
+      ...(lastRouting && { lastRouting }),
     };
   }
 

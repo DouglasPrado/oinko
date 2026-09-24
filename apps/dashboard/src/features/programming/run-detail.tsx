@@ -128,7 +128,8 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
         <AlertDescription>{detail.error.message}</AlertDescription>
       </Alert>
     );
-  const { run, plan, criteria, operations, uncertain, artifacts, publications, levels, metrics, telemetry, steps } = detail.data;
+  const { run, plan, criteria, operations, uncertain, artifacts, publications, levels, metrics, telemetry, steps, context } = detail.data;
+  const components = Object.entries((context.assembled?.components as Record<string, number> | undefined) ?? {});
   const current = plan.at(-1);
   const live = ['queued', 'running', 'paused', 'blocked'].includes(run.state);
   const submitDirection = (event: FormEvent) => {
@@ -178,10 +179,16 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
         }
       />
       <p className="text-xs text-ink-muted">
-        Projeto <span className="font-mono">{run.projectId}</span>
+        Projeto{' '}
+        <Link className="font-mono text-info-ink hover:underline" href={`/projetos/${encodeURIComponent(run.projectId)}`}>
+          {run.projectId}
+        </Link>
         {run.taskId && (
           <>
-            {' '}· tarefa <span className="font-mono">{run.taskId}</span>
+            {' '}· worktree da tarefa{' '}
+            <Link className="font-mono text-info-ink hover:underline" href={`/projetos/${encodeURIComponent(run.projectId)}#tarefa-${encodeURIComponent(run.taskId)}`}>
+              {run.taskId}
+            </Link>
           </>
         )}{' '}
         · política <span className="font-mono">{run.policyVersion.slice(7, 19)}</span> · revisão do plano {run.planRevision}
@@ -239,7 +246,12 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
           icon={<Coins aria-hidden />}
           hint={`cobertura ${Math.round(metrics.cost.coverage * 100)}% · ${metrics.cost.pendingCalls} pendente(s) · ${metrics.cost.unavailableCalls} indisponível(is)`}
         />
-        <Metric label="Duração" value={formatDuration(metrics.durations.total)} icon={<Clock aria-hidden />} hint={`fila ${formatDuration(metrics.durations.queue)}`} />
+        <Metric
+          label="Duração"
+          value={formatDuration(metrics.durations.total)}
+          icon={<Clock aria-hidden />}
+          hint={`fila ${formatDuration(metrics.durations.queue)} · contexto ${formatDuration(metrics.durations.context)} · modelo ${formatDuration(metrics.durations.model)} · ferramentas ${formatDuration(metrics.durations.tool)}`}
+        />
       </MetricGrid>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="space-y-5">
@@ -301,11 +313,42 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
               ))}
               {!shown.length && <li className="px-4 py-3 text-xs text-ink-muted">Sem eventos nesta categoria.</li>}
             </ol>
+            {telemetry.degraded && (
+              <p className="border-t border-rule px-4 py-2 text-xs text-warning-ink">
+                Entrega de telemetria degradada: {telemetry.pendingDelivery} evento(s) aguardando; nada foi descartado.
+              </p>
+            )}
             {telemetry.gaps.length > 0 && (
               <p className="border-t border-rule px-4 py-2 text-xs text-warning-ink">
                 Lacunas na sequência de eventos: {telemetry.gaps.map((gap) => `${gap.producer} (${gap.missing})`).join(', ')}
               </p>
             )}
+          </Section>
+          <Section title="Contexto e modelo" className="p-0">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 py-3 text-xs" aria-label="Contexto e modelo">
+              <dt className="text-ink-muted">Modelo do último ciclo</dt>
+              <dd className="font-mono">
+                {typeof context.lastRouting?.model === 'string' ? context.lastRouting.model : '—'}
+                {typeof context.lastRouting?.tier === 'string' ? ` (${context.lastRouting.tier})` : ''}
+              </dd>
+              <dt className="text-ink-muted">Ferramentas carregadas</dt>
+              <dd>
+                {context.tools ? `${Number(context.tools.count)} (${context.tools.source === 'decider' ? 'escolhidas pelo Jev' : 'todas'})` : '—'}
+                {context.expansions > 0 && ` · ${context.expansions} expansão(ões)`}
+              </dd>
+              <dt className="text-ink-muted">Tokens do prompt</dt>
+              <dd>{context.assembled ? Number(context.assembled.totalTokens).toLocaleString('pt-BR') : '—'}</dd>
+              {components.map(([source, tokens]) => (
+                <div key={source} className="contents">
+                  <dt className="pl-2 font-mono text-ink-muted">{source}</dt>
+                  <dd>{Number(tokens).toLocaleString('pt-BR')}</dd>
+                </div>
+              ))}
+              <dt className="text-ink-muted">Buscas no histórico</dt>
+              <dd>{context.retrievals}</dd>
+              <dt className="text-ink-muted">Trocas rápido → principal</dt>
+              <dd>{context.fallbacks}</dd>
+            </dl>
           </Section>
           <Section title="Operações" className="p-0">
             <ul className="divide-y divide-rule" aria-label="Operações">

@@ -89,6 +89,7 @@ export function WorkspaceTasks({
             return (
               <article
                 key={task.id}
+                id={`tarefa-${task.id}`}
                 data-slot="card"
                 aria-label={task.name}
                 className="space-y-3 px-4 py-3.5"

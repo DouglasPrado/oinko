@@ -20,7 +20,7 @@ test('lists the queue per bot and never shows another bot’s run by guessed id'
   await expect(page.getByRole('heading', { name: 'Trabalhos', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Todos', exact: true }).click();
   const list = page.getByRole('list', { name: 'Lista de trabalhos' });
-  await expect(list.getByRole('link')).toHaveCount(5);
+  await expect(list.getByRole('link')).toHaveCount(6);
   await page.goto('/bots/beta/trabalhos');
   await page.getByRole('tab', { name: 'Todos', exact: true }).click();
   await expect(list.getByText('Analisar a cobertura de testes')).toBeVisible();

@@ -72,6 +72,10 @@ const completed = await execute('Corrigir o total do carrinho com desconto', [
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 const delivered = await execute('Mostrar o selo de frete grátis na vitrine', [
   (input) => {
+    input.context.emit('routing_decision', { model: 'model-alpha', tier: 'main' });
+    input.context.emit('tools_selected', { source: 'decider', count: 9, tools: 'workspace_read_range,workspace_patch,workspace_check,workspace_preview,browser_open,browser_navigate,functional_check,publication_publish,programming_complete', schemaTokens: 2100 });
+    input.context.emit('context_assembled', { model: 'model-alpha', totalTokens: 6400, components: { 'system:base': 900, 'tools:schema': 2100, 'history:recent': 3000, 'context:summary': 400 }, dropped: 0 });
+    input.context.emit('tools_expanded', { source: 'tool_search', count: 1, tools: 'browser_screenshot' });
     input.context.record({ kind: 'edit', repositoryId: 'app', paths: ['banner.tsx'], revision: 'tree:7' });
     input.context.record({ kind: 'check', checkKind: 'test', repositoryId: 'app', result: 'passed', revision: 'tree:7', fingerprint: 'test:tree:7:passed' });
     const shot = input.context.saveArtifact({ type: 'screenshot', content: PNG, mediaType: 'image/png', treeHash: 'tree:7' });
@@ -87,6 +91,16 @@ const noProgress = () => {
   throw new Error('pnpm test falhou: Cannot find module "@loja/config"');
 };
 const blocked = await execute('Migrar o checkout para a API nova', [noProgress, noProgress, noProgress], 'interno');
+// An effect whose outcome is unknown: the run cannot complete and says which operation.
+const lost = async (input) => {
+  await input.context
+    .operation({ kind: 'workspace.exec', class: 'mutate', params: { command: 'pnpm run release:canary' }, intent: { command: 'pnpm run release:canary' } }, async () => {
+      throw new Error('conexão com o runner perdida durante o comando');
+    })
+    .catch(() => undefined);
+  return { summary: 'Comando de release sem resposta.', traceIds: [] };
+};
+const uncertain = await execute('Publicar a versão canário do pacote', [lost, noProgress, noProgress, noProgress], 'interno');
 
 await runtime.close();
 
@@ -133,6 +147,6 @@ await passive.close();
 bots.close();
 writeFileSync(
   join(root, 'programming-seed.json'),
-  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, candidate: candidate.id, states: [completed.state, delivered.state, blocked.state] }),
+  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, candidate: candidate.id, uncertain: uncertain.id, states: [completed.state, delivered.state, blocked.state] }),
 );
 console.log(`seeded programming runs: ${completed.state}, ${delivered.state}, ${blocked.state}, running, queued`);

@@ -1,5 +1,5 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SwitchField, SwitchList } from '@/components/shared/switch-field';
 import { ProjectSchema, type Project, type Saved } from '@oinko/workspaces/contracts';
@@ -33,6 +33,16 @@ export function ProjectEditor({
       allowedBotIds: [],
     },
   );
+  // The revision this form was loaded from: saving sends it, so a newer
+  // version saved meanwhile is refused instead of silently overwritten.
+  const [base, setBase] = useState(project?.revision ?? 0);
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!project || dirty || project.revision === base) return;
+    // Nothing edited yet: follow the latest saved version.
+    setDefinition(project);
+    setBase(project.revision);
+  }, [project, dirty, base]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const bots = useQuery<{ id: string; name: string }[]>({
@@ -43,8 +53,10 @@ export function ProjectEditor({
       return response.json() as Promise<{ id: string; name: string }[]>;
     },
   });
-  const change = <K extends keyof Project>(key: K, value: Project[K]) =>
+  const change = <K extends keyof Project>(key: K, value: Project[K]) => {
+    setDirty(true);
     setDefinition((current) => ({ ...current, [key]: value }));
+  };
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -53,7 +65,7 @@ export function ProjectEditor({
       await save({
         action: 'saveProject',
         definition: ProjectSchema.parse(definition),
-        revision: project?.revision ?? 0,
+        revision: base,
       });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Confira os campos.');
@@ -74,15 +86,16 @@ export function ProjectEditor({
               className={inputStyle}
               required
               value={definition.name}
-              onChange={(event) =>
+              onChange={(event) => {
+                setDirty(true);
                 setDefinition((value) => ({
                   ...value,
                   name: event.target.value,
                   ...(!project && (!value.id || value.id === slug(value.name))
                     ? { id: slug(event.target.value) }
                     : {}),
-                }))
-              }
+                }));
+              }}
             />
           </Field>
           <Field label="Identificador do projeto">
