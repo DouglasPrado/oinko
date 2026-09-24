@@ -22,6 +22,7 @@ import { BotError } from './schema.js';
 import type { BotStore } from './store.js';
 import { programmingTools, PROGRAMMING_INSTRUCTIONS } from './programming-tools.js';
 import { openProgramming } from './programming/runtime.js';
+import { isOinkoMcp, scopeOinkoMcp } from './programming/equivalence.js';
 import { programmingRunTools } from './programming/run-tools.js';
 
 export interface RunBotOptions {
@@ -63,6 +64,13 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
         tools: bot.higgsfieldTools,
       },
     });
+  // Tools this bot already has internally: an Oinko MCP connection must not add copies.
+  const internalTools = new Set<string>([
+    ...(bot.programming
+      ? ['workspace_status', 'workspace_task', 'workspace_exec', 'workspace_read', 'workspace_write', 'workspace_preview', 'workspace_logs']
+      : []),
+    ...(bot.programmingPolicy?.enabled ? ['programming_start', 'programming_status', 'programming_steer', 'programming_control'] : []),
+  ]);
   for (const mcp of bot.mcps)
     connections.mcps.push({
       id: mcp.id,
@@ -70,7 +78,9 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
       enabled: mcp.enabled,
       options:
         mcp.transport === 'stdio'
-          ? { transport: 'stdio', command: mcp.command, args: mcp.args }
+          ? isOinkoMcp(mcp.command, mcp.args)
+            ? { transport: 'stdio', command: mcp.command, ...scopeOinkoMcp(bot.id, mcp.args, internalTools) }
+            : { transport: 'stdio', command: mcp.command, args: mcp.args }
           : {
               transport: 'http',
               url: mcp.url,

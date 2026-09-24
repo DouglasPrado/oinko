@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { OINKO_MCP_TOOLS } from '@oinko/bots/programming';
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -157,7 +158,7 @@ it('shares one runner across clients with different TMPDIR values and keeps it a
   const f = await fixture();
   expect(f.client.getServerVersion()?.name).toBe('oinko');
   expect(f.client.getServerVersion()?.icons?.[0]?.mimeType).toBe('image/png');
-  expect((await f.client.listTools()).tools.length).toBe(17);
+  expect((await f.client.listTools()).tools.length).toBe(OINKO_MCP_TOOLS.length);
   const state = await call<RunnerState>(f.client, 'oinko_status');
   expect(state.projects).toEqual([]);
   await f.client.close();

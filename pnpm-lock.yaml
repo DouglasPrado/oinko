@@ -362,6 +362,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(supports-color@7.2.0)(zod@4.6.5)
+      '@oinko/agent-runtime':
+        specifier: workspace:*
+        version: link:../../agent-runtime
       '@oinko/bots':
         specifier: workspace:*
         version: link:../../bots

@@ -53,8 +53,18 @@ export function shortId(runId: string): string {
   return runId.slice(4, 12);
 }
 
+const PENDING_LABEL: Record<string, string> = {
+  pause: 'pausa solicitada',
+  cancel: 'cancelamento solicitado',
+  steer: 'orientação pendente',
+  resume: 'retomada solicitada',
+};
+
 export function describeRun(run: ProgrammingRun, pendingControls: string[] = []): string {
-  const pending = pendingControls.length ? ` (pedido pendente: ${pendingControls.join(', ')})` : '';
+  // A request is not the transition: say it is requested until the executor applies it.
+  const pending = pendingControls.length
+    ? ` · ${[...new Set(pendingControls)].map((kind) => PENDING_LABEL[kind] ?? kind).join(', ')}`
+    : '';
   const blocked = run.blocked ? ` — ${run.blocked.message}${run.blocked.needs ? ` ${run.blocked.needs}` : ''}` : '';
   const outcome = run.finalOutcome ? ` — ${run.finalOutcome.summary.slice(0, 300)}` : '';
   return `#${shortId(run.id)} ${STATE_LABEL[run.state] ?? run.state}${pending} · ${run.projectId}${run.taskId ? `/${run.taskId}` : ''} · ciclo ${run.cycleCount}: ${run.request.text.slice(0, 120)}${blocked}${outcome}`;

@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@oinko/agent-runtime": "workspace:*",
     "@oinko/bots": "workspace:*",
     "@oinko/environments": "workspace:*",
     "@oinko/workspaces": "workspace:*",

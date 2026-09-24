@@ -13,6 +13,20 @@ import { GUIDE } from './guide.js';
 import { PrepareSchema, prepareProject } from './prepare.js';
 import { inspect, logs, status, waitJob, type RunnerConnection } from './service.js';
 import { BotQuery, BotUpdate, queryBots, updateBot } from './bots.js';
+import type { ProgrammingRuntime } from '@oinko/bots/programming';
+import { lazyProgramming, registerRunTools } from './runs.js';
+
+export { OINKO_TOOL_EQUIVALENTS } from './runs.js';
+
+/** Tools that administer the installation: never offered to a bot-scoped connection. */
+const ADMIN_TOOLS = new Set([
+  'oinko_bots',
+  'oinko_update_bot',
+  'oinko_prepare_project',
+  'oinko_configure_project',
+  'oinko_configure_environment',
+  'oinko_configure_network',
+]);
 
 const icon = {
   src: `data:image/png;base64,${readFileSync(new URL('../assets/icon.png', import.meta.url)).toString('base64')}`,
@@ -20,9 +34,20 @@ const icon = {
   sizes: ['128x128'],
 };
 
-export function createOinkoServer(options: { root?: string; client?: RunnerConnection }) {
+export function createOinkoServer(options: {
+  root?: string;
+  client?: RunnerConnection;
+  /**
+   * Bot-scoped connection: acts as this bot (its projects, its runs) and never
+   * gets the installation's administrative tools.
+   */
+  botId?: string;
+  programming?: () => ProgrammingRuntime;
+}) {
   if (!options.client && !options.root) throw new Error('Informe a raiz de dados Oinko.');
-  const client = options.client ?? new EnvironmentClient(options.root!);
+  const client = options.client ?? new EnvironmentClient(options.root!, options.botId);
+  const admin = !options.botId;
+  const runtime = lazyProgramming(options.root);
   const server = new McpServer(
     { name: 'oinko', version: '0.1.0', icons: [icon] },
     { instructions: GUIDE },
@@ -34,6 +59,8 @@ export function createOinkoServer(options: { root?: string; client?: RunnerConne
     run: (args: z.output<z.ZodObject<S>>, signal: AbortSignal) => Promise<unknown>,
     readOnly = false,
   ) {
+    // A bot-scoped connection never sees installation administration.
+    if (!admin && ADMIN_TOOLS.has(name)) return;
     server.registerTool<z.ZodRawShape, z.ZodObject<S>>(
       name,
       {
@@ -199,6 +226,15 @@ export function createOinkoServer(options: { root?: string; client?: RunnerConne
     { ...location, path: RelativePath, content: z.string().max(200_000) },
     (args) => client.command({ action: 'writeFile', ...args }),
   );
+  registerRunTools(tool, {
+    actor: options.botId ? { kind: 'bot', botId: options.botId } : { kind: 'operator', id: 'mcp' },
+    programming: options.programming ?? runtime.get,
+  });
+  const closeServer = server.close.bind(server);
+  server.close = async () => {
+    await runtime.close();
+    await closeServer();
+  };
   server.registerResource(
     'guide',
     'oinko://guide',

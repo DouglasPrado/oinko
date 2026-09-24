@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { BotDefinitionSchema, BotId, BotSecretsSchema } from '@oinko/bots/schema';
 import { BotStore } from '@oinko/bots/store';
 import { BotManager, type BotStatus } from '@oinko/bots/manager';
+import { openProgramming, recordBotConfiguration } from '@oinko/bots/programming';
 
 const fields = BotDefinitionSchema.shape;
 const telegram = fields.telegram.removeDefault().shape;
@@ -25,6 +26,11 @@ const BotChanges = z.strictObject({
     ),
   cli: fields.cli.removeDefault().optional(),
   programming: fields.programming.removeDefault().optional(),
+  programmingPolicy: fields.programmingPolicy
+    .nullable()
+    .describe(
+      'Política completa de trabalhos de programação duráveis: enabled, autonomy (analysis|edit|draft_pr), autoResume, cycle, models (main, fast, fallbackAfterMs), capabilities (browser, publication) e notifications. null desabilita. Não existe teto de gasto.',
+    ),
   conversationSearch: fields.conversationSearch.removeDefault().optional(),
   telegram: z
     .strictObject({
@@ -116,7 +122,14 @@ export function updateBot(root: string | undefined, input: z.output<typeof BotUp
       telegram: { ...current.telegram, ...changes.telegram },
       telemetry: { ...current.telemetry, ...changes.telemetry },
     });
+    const before = store.runtime(botId).definition;
     const bot = store.save(definition, credentials ?? {}, revision);
+    const programming = openProgramming({ root: root!, producer: 'mcp', bots: store });
+    try {
+      recordBotConfiguration(programming.journal, before, BotDefinitionSchema.parse(bot), 'operator', bot.revision);
+    } finally {
+      await programming.close();
+    }
     const status = await manager.status(botId);
     return { saved: true, bot, status, activation: activation(status) };
   });

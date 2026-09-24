@@ -9,6 +9,7 @@ async function main() {
   const { values } = parseArgs({
     options: {
       root: { type: 'string' },
+      bot: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
       'print-config': { type: 'boolean' },
     },
@@ -16,7 +17,7 @@ async function main() {
   });
   if (values.help) {
     process.stdout.write(
-      'Oinko MCP (stdio)\nUso: node dist/cli.js [--root /caminho/oinko] [--print-config]\nRaiz: --root, OINKO_ROOT ou checkout do servidor. Node 22.5+; Docker para sandbox.\n',
+      'Oinko MCP (stdio)\nUso: node dist/cli.js [--root /caminho/oinko] [--bot <id>] [--print-config]\nRaiz: --root, OINKO_ROOT ou checkout do servidor. --bot conecta como esse bot, sem ferramentas de administração. Node 22.5+; Docker para sandbox.\n',
     );
     return;
   }
@@ -43,7 +44,8 @@ async function main() {
     );
     return;
   }
-  const server = createOinkoServer({ root });
+  const botId = values.bot ?? process.env.OINKO_MCP_BOT;
+  const server = createOinkoServer({ root, ...(botId && { botId }) });
   await server.connect(new StdioServerTransport());
   const close = () => {
     void server.close().catch((error: unknown) => console.error(error));
