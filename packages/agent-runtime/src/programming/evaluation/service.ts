@@ -125,6 +125,13 @@ export class EvaluationService {
       },
       result.verdict === 'passed' ? 'succeeded' : result.verdict === 'skipped' ? 'info' : 'failed',
     );
+    if (batch.environment === 'real')
+      this.options.journal.record(
+        'real_evaluation_finished',
+        { botId: batch.botId, ...(result.runId && { runId: result.runId }) },
+        { caseId: result.caseId, verdict: result.verdict, repetition: result.repetition, batchId },
+        result.verdict === 'passed' ? 'succeeded' : result.verdict === 'skipped' ? 'info' : 'failed',
+      );
   }
   finishBatch(batchId: string, status: 'finished' | 'aborted' = 'finished'): Aggregate {
     const batch = this.requireBatch(batchId);
