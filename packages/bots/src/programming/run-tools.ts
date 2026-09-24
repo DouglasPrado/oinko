@@ -14,6 +14,11 @@ import { hash, toolKit, type Json, type RunnerPort } from './tool-kit.js';
 export type { RunnerPort } from './tool-kit.js';
 
 const RelPath = z.string().min(1).max(500);
+/** Only the hash the runner returned proves which content an edit expects. */
+const FileHash = z
+  .string()
+  .regex(/^sha256:[a-f0-9]{64}$/, 'Use o hash sha256:… devolvido por workspace_read_range, nunca um calculado no terminal.')
+  .describe('hash sha256:… devolvido por workspace_read_range');
 const Repo = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/).optional().describe('Repositório do projeto; padrão: o primeiro do run.');
 
 export interface RunToolsOptions {
@@ -64,16 +69,16 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
   });
   const replace = z.object({
     path: RelPath,
-    expectedHash: z.string().describe('hash retornado por workspace_read_range'),
+    expectedHash: FileHash,
     oldText: z.string().min(1),
     newText: z.string(),
     replaceAll: z.boolean().default(false),
     repositoryId: Repo,
   });
   const Edit = z.discriminatedUnion('action', [
-    z.object({ action: z.literal('replace'), path: RelPath, expectedHash: z.string(), oldText: z.string().min(1), newText: z.string(), replaceAll: z.boolean().default(false) }),
+    z.object({ action: z.literal('replace'), path: RelPath, expectedHash: FileHash, oldText: z.string().min(1), newText: z.string(), replaceAll: z.boolean().default(false) }),
     z.object({ action: z.literal('create'), path: RelPath, content: z.string().max(400_000) }),
-    z.object({ action: z.literal('delete'), path: RelPath, expectedHash: z.string() }),
+    z.object({ action: z.literal('delete'), path: RelPath, expectedHash: FileHash }),
   ]);
   const patch = z.object({ edits: z.array(Edit).min(1).max(50), repositoryId: Repo });
   const diff = z.object({ repositoryId: Repo });

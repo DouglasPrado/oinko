@@ -61,3 +61,18 @@ it('serves persisted configuration through a private local socket and enforces b
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+it('answers a malformed command as invalid_request naming the field, so callers know nothing ran', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'oinko-runner-'));
+  const service = await startEnvironmentService(root);
+  try {
+    const error = await environmentRequest(root, '/command', {
+      command: { action: 'applyPatch', taskId: 'task', repositoryId: 'app', operationId: 'op-1', edits: [{ action: 'replace', path: 'a.ts', expectedHash: 'e38bf38f29bca5d4', oldText: 'a', newText: 'b' }] },
+    }).catch((reason: unknown) => reason as { code?: string; message: string });
+    expect(error).toMatchObject({ code: 'invalid_request', message: expect.stringContaining('command.edits.0.expectedHash') });
+    expect((error as { message: string }).message).not.toContain('"code"');
+  } finally {
+    await service.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

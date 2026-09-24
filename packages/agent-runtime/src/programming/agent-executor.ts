@@ -42,6 +42,9 @@ export function cyclePrompt(input: CycleInput): string {
   if (input.feedback) parts.push(`Retorno do avaliador: ${input.feedback}`);
   if (input.previousSummary) parts.push(`Resumo do ciclo anterior:\n${input.previousSummary}`);
   if (policy.allowPublication) parts.push('Publicação em draft PR está autorizada para este run quando as verificações passarem.');
+  // Said out loud: otherwise the agent may believe a missing capability is what blocks completion and ask the person for it.
+  else parts.push('Este run não publica: a entrega é técnica e a conclusão não depende de push, PR nem do remoto. Não peça autorização para publicar; a política do run não muda por resposta.');
+  if (policy.allowBrowser === false) parts.push('O navegador não está habilitado para este run: não peça para validar visualmente; diga na conclusão o que ficou sem validação visual.');
   parts.push('Continue o trabalho a partir deste estado.');
   return parts.join('\n\n');
 }

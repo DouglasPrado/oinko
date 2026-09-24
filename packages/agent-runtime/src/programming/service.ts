@@ -580,6 +580,9 @@ export class ProgrammingRunService {
     for (const item of this.store.evidence<Evidence>(run.id)) observeRevision(revisions, item.value);
     let feedback: string | undefined;
     let previousSummary = this.store.listSteps(run.id).filter((step) => step.kind === 'cycle').at(-1)?.summary;
+    // A run resumed by a person may carry operations left uncertain before it
+    // stopped; recovery already settled them for a restarted one.
+    if (!recovering && (await this.settleUncertain(run))) return;
     this.notify(run, recovering ? 'run_resumed' : 'run_started', recovering ? 'Execução retomada após reinício.' : 'Trabalho iniciado.');
     for (;;) {
       if (this.closed) return;
@@ -740,6 +743,8 @@ export class ProgrammingRunService {
         this.block(run, { code: 'needs_input', message: 'O trabalho precisa de uma informação para continuar.', needs: outcome.needsInput.slice(0, 2000), stepId });
         return;
       }
+      // An uncertain operation would refuse every completion: settle it now or block naming it.
+      if (outcome?.completion && this.store.listReceipts(run.id, ['uncertain']).length && (await this.settleUncertain(run))) return;
       if (outcome?.completion) {
         const blockers = completionBlockers({ operations: this.store.listReceipts(run.id), criteria: evaluation.criteria });
         this.journal.record('acceptance_evaluated', correlationOf(run, stepId), {
@@ -909,25 +914,7 @@ export class ProgrammingRunService {
         const correlation = correlationOf(run);
         this.journal.record('recovery_started', correlation, { reason: 'lease_expired', owner: this.ownerId });
         this.options.recorder.markInterrupted(run);
-        let unresolved: OperationReceipt | undefined;
-        for (const receipt of this.store.listReceipts(run.id, ['uncertain'])) {
-          const result = this.options.reconciler
-            ? await this.options.reconciler.reconcile(run, receipt).catch(() => ({ resolution: 'unknown' as const, evidence: { error: 'reconciler_failed' } }))
-            : { resolution: 'unknown' as const, evidence: { reason: 'no_reconciler' } };
-          this.options.recorder.reconcile(run, receipt.operationId, result.resolution, result.evidence);
-          if (result.resolution === 'applied')
-            for (const item of result.observed ?? [])
-              this.store.addEvidence(run.id, receipt.stepId, item.kind, evidenceFingerprint(item), item);
-          if (result.resolution === 'unknown') unresolved ??= receipt;
-        }
-        if (unresolved) {
-          this.journal.record('recovery_blocked', correlation, { code: 'uncertain_operation', operationKind: unresolved.kind }, 'uncertain');
-          this.block(run, {
-            code: 'uncertain_operation',
-            message: `Não foi possível determinar o resultado de ${unresolved.kind}; nada foi repetido.`,
-            operationId: unresolved.operationId,
-            needs: 'Confira o efeito (arquivos, job, branch ou PR) e retome informando o que encontrou.',
-          });
+        if (await this.settleUncertain(run)) {
           this.store.releaseLease(run.id, this.ownerId);
           continue;
         }
@@ -949,6 +936,34 @@ export class ProgrammingRunService {
         this.launch(resumed, true);
       }
     }
+  }
+
+  /**
+   * Investigates the run's uncertain operations with the reconciler. One
+   * whose outcome stays unknown blocks the run naming it (returns true):
+   * completion would refuse it anyway, so cycles would only loop.
+   */
+  private async settleUncertain(run: ProgrammingRun): Promise<boolean> {
+    let unresolved: OperationReceipt | undefined;
+    for (const receipt of this.store.listReceipts(run.id, ['uncertain'])) {
+      const result = this.options.reconciler
+        ? await this.options.reconciler.reconcile(run, receipt).catch(() => ({ resolution: 'unknown' as const, evidence: { error: 'reconciler_failed' } }))
+        : { resolution: 'unknown' as const, evidence: { reason: 'no_reconciler' } };
+      this.options.recorder.reconcile(run, receipt.operationId, result.resolution, result.evidence);
+      if (result.resolution === 'applied')
+        for (const item of result.observed ?? [])
+          this.store.addEvidence(run.id, receipt.stepId, item.kind, evidenceFingerprint(item), item);
+      if (result.resolution === 'unknown') unresolved ??= receipt;
+    }
+    if (!unresolved) return false;
+    this.journal.record('recovery_blocked', correlationOf(run), { code: 'uncertain_operation', operationKind: unresolved.kind }, 'uncertain');
+    this.block(run, {
+      code: 'uncertain_operation',
+      message: `Não foi possível determinar o resultado de ${unresolved.kind}; nada foi repetido.`,
+      operationId: unresolved.operationId,
+      needs: 'Confira o efeito (arquivos, job, branch ou PR) e retome informando o que encontrou.',
+    });
+    return true;
   }
 
   async close(): Promise<void> {

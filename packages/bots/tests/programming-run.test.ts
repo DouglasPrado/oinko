@@ -241,6 +241,35 @@ describe('programming run with the real agent loop and simulated provider', () =
     expect(edits).toEqual([expect.objectContaining({ repositoryId: 'app', paths: ['sum.cjs'], operationId: receipts[1]!.operationId })]);
   }, 60_000);
 
+  it('never leaves an edit uncertain when the runner refused it before running, nor accepts a hash it did not return', async () => {
+    class RefusingRunner extends LocalRunner {
+      override async command<T>(command: any, options: { correlation?: any } = {}): Promise<T> {
+        if (command.action === 'applyPatch')
+          throw Object.assign(new Error('Pedido inválido para o gerenciador: command.edits.0.path: Invalid'), { code: 'invalid_request' });
+        return super.command<T>(command, options);
+      }
+    }
+    const readHash = (messages: any[]) => JSON.parse(String(messages.find((message) => message.role === 'tool').content)).hash;
+    const steps: ((messages: any[]) => ScriptStep)[] = [
+      () => ({ tool: 'workspace_read_range', args: { path: 'sum.cjs' } }),
+      // A hash the model computed itself (md5 from the shell) is refused by the tool.
+      () => ({ tool: 'workspace_replace', args: { path: 'sum.cjs', expectedHash: 'e38bf38f29bca5d4e89a8e8f3c12c1f1', oldText: 'a - b', newText: 'a + b' } }),
+      (messages) => ({ tool: 'workspace_patch', args: { edits: [{ action: 'replace', path: 'sum.cjs', expectedHash: readHash(messages), oldText: 'a - b', newText: 'a + b' }] } }),
+      () => ({ text: 'Não consegui aplicar.' }),
+    ];
+    let index = 0;
+    const context = setup({ script: (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Parado.' }), runner: (worktree) => new RefusingRunner(worktree) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    const results = context.provider.requests[3]!.messages.filter((message) => message.role === 'tool').map((message) => String(message.content));
+    expect(results[1]).toMatch(/sha256:… devolvido por workspace_read_range/);
+    expect(JSON.parse(results[2]!).error.code).toBe('invalid_request');
+    // The refused hash never became an operation; the refused patch is a known failure.
+    expect(store.listReceipts(id).map((receipt) => [receipt.kind, receipt.state])).toEqual([['workspace.applyPatch', 'failed']]);
+  }, 60_000);
+
   it('blocks the run naming the fix when the environment runner is older than the tools, without falling back to the shell', async () => {
     const steps: ScriptStep[] = [
       { tool: 'workspace_read_range', args: { path: 'sum.cjs' } },

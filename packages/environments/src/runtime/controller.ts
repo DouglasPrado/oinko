@@ -160,7 +160,19 @@ export class EnvironmentController {
     );
   }
   async handle(input: unknown): Promise<unknown> {
-    const { command, botId, correlation } = RunnerRequest.parse(input);
+    const parsed = RunnerRequest.safeParse(input);
+    // Refused before any effect: callers can tell it from a failure midway.
+    if (!parsed.success)
+      throw Object.assign(
+        new Error(
+          `Pedido inválido para o gerenciador: ${parsed.error.issues
+            .slice(0, 3)
+            .map((issue) => `${issue.path.join('.') || 'command'}: ${issue.message}`)
+            .join('; ')}`,
+        ),
+        { code: 'invalid_request' },
+      );
+    const { command, botId, correlation } = parsed.data;
     const extension = this.extensions.find((item) => item.actions.has(command.action));
     if (extension) return extension.handle(command, this.context(botId, correlation));
     if (!isBaseCommand(command))

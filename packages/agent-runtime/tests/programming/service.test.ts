@@ -304,6 +304,104 @@ describe('M03-S04 recovery after restart', () => {
     await worker.close();
   });
 
+  /** A run blocked waiting for the person while one of its operations is uncertain. */
+  function blockedWithUncertain(dir: string, access: ReturnType<typeof twoBotMatrix>) {
+    const accepting = createService(dir, access);
+    const id = accepting.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'tema escuro' }).run.id;
+    const run = accepting.store.getRun(id)!;
+    accepting.store.transitionRun(id, run.revision, 'blocked', { phase: 'waiting', blocked: { code: 'needs_input', message: 'Preciso de uma decisão.', needs: 'Posso seguir?' } });
+    accepting.store.insertReceipt({
+      operationId: 'op-edit',
+      runId: id,
+      kind: 'workspace.replace',
+      idempotencyKey: 'k1',
+      paramsHash: hashParams({ path: 'theme-toggle.tsx' }),
+      actor: { kind: 'system', botId: 'alpha', component: 'executor' },
+      intent: {},
+      preconditions: {},
+      state: 'uncertain',
+      attempt: 1,
+      createdAt: 1,
+    });
+    return { id, close: () => accepting.close() };
+  }
+
+  it('reconciles uncertain operations when a blocked run is resumed, so it can complete', async () => {
+    const access = twoBotMatrix();
+    const dir = tempRoot();
+    const blocked = blockedWithUncertain(dir, access);
+    await blocked.close();
+    const reconciled: string[] = [];
+    const worker = createService(dir, access, {
+      executor: new ScriptedExecutor([progress('r1'), finish]),
+      reconciler: {
+        async reconcile(_run, receipt) {
+          reconciled.push(receipt.operationId);
+          return { resolution: 'not_applied', evidence: { journal: 'absent' } };
+        },
+      },
+    });
+    expect(worker.service.control(operator, blocked.id, 'resume', { note: 'pode' }).status).toBe('applied');
+    worker.service.kick();
+    await until(() => ['completed', 'blocked'].includes(worker.store.getRun(blocked.id)!.state));
+    expect(worker.store.getRun(blocked.id)?.state).toBe('completed');
+    expect(reconciled).toEqual(['op-edit']);
+    expect(worker.store.getReceipt('op-edit')?.state).not.toBe('uncertain');
+    await worker.close();
+  });
+
+  it('settles an operation left uncertain during a cycle before judging its completion', async () => {
+    const access = twoBotMatrix();
+    const dir = tempRoot();
+    // The executor reaches the store of the service it runs in.
+    const box: { harness?: ReturnType<typeof createService> } = {};
+    const executor = new ScriptedExecutor([
+      (input) => {
+        input.context.record(edit('r1'));
+        input.context.record(check('r1', 'passed'));
+        box.harness!.store.insertReceipt({
+          operationId: 'op-lost',
+          runId: input.run.id,
+          stepId: input.context.stepId,
+          kind: 'workspace.replace',
+          idempotencyKey: 'k-lost',
+          paramsHash: hashParams({ path: 'a.ts' }),
+          actor: { kind: 'system', botId: 'alpha', component: 'executor' },
+          intent: {},
+          preconditions: {},
+          state: 'uncertain',
+          attempt: 1,
+          createdAt: 1,
+        });
+        return done();
+      },
+    ]);
+    const harness = (box.harness = createService(dir, access, { executor, reconciler: { reconcile: async () => ({ resolution: 'not_applied', evidence: { journal: 'absent' } }) } }));
+    const id = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'tema escuro' }).run.id;
+    await until(() => ['completed', 'blocked'].includes(harness.store.getRun(id)!.state));
+    expect(harness.store.getRun(id)?.state).toBe('completed');
+    expect(executor.inputs).toHaveLength(1);
+    await harness.close();
+  });
+
+  it('blocks again naming the operation when a resumed run still has an undeterminable one, without spending a cycle', async () => {
+    const access = twoBotMatrix();
+    const dir = tempRoot();
+    const blocked = blockedWithUncertain(dir, access);
+    await blocked.close();
+    const executor = new ScriptedExecutor([finish]);
+    const worker = createService(dir, access, {
+      executor,
+      reconciler: { reconcile: async () => ({ resolution: 'unknown', evidence: { state: 'partial' } }) },
+    });
+    worker.service.control(operator, blocked.id, 'resume', { note: 'pode' });
+    worker.service.kick();
+    await until(() => worker.store.getRun(blocked.id)?.state === 'blocked');
+    expect(worker.store.getRun(blocked.id)?.blocked).toMatchObject({ code: 'uncertain_operation', operationId: 'op-edit' });
+    expect(executor.inputs).toHaveLength(0);
+    await worker.close();
+  });
+
   it('treats an intent never marked running as not started', async () => {
     const access = twoBotMatrix();
     const dir = tempRoot();
