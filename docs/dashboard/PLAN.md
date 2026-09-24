@@ -6,6 +6,8 @@
 
 Em `/bots`, a pessoa cria um bot, define nome, modelo, instruções, credenciais e conexões. Pode editar, iniciar, parar e reiniciar. Salvar não interrompe uma conversa: a tela sinaliza a revisão pendente, aplicada no próximo reinício. CLI, Telegram, Higgsfield e MCP HTTP são reutilizados, sem copiar uma aplicação por bot.
 
+No Telegram, o canal mantém o indicador “digitando” durante o processamento, inclusive transcrição, espera pelo modelo e compactação de histórico. Renova a indicação a cada quatro segundos e encerra ao responder, falhar ou cancelar. Falhas nesse sinal visual não bloqueiam a resposta. O primeiro turno após habilitar contexto adaptativo pode demorar mais ao resumir o histórico existente; o resumo persistido é reutilizado nos turnos seguintes.
+
 A navegação principal contém Bots, Projetos e Integrações. Projetos contêm ambientes, e cada ambiente apresenta suas prévias. Worktrees e atividade pertencem ao projeto. A telemetria é aberta pelo botão no bot, em `/bots/[botId]/telemetria`, mantendo o contexto nas conversas e respostas. No desktop, fica em uma sidebar com a seção atual destacada, rolagem própria e saída no rodapé. No celular, o botão Menu revela os mesmos destinos e fecha ao navegar ou pressionar Escape. As conversas e respostas aparecem em uma seção separada dentro da sidebar da telemetria, inclusive no menu móvel.
 
 A lista de bots separa **Canais** (CLI e Telegram) de **MCPs** (Higgsfield, Oinko e demais integrações). Cada grupo preserva o estado das conexões e a identificação acessível; bots parados mostram as conexões configuradas nos mesmos grupos. No desktop, os grupos usam colunas distintas; em telas menores, rótulos acompanham os ícones.

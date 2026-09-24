@@ -32,6 +32,8 @@ Telemetria por bot: `docs/dashboard/PLAN.md` → `apps/dashboard/src/server/repo
 
 Bots configuráveis: `docs/dashboard/PLAN.md` → `packages/bots` e `apps/dashboard/src/server/bots`. Histórico e isolamento: `packages/agent-runtime/tests`; CLI e ciclo de serviço: `packages/channels/cli/tests`; texto, imagem e áudio Telegram: `packages/channels/telegram/tests`. Cada bot usa `.harness/bots/<id>` e o executor compartilhado.
 
+Espera no Telegram: `docs/dashboard/PLAN.md` → `packages/channels/telegram/src/typing.ts`; testes do adaptador verificam renovação, encerramento, cancelamento e tolerância a falhas da indicação.
+
 MCP local nos bots: `docs/dashboard/PLAN.md` e `docs/blueprint/25-oinko-mcp.md` → schema e runner de `packages/bots`; regressão em `packages/bots/tests/bots.test.ts` conecta o servidor Oinko real pelo worker e preserva conexões HTTP existentes.
 
 Projetos e ambientes: `docs/blueprint/24-workspaces-environments.md` → `packages/workspaces`, `packages/environments`, `apps/environment-runner`, ferramentas em `packages/bots/src/programming-tools.ts` e telas `apps/dashboard/src/features/{projects,environments}`. Decisão: `docs/adr/adr-008-local-environments.md`. Operação: `packages/environments/README.md`. Evidências: `docs/dashboard/ENVIRONMENTS-DELIVERY.md`.
