@@ -32,12 +32,13 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:docker": "OINKO_DOCKER_TEST=1 vitest run tests/docker.test.ts tests/runner.e2e.test.ts tests/failures.e2e.test.ts"
+    "test:docker": "OINKO_DOCKER_TEST=1 vitest run tests/docker.test.ts tests/runner.e2e.test.ts tests/failures.e2e.test.ts tests/browser.e2e.test.ts"
   },
   "dependencies": {
     "@oinko/workspaces": "workspace:*",
-    "zod": "^4.4.3",
-    "yaml": "^2.8.2"
+    "playwright-core": "1.63.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

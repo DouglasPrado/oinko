@@ -315,6 +315,9 @@ importers:
       '@oinko/workspaces':
         specifier: workspace:*
         version: link:../workspaces
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
       yaml:
         specifier: ^2.8.2
         version: 2.9.1
