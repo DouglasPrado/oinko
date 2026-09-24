@@ -40,11 +40,11 @@ export function RoutingNote({
   const switched = requestedModel !== null && requestedModel !== model;
 
   return (
-    <p className="mt-2 flex flex-wrap items-baseline gap-x-2 text-xs text-ink-muted">
-      <GitBranch className="size-3 self-center text-judge" aria-hidden />
+    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-ink-muted">
+      <GitBranch className="size-3.5 self-center text-ink-muted" aria-hidden />
       <span>
         Roteamento decidiu <span className="font-medium text-ink">{chose}</span>
-        {confidence ? <span className="tabular text-judge"> {confidence}</span> : null}
+        {confidence ? <span className="tabular text-ink"> {confidence}</span> : null}
       </span>
       {switched ? (
         <span>

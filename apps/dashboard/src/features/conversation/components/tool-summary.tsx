@@ -24,29 +24,32 @@ export function ToolSummary({ available, items }: Props) {
   }
 
   return (
-    <section aria-label="Ferramentas disponiveis" className="mt-3">
-      <h2 className="flex items-center gap-1.5 text-[0.6875rem] text-ink-muted">
-        <Wrench className="size-3" aria-hidden />
+    <section aria-label="Ferramentas disponiveis">
+      <h2 className="flex flex-wrap items-center gap-x-1.5 text-[13px] font-medium">
+        <Wrench className="size-3.5 text-ink-muted" aria-hidden />
         Ferramentas disponiveis
-        {used.size === 0 ? <span>· nenhuma foi chamada neste turno</span> : null}
+        {used.size === 0 ? (
+          <span className="font-normal text-ink-muted">· nenhuma foi chamada neste turno</span>
+        ) : null}
       </h2>
 
-      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+      <ul className="mt-2 flex flex-wrap gap-1.5">
         {available.map((name) => {
           const count = used.get(name) ?? 0;
           return (
             <li
               key={name}
               className={cn(
-                'flex items-baseline gap-1',
-                count === 0 ? 'text-ink-muted' : 'font-medium text-ink',
+                'inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-xs',
+                count === 0
+                  ? 'border-rule text-ink-muted'
+                  : 'border-rule-strong bg-canvas font-medium text-ink',
               )}
             >
               <span className="font-mono">{name}</span>
               {count > 0 ? (
-                <span className="tabular text-time">
-                  {count}
-                  {count === 1 ? '×' : '×'}
+                <span className="tabular rounded-full bg-hover px-1.5 text-[11px] leading-4 font-normal text-ink-muted">
+                  {count}×
                 </span>
               ) : null}
             </li>

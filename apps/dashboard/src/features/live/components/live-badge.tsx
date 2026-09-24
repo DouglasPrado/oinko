@@ -29,18 +29,18 @@ export function LiveBadge() {
 
   return (
     <span
-      className="flex items-center gap-1.5 text-[0.6875rem] text-ink-muted"
+      className="flex items-center gap-1.5 text-[11px] text-ink-muted"
       aria-live="polite"
       role="status"
     >
       <span
         aria-hidden
         className={cn(
-          'inline-block size-1.5 rounded-full',
-          status === 'live' && 'bg-ok',
-          status === 'connecting' && 'bg-ink-muted',
-          status === 'offline' && 'bg-fault',
-          flash && 'ring-2 ring-ok/40',
+          'inline-block size-1.5 rounded-full transition-shadow',
+          status === 'live' && 'bg-ready',
+          status === 'connecting' && 'animate-pulse bg-ink-disabled',
+          status === 'offline' && 'bg-error',
+          flash && 'ring-3 ring-ready/30',
         )}
       />
       {flash ? 'atualizado' : LABEL[status]}

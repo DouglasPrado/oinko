@@ -38,8 +38,8 @@ export function ThreadRail({ activeThreadId, activeTraceId, telemetry }: Props) 
       : [];
 
   return (
-    <nav aria-label="Conversas" className="min-w-0 py-3">
-      <div className="flex items-center gap-2 px-5 pb-2">
+    <nav aria-label="Conversas" className="min-w-0 px-2 pb-3">
+      <div className="flex h-8 items-center gap-2 px-2.5">
         <h2 className="text-xs font-medium text-ink-muted">Conversas</h2>
         <span className="ml-auto">
           <LiveBadge key={telemetry.id} />
@@ -47,10 +47,10 @@ export function ThreadRail({ activeThreadId, activeTraceId, telemetry }: Props) 
       </div>
 
       {threads.length === 0 ? (
-        <p className="px-4 py-4 text-[0.8125rem] text-ink-muted">Nenhuma conversa gravada ainda.</p>
+        <p className="px-2.5 py-2 text-[13px] text-ink-muted">Nenhuma conversa gravada ainda.</p>
       ) : null}
 
-      <ul>
+      <ul className="space-y-px">
         {threads.map((thread) => {
           const open = thread.threadId === activeThreadId;
 
@@ -63,54 +63,72 @@ export function ThreadRail({ activeThreadId, activeTraceId, telemetry }: Props) 
                 )}
                 aria-current={open ? 'true' : undefined}
                 className={cn(
-                  'flex items-baseline gap-2 px-4 py-2 text-[0.8125rem] hover:bg-paper',
-                  open && 'bg-paper font-medium',
+                  'flex h-10 items-center gap-2 rounded-md px-2.5 text-[13px] transition-colors lg:h-8',
+                  open
+                    ? 'bg-selected font-medium text-ink'
+                    : 'text-ink-muted hover:bg-hover hover:text-ink',
                 )}
               >
                 <span className="min-w-0 flex-1 truncate" title={threadLabel(thread.threadId)}>
                   {threadLabel(thread.threadId)}
                 </span>
-                <span className="tabular ml-auto shrink-0 text-xs text-ink-muted">
+                {thread.errorCount > 0 ? (
+                  <span
+                    className="tabular inline-flex shrink-0 items-center gap-1 text-xs text-error-ink"
+                    title={`${thread.errorCount} com erro`}
+                  >
+                    <span aria-hidden className="size-1.5 rounded-full bg-error" />
+                    {thread.errorCount}
+                  </span>
+                ) : null}
+                <span className="tabular shrink-0 text-xs font-normal text-ink-muted">
                   {thread.executionCount}
                 </span>
-                {thread.errorCount > 0 ? (
-                  <span className="tabular shrink-0 text-xs text-fault">{thread.errorCount}</span>
-                ) : null}
               </Link>
 
               {open && executions.length > 0 ? (
-                <ul className="border-y border-rule/60 bg-paper/60 pb-1">
-                  {executions.map((execution) => (
-                    <li key={execution.traceId}>
-                      <Link
-                        href={telemetryHref(
-                          `/threads/${encodeURIComponent(thread.threadId)}/${execution.traceId}`,
-                          telemetry.id,
-                        )}
-                        aria-current={execution.traceId === activeTraceId ? 'page' : undefined}
-                        className={cn(
-                          'flex items-baseline gap-2 py-1 pr-3 pl-6 text-xs hover:bg-surface',
-                          execution.traceId === activeTraceId &&
-                            'border-l-2 border-time bg-surface pl-[calc(1.5rem-2px)] font-medium',
-                        )}
-                      >
-                        <span className="tabular shrink-0 text-ink-muted">
-                          {day(execution.startedAt)} {time(execution.startedAt)}
-                        </span>
-                        <span className="tabular ml-auto shrink-0 text-time">
-                          {formatDuration(execution.durationMs)}
-                        </span>
-                        {execution.costUsd !== null ? (
-                          <span className="tabular shrink-0 text-spend">
-                            {formatUsd(execution.costUsd)}
+                <ul className="my-1 ml-4 space-y-px border-l border-rule pl-2">
+                  {executions.map((execution) => {
+                    const current = execution.traceId === activeTraceId;
+                    return (
+                      <li key={execution.traceId}>
+                        <Link
+                          href={telemetryHref(
+                            `/threads/${encodeURIComponent(thread.threadId)}/${execution.traceId}`,
+                            telemetry.id,
+                          )}
+                          aria-current={current ? 'page' : undefined}
+                          className={cn(
+                            'flex h-9 items-center gap-2 rounded-md px-2 text-xs transition-colors lg:h-7',
+                            current
+                              ? 'bg-selected font-medium text-ink'
+                              : 'text-ink-muted hover:bg-hover hover:text-ink',
+                          )}
+                        >
+                          {execution.status === 'error' ? (
+                            <>
+                              <span
+                                aria-hidden
+                                className="size-1.5 shrink-0 rounded-full bg-error"
+                              />
+                              <span className="sr-only">com erro</span>
+                            </>
+                          ) : null}
+                          <span className="tabular shrink-0">
+                            {day(execution.startedAt)} {time(execution.startedAt)}
                           </span>
-                        ) : null}
-                        {execution.status === 'error' ? (
-                          <span className="shrink-0 text-fault">!</span>
-                        ) : null}
-                      </Link>
-                    </li>
-                  ))}
+                          <span className="tabular ml-auto shrink-0">
+                            {formatDuration(execution.durationMs)}
+                          </span>
+                          {execution.costUsd !== null ? (
+                            <span className="tabular shrink-0 text-ink-subtle">
+                              {formatUsd(execution.costUsd)}
+                            </span>
+                          ) : null}
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : null}
             </li>

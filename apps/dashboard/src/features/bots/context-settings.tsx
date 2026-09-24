@@ -3,29 +3,7 @@
 import { ContextPolicySchema, type ContextPolicy } from '@oinko/core/context-policy';
 import type { BotDefinition, BotSecrets } from '@oinko/bots/schema';
 import { Field, inputStyle } from '@/features/projects/shared';
-import { useId, type ComponentProps } from 'react';
-
-function ContextToggle({
-  label,
-  description,
-  ...input
-}: Pick<ComponentProps<'input'>, 'checked' | 'onChange'> & {
-  label: string;
-  description: string;
-}) {
-  const id = useId();
-  return (
-    <div className="space-y-1.5 text-sm">
-      <label className="flex items-center gap-3">
-        <input type="checkbox" aria-describedby={id} {...input} />
-        {label}
-      </label>
-      <p id={id} className="text-xs leading-5 text-ink-muted">
-        {description}
-      </p>
-    </div>
-  );
-}
+import { SwitchField } from '@/components/shared/switch-field';
 
 const NUMBERS = [
   ['maxInputTokens', 'Orçamento de contexto', 4096, 128000],
@@ -63,7 +41,7 @@ export function ContextSettings({
         </p>
       </header>
       <div className="space-y-4 p-5">
-        <ContextToggle
+        <SwitchField
           label="Otimizar contexto"
           description="Resume o histórico antigo e permite recuperar detalhes quando necessário."
           checked={context.enabled}
@@ -90,7 +68,7 @@ export function ContextSettings({
                 </Field>
               ))}
             </div>
-            <ContextToggle
+            <SwitchField
               label="Selecionar ferramentas com Jev"
               description="Carrega as ferramentas relevantes e permite descobrir outras durante a tarefa."
               checked={context.selectTools}
@@ -119,7 +97,7 @@ export function ContextSettings({
             </Field>
           </>
         )}
-        <ContextToggle
+        <SwitchField
           label="Usar Jev"
           description="Decide o roteamento de modelo e, quando habilitada acima, a seleção de ferramentas."
           checked={intelligence.enabled}

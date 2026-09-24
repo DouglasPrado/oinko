@@ -6,27 +6,76 @@
  */
 @custom-variant dark (&:is(.dark *));
 
-/* Superfícies claras e acentos semânticos compartilhados pela dashboard. */
+/*
+ * Sistema neutro inspirado no painel da Vercel (vercel-DESIGN.md na raiz).
+ *
+ * Hierarquia vem de layout, tipografia, hairlines e troca sutil de superficie;
+ * cor so aparece quando comunica estado, foco ou risco. Os nomes antigos
+ * (paper, surface, ink, rule) continuam valendo e apontam para os papeis novos.
+ */
 @theme {
-  --color-paper: #f4f6f5;
+  /* Superficies */
+  --color-canvas: #ffffff;
   --color-surface: #ffffff;
-  --color-ink: #1b2320;
-  --color-ink-muted: #5a635e;
-  --color-rule: #e0e5e2;
+  --color-paper: #fafafa;
+  --color-hover: #f2f2f2;
+  --color-selected: #ebebeb;
+  --color-active: #e6e6e6;
 
-  /* Acentos semanticos: cor codifica grandeza, nunca decora. */
-  --color-time: #2b6c8f;
-  --color-spend: #8a6a1f;
-  --color-judge: #4a4e9c;
-  --color-fault: #96262c;
-  --color-ok: #3f6b3a;
+  /*
+   * Marca: o rosa e o grafite da logo. O rosa e identidade (logo, item ativo,
+   * selecao), nunca fundo de botao: com texto branco ele nao passa de 3:1, e o
+   * tom escuro que passaria fica colado no vermelho de erro. -ink e o rosa
+   * escurecido para icone e texto sobre fundo claro.
+   */
+  --color-brand: #ff5c80;
+  --color-brand-ink: #d6335c;
+  --color-brand-bg: #ffe8ee;
 
-  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* Texto e icones: o grafite da logo. */
+  --color-ink: #333333;
+  --color-ink-muted: #666666;
+  --color-ink-subtle: #8f8f8f;
+  --color-ink-disabled: #a8a8a8;
+
+  /* Bordas */
+  --color-rule: #ebebeb;
+  --color-rule-strong: #dcdcdc;
+
+  /*
+   * Semantica escassa. O tom base serve para ponto, borda e preenchimento; o
+   * tom -ink e o mesmo matiz escurecido para texto passar de 4.5:1 no branco.
+   */
+  --color-focus: #0072f5;
+  --color-info: #0072f5;
+  --color-info-ink: #0068d6;
+  --color-info-bg: #eaf6ff;
+  --color-ready: #45d6b6;
+  --color-ready-ink: #008573;
+  --color-ready-bg: #e9fbf6;
+  --color-error: #e5484d;
+  --color-error-ink: #ce2c31;
+  --color-error-bg: #fdebec;
+  --color-warning: #f5a623;
+  --color-warning-ink: #ab6400;
+  --color-warning-bg: #fff5e5;
+
+  /* Aliases historicos: grandezas da telemetria ficam neutras; erro e sucesso mantem o papel. */
+  --color-time: #333333;
+  --color-spend: #333333;
+  --color-judge: #666666;
+  --color-fault: #ce2c31;
+  --color-ok: #008573;
+
+  --font-sans:
+    var(--font-geist-sans), Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   --radius-tape: 0;
-  --radius-control: 8px;
-  --radius-panel: 6px;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+
+  --shadow-float: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -6px rgb(0 0 0 / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -43,10 +92,14 @@ html {
 }
 
 body {
-  background: var(--color-paper);
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* Toda coluna numerica alinha; e o que torna a fita legivel de relance. */
@@ -54,9 +107,9 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-:focus-visible {
-  outline: 2px solid var(--color-time);
-  outline-offset: 2px;
+::selection {
+  background: var(--color-brand-bg);
+  color: var(--color-ink);
 }
 
 /*
@@ -76,7 +129,6 @@ body {
  */
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -108,93 +160,59 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Escala de raio do sistema: 4 tecnico, 6 controle, 8 painel, 12 flutuante. */
+  --radius-xs: 4px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
+  --radius-4xl: 9999px;
 }
 /*
  ---break---
  */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-/*
- ---break---
- */
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #ffffff;
+  --foreground: #333333;
+  --card: #ffffff;
+  --card-foreground: #333333;
+  --popover: #ffffff;
+  --popover-foreground: #333333;
+  --primary: #333333;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f2;
+  --secondary-foreground: #333333;
+  --muted: #f2f2f2;
+  --muted-foreground: #666666;
+  --accent: #f2f2f2;
+  --accent-foreground: #333333;
+  --destructive: #ce2c31;
+  --border: #ebebeb;
+  --input: #dcdcdc;
+  --ring: #0072f5;
+  --chart-1: #0072f5;
+  --chart-2: #45d6b6;
+  --chart-3: #f5a623;
+  --chart-4: #8e4ec6;
+  --chart-5: #e5484d;
+  --radius: 6px;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #333333;
+  --sidebar-primary: #ff5c80;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ebebeb;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: #ebebeb;
+  --sidebar-ring: #0072f5;
 }
 /*
  ---break---
  */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border outline-ring;
   }
   body {
     @apply bg-background text-foreground;
@@ -202,17 +220,84 @@ body {
   html {
     @apply font-sans;
   }
+  /*
+   * Foco e um dos poucos indicadores de alto contraste. Fica na camada base
+   * para valer em tudo, mas deixar um componente que desenha o proprio foco
+   * (a busca do menu de comando) desligar com outline-none.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-ink-subtle);
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-ink);
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+  }
+  /* Um so chevron para todo select nativo, no lugar do desenho do sistema. */
+  select:not([multiple]) {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1rem;
+    padding-right: 2.25rem;
+  }
+  summary {
+    cursor: pointer;
+  }
+  kbd {
+    font-family: var(--font-sans);
+  }
 }
-:root {
-  --background: #f4f6f5;
-  --foreground: #1b2320;
-  --primary: #226953;
-  --primary-foreground: #ffffff;
-  --ring: #459478;
-  --muted: #edf1ee;
-  --muted-foreground: #65716a;
-  --border: #dfe6e1;
-  --input: #d4ddd6;
-  --accent: #e9f1ec;
-  --radius: 0.75rem;
+
+@layer components {
+  /*
+   * Switch sobre o checkbox nativo, nao um botao com role="switch": continua
+   * sendo o mesmo controle para o teclado, para o rotulo e para os testes que
+   * marcam a opcao. O polegar e um gradiente radial, entao nao depende de
+   * pseudo-elemento em input, que nem todo navegador desenha.
+   */
+  .switch {
+    appearance: none;
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 1.25rem;
+    margin: 0;
+    border-radius: 9999px;
+    background-color: var(--color-rule-strong);
+    background-image: radial-gradient(
+      circle,
+      #fff 0 7px,
+      rgb(0 0 0 / 0.1) 7.5px 8px,
+      transparent 8.5px
+    );
+    background-size: 1.25rem 1.25rem;
+    background-repeat: no-repeat;
+    background-position: 0 0;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      background-position 150ms ease;
+  }
+  .switch:hover {
+    background-color: var(--color-ink-disabled);
+  }
+  .switch:checked {
+    background-color: var(--color-ink);
+    background-position: 1rem 0;
+  }
+  .switch:checked:hover {
+    background-color: #1f1f1f;
+  }
+  .switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }

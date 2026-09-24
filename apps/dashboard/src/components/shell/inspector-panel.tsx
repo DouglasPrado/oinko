@@ -110,7 +110,7 @@ export function InspectorPanel({ children }: { children: React.ReactNode }) {
     <aside
       ref={panel}
       aria-label="Detalhe"
-      className="inspector-panel relative w-full shrink-0 border-t border-rule bg-surface lg:border-t-0 lg:border-l"
+      className="inspector-panel relative w-full shrink-0 border-t border-rule bg-canvas lg:border-t-0 lg:border-l"
       style={{ ['--inspector-width' as string]: `${width}px` }}
     >
       <div
@@ -125,7 +125,7 @@ export function InspectorPanel({ children }: { children: React.ReactNode }) {
           setDragging(true);
         }}
         onKeyDown={onKeyDown}
-        className="absolute top-0 left-0 hidden h-full w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent hover:bg-time/30 focus-visible:bg-time/50 lg:block"
+        className="absolute top-0 left-0 hidden h-full w-1.5 -translate-x-1/2 cursor-col-resize bg-transparent transition-colors outline-none hover:bg-focus/30 focus-visible:bg-focus/60 lg:block"
       />
       {children}
     </aside>

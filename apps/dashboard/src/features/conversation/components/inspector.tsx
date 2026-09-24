@@ -9,9 +9,9 @@ import { formatTokens } from '@/lib/utils/format-tokens';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-rule/60 py-1.5">
-      <dt className="text-[0.8125rem] text-ink-muted">{label}</dt>
-      <dd className="tabular text-right text-sm">{value}</dd>
+    <div className="flex min-h-9 items-center justify-between gap-4 border-b border-rule py-1.5 last:border-b-0">
+      <dt className="shrink-0 text-[13px] text-ink-muted">{label}</dt>
+      <dd className="tabular min-w-0 text-right text-[13px] break-words text-ink">{value}</dd>
     </div>
   );
 }
@@ -21,7 +21,7 @@ function ItemDetail({ item }: { item: TimelineItem }) {
     return (
       <>
         <dl>
-          <Row label="Modelo" value={item.model} />
+          <Row label="Modelo" value={<span className="font-mono">{item.model}</span>} />
           <Row label="Duracao" value={formatDuration(item.durationMs)} />
           <Row label="Ate o primeiro token" value={formatDuration(item.ttftMs)} />
           <Row
@@ -64,7 +64,7 @@ function ItemDetail({ item }: { item: TimelineItem }) {
     return (
       <>
         <dl>
-          <Row label="Ferramenta" value={item.name} />
+          <Row label="Ferramenta" value={<span className="font-mono">{item.name}</span>} />
           <Row label="Origem" value={item.origin} />
           <Row label="Duracao" value={formatDuration(item.durationMs)} />
           <Row label="Resultado" value={item.isError ? 'erro' : 'ok'} />
@@ -81,7 +81,10 @@ function ItemDetail({ item }: { item: TimelineItem }) {
       <>
         <dl>
           <Row label="Servidor" value={item.serverName} />
-          <Row label="Ferramenta remota" value={item.remoteToolName} />
+          <Row
+            label="Ferramenta remota"
+            value={<span className="font-mono">{item.remoteToolName}</span>}
+          />
           <Row label="Duracao" value={formatDuration(item.durationMs)} />
           <Row
             label="Resultado"
@@ -100,7 +103,7 @@ function ItemDetail({ item }: { item: TimelineItem }) {
         <Row label="Ponto de decisao" value={item.point} />
         <Row label="Duracao" value={formatDuration(item.durationMs)} />
       </dl>
-      <div className="mt-3">
+      <div className="mt-4">
         <DecisionAnswers answers={item.answers} labels={item.answerLabels} />
         {item.inputTokens != null && (
           <p className="mt-3 text-xs text-ink-muted">
@@ -131,29 +134,29 @@ export function Inspector({ detail, selectedId, basePath }: Props) {
   const item = detail.items.find((candidate) => candidate.id === selectedId);
 
   return (
-    <div className="sticky top-0 max-h-dvh overflow-y-auto px-5 py-4">
-      <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2">
-        <h2 className="text-sm font-medium">{item ? 'Etapa selecionada' : 'O que entrou'}</h2>
+    <div className="sticky top-0 max-h-dvh overflow-y-auto">
+      <div className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b border-rule bg-canvas px-5">
+        <h2 className="text-sm font-semibold">{item ? 'Etapa selecionada' : 'O que entrou'}</h2>
         {item ? (
           <Link
             href={basePath}
             scroll={false}
-            className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-ink-muted transition-colors hover:bg-hover hover:text-ink"
           >
-            <X className="size-3" aria-hidden />
+            <X className="size-3.5" aria-hidden />
             fechar
           </Link>
         ) : null}
       </div>
 
-      <div className="mt-3">
+      <div className="px-5 pt-2 pb-6">
         {item ? (
           <ItemDetail item={item} />
         ) : (
           <>
             <PayloadViewer label="System prompt" payload={detail.systemPrompt} />
             <PayloadViewer label="Schema das ferramentas" payload={detail.toolsSchema} />
-            <p className="mt-4 text-[0.8125rem] text-ink-muted">
+            <p className="mt-5 text-[13px] text-ink-muted">
               Escolha uma etapa na fita para ver a entrada e a saida dela.
             </p>
           </>

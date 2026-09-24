@@ -1,10 +1,10 @@
 import type { TelemetrySelection } from '@/server/repositories/telemetry-sources';
 import { TelemetryProvider } from '@/features/telemetry/telemetry-context';
 import Link from 'next/link';
-import { Activity, Bot } from 'lucide-react';
+import { Activity, Bot, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Trail } from '@/features/projects/workspace-ui';
+import { PageHeader } from '@/components/shared/page-header';
 import { telemetryHref } from '@/features/telemetry/telemetry-href';
 import { ThreadRail } from './thread-rail';
 import { InspectorPanel } from './inspector-panel';
@@ -43,43 +43,42 @@ export function Workbench({
         inspector={inspector ? <InspectorPanel>{inspector}</InspectorPanel> : null}
       >
         {telemetry ? (
-          <div className="space-y-5 border-b bg-card px-5 py-6 md:px-8">
-            <Trail
-              items={[
-                { label: 'Bots', href: '/bots' },
-                {
-                  label: telemetry.name,
-                  ...(telemetry.id ? { href: `/bots/${telemetry.id}` } : {}),
-                },
-                { label: 'Telemetria' },
-              ]}
-            />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="flex items-center gap-2 text-2xl font-semibold">
-                  <Activity className="size-5 text-primary" />
-                  {telemetry.name}
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Telemetria · conversas, respostas e uso do modelo
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">Dados deste bot</Badge>
+          <PageHeader
+            className="border-b border-rule px-4 pt-6 pb-5 md:px-6"
+            trail={[
+              { label: 'Bots', href: '/bots' },
+              {
+                label: telemetry.name,
+                ...(telemetry.id ? { href: `/bots/${telemetry.id}` } : {}),
+              },
+              { label: 'Telemetria' },
+            ]}
+            icon={<Activity aria-hidden />}
+            title={telemetry.name}
+            badges={
+              <Badge variant="secondary" className="max-sm:hidden">
+                Dados deste bot
+              </Badge>
+            }
+            actions={
+              <>
                 {telemetry.id && (
                   <Button variant="outline" asChild>
                     <Link href={`/bots/${telemetry.id}`}>
-                      <Bot />
+                      <Bot aria-hidden />
                       Voltar ao bot
                     </Link>
                   </Button>
                 )}
                 <Button variant="outline" asChild>
-                  <Link href={telemetryHref('/', telemetry.id)}>Visão geral</Link>
+                  <Link href={telemetryHref('/', telemetry.id)}>
+                    <LayoutGrid aria-hidden />
+                    Visão geral
+                  </Link>
                 </Button>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          />
         ) : null}
         {children}
       </DashboardShell>

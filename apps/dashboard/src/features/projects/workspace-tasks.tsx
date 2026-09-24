@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { GitBranch, Plus, Terminal, ExternalLink, Play, Square, ScrollText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +19,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Blank, Status } from './workspace-ui';
+import { SectionHeader } from '@/components/shared/page-header';
+import { cn } from '@/lib/utils/cn';
+import { Blank, Status, listStyle } from './workspace-ui';
 import { Field, inputStyle, slug, type RunnerState, type RunnerCommandInput } from './shared';
 type Project = RunnerState['projects'][number];
 export function WorkspaceTasks({
@@ -34,7 +35,7 @@ export function WorkspaceTasks({
   state: RunnerState;
   project: Project;
   environmentId?: string;
-  act: (c: RunnerCommandInput) => Promise<unknown>;
+  act: (c: RunnerCommandInput, done?: string | false) => Promise<unknown>;
   busy: boolean;
   showLogs: (c: RunnerCommandInput, title: string) => Promise<void>;
 }) {
@@ -49,27 +50,25 @@ export function WorkspaceTasks({
   const pending =
     busy ||
     state.jobs.some((j) => j.projectId === project.id && ['queued', 'running'].includes(j.state));
-  const trigger = (c: RunnerCommandInput) => void act(c).catch(() => {});
+  const trigger = (c: RunnerCommandInput, done?: string) => void act(c, done).catch(() => {});
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">
-            {environmentId ? 'Prévias por worktree' : 'Worktrees do projeto'}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {environmentId
-              ? 'Escolha o trabalho que deseja testar neste ambiente.'
-              : 'Cada tarefa tem sua branch e uma cópia de trabalho isolada.'}
-          </p>
-        </div>
-        <Button disabled={!project.environmentId} onClick={() => setCreating(true)}>
-          <Plus />
-          Nova tarefa
-        </Button>
-      </div>
+    <div className="space-y-4">
+      <SectionHeader
+        title={environmentId ? 'Prévias por worktree' : 'Worktrees do projeto'}
+        description={
+          environmentId
+            ? 'Escolha o trabalho que deseja testar neste ambiente.'
+            : 'Cada tarefa tem sua branch e uma cópia de trabalho isolada.'
+        }
+        actions={
+          <Button disabled={!project.environmentId} onClick={() => setCreating(true)}>
+            <Plus aria-hidden />
+            Nova tarefa
+          </Button>
+        }
+      />
       {!project.environmentId && (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-[13px] text-ink-muted">
           Adicione o primeiro ambiente para preparar as worktrees.
         </p>
       )}
@@ -80,110 +79,131 @@ export function WorkspaceTasks({
           description="Crie uma tarefa para preparar a branch. Depois, abra uma prévia para testar as alterações."
         />
       ) : (
-        <div className="space-y-3">
+        <div className={listStyle}>
           {tasks.map((task) => {
             const preview = state.previews.find(
               (p) => p.taskId === task.id && p.environmentId === environmentId,
             );
+            // data-slot="card" continua sendo o contrato com os testes de ponta a
+            // ponta, que localizam a tarefa por ele, mesmo sem o cartao visual.
             return (
-              <Card key={task.id} aria-label={task.name} className="py-0 shadow-none">
-                <CardContent className="p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex min-w-0 gap-3">
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <GitBranch className="size-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-medium">{task.name}</h3>
-                        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
-                          {task.branch}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {environmentId && !preview && <Badge variant="outline">Sem prévia</Badge>}
-                      <Status state={preview?.state ?? task.state} />
+              <article
+                key={task.id}
+                data-slot="card"
+                aria-label={task.name}
+                className="space-y-3 px-4 py-3.5"
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rule text-ink-muted">
+                      <GitBranch className="size-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-medium">{task.name}</h3>
+                      <p
+                        className="mt-0.5 truncate font-mono text-xs text-ink-muted"
+                        title={task.branch}
+                      >
+                        {task.branch}
+                      </p>
                     </div>
                   </div>
-                  {(task.error || preview?.error) && (
-                    <p role="alert" className="mt-4 text-sm text-destructive whitespace-pre-wrap">
-                      {task.error || preview?.error}
-                    </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {environmentId && !preview && <Badge variant="outline">Sem prévia</Badge>}
+                    <Status state={preview?.state ?? task.state} />
+                  </div>
+                </div>
+                {(task.error || preview?.error) && (
+                  <p
+                    role="alert"
+                    className="ml-11 rounded-lg border border-error/40 px-3 py-2 text-[13px] whitespace-pre-wrap text-error-ink"
+                  >
+                    {task.error || preview?.error}
+                  </p>
+                )}
+                <div className="ml-11 flex flex-wrap items-center gap-2">
+                  {environmentId && (
+                    <Button
+                      size="sm"
+                      disabled={pending || task.state !== 'ready'}
+                      onClick={() =>
+                        trigger({ action: 'startPreview', taskId: task.id, environmentId })
+                      }
+                    >
+                      <Play aria-hidden />
+                      {preview?.state === 'ready' ? 'Reconstruir prévia' : 'Subir prévia'}
+                    </Button>
                   )}
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {environmentId && (
+                  {preview && (
+                    <>
                       <Button
-                        disabled={pending || task.state !== 'ready'}
+                        size="sm"
+                        variant="outline"
+                        disabled={pending || preview.state === 'stopped'}
+                        onClick={() => trigger({ action: 'stopPreview', previewId: preview.id })}
+                      >
+                        <Square aria-hidden />
+                        Parar prévia
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() =>
-                          trigger({ action: 'startPreview', taskId: task.id, environmentId })
+                          void showLogs(
+                            { action: 'previewLogs', previewId: preview.id },
+                            `Logs · ${task.name}`,
+                          )
                         }
                       >
-                        <Play />
-                        {preview?.state === 'ready' ? 'Reconstruir prévia' : 'Subir prévia'}
+                        <ScrollText aria-hidden />
+                        Logs dos serviços
                       </Button>
-                    )}
-                    {preview && (
-                      <>
-                        <Button
-                          variant="outline"
-                          disabled={pending || preview.state === 'stopped'}
-                          onClick={() => trigger({ action: 'stopPreview', previewId: preview.id })}
-                        >
-                          <Square />
-                          Parar prévia
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() =>
-                            void showLogs(
-                              { action: 'previewLogs', previewId: preview.id },
-                              `Logs · ${task.name}`,
-                            )
-                          }
-                        >
-                          <ScrollText />
-                          Logs dos serviços
-                        </Button>
-                      </>
-                    )}
+                    </>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={task.state !== 'ready'}
+                    onClick={() => {
+                      setTerminal(task.id);
+                      setOutput('');
+                    }}
+                  >
+                    <Terminal aria-hidden />
+                    Terminal
+                  </Button>
+                  {task.state === 'failed' && (
                     <Button
+                      size="sm"
                       variant="outline"
-                      disabled={task.state !== 'ready'}
-                      onClick={() => {
-                        setTerminal(task.id);
-                        setOutput('');
-                      }}
+                      disabled={pending}
+                      onClick={() =>
+                        trigger(
+                          { action: 'createTask', definition: task },
+                          'Preparando a worktree de novo',
+                        )
+                      }
                     >
-                      <Terminal />
-                      Terminal
+                      Tentar preparar novamente
                     </Button>
-                    {task.state === 'failed' && (
-                      <Button
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() => trigger({ action: 'createTask', definition: task })}
-                      >
-                        Tentar preparar novamente
+                  )}
+                </div>
+                {preview?.state === 'ready' && (
+                  <div className="ml-11 flex flex-wrap items-center gap-2 border-t border-rule pt-3">
+                    {preview.urls.map((link) => (
+                      <Button asChild size="sm" variant="secondary" key={link.serviceId}>
+                        <a href={link.url} target="_blank" rel="noreferrer">
+                          <ExternalLink aria-hidden />
+                          Abrir {link.serviceId} ↗
+                        </a>
                       </Button>
+                    ))}
+                    {!preview.urls.length && (
+                      <Badge variant="secondary">Serviços sem rota de navegador</Badge>
                     )}
                   </div>
-                  {preview?.state === 'ready' && (
-                    <div className="mt-4 flex flex-wrap gap-2 border-t pt-4">
-                      {preview.urls.map((link) => (
-                        <Button asChild variant="secondary" key={link.serviceId}>
-                          <a href={link.url} target="_blank" rel="noreferrer">
-                            <ExternalLink />
-                            Abrir {link.serviceId} ↗
-                          </a>
-                        </Button>
-                      ))}
-                      {!preview.urls.length && (
-                        <Badge variant="secondary">Serviços sem rota de navegador</Badge>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                )}
+              </article>
             );
           })}
         </div>
@@ -228,9 +248,14 @@ export function WorkspaceTasks({
                 placeholder="task/ajustar-checkout"
               />
             </Field>
-            <Button disabled={busy} type="submit">
-              Criar tarefa
-            </Button>
+            <div className="-mx-6 -mb-6 flex justify-end gap-2 rounded-b-2xl border-t border-rule bg-paper px-6 py-3">
+              <Button type="button" variant="outline" onClick={() => setCreating(false)}>
+                Cancelar
+              </Button>
+              <Button disabled={busy} type="submit">
+                Criar tarefa
+              </Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
@@ -246,7 +271,7 @@ export function WorkspaceTasks({
             <SheetDescription>Comandos executados no sandbox de {project.name}.</SheetDescription>
           </SheetHeader>
           <form
-            className="space-y-4 p-6"
+            className="space-y-4 px-6 py-6"
             onSubmit={(e) => {
               e.preventDefault();
               void act({ action: 'shell', taskId: terminal, repositoryId: repo, command })
@@ -258,7 +283,11 @@ export function WorkspaceTasks({
             }}
           >
             <Field label="Repositório do terminal">
-              <select className={inputStyle} value={repo} onChange={(e) => setRepo(e.target.value)}>
+              <select
+                className={cn(inputStyle, 'font-mono')}
+                value={repo}
+                onChange={(e) => setRepo(e.target.value)}
+              >
                 {project.repositories.map((r) => (
                   <option key={r.id}>{r.id}</option>
                 ))}
@@ -266,17 +295,20 @@ export function WorkspaceTasks({
             </Field>
             <Field label="Comando no sandbox">
               <Textarea
-                className="font-mono"
+                className="font-mono text-[13px]!"
                 rows={4}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
               />
             </Field>
-            <Button disabled={busy}>Executar comando</Button>
+            <Button disabled={busy}>
+              <Terminal aria-hidden />
+              Executar comando
+            </Button>
             {output && (
               <pre
                 aria-live="polite"
-                className="overflow-auto rounded-lg bg-zinc-950 p-5 font-mono text-xs text-zinc-100 whitespace-pre-wrap"
+                className="overflow-auto rounded-lg border border-rule bg-paper p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap text-ink"
               >
                 {output}
               </pre>

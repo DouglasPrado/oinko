@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="104 228 428 450">
+  <mask id="ears" maskUnits="userSpaceOnUse">
+    <rect x="0" y="0" width="2000" height="1000" fill="#fff"/>
+    <circle cx="318" cy="478" r="203" fill="#000"/>
+  </mask>
+  <g fill="#ff5c80" mask="url(#ears)">
+    <path d="M156 372C106 306 108 256 132 240C180 236 230 262 264 304Z"/>
+    <path d="M480 372C530 306 528 256 504 240C456 236 406 262 372 304Z"/>
+  </g>
+  <circle cx="318" cy="478" r="190" fill="#ff5c80"/>
+  <rect x="213" y="398" width="210" height="178" rx="89" fill="#fff"/>
+  <rect x="266" y="456" width="32" height="64" rx="16" fill="#ff5c80"/>
+  <rect x="338" y="456" width="32" height="64" rx="16" fill="#ff5c80"/>
+</svg>

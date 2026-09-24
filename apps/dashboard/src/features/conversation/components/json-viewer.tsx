@@ -4,13 +4,14 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { toJsonLines, type TokenKind } from './json-lines';
 
+/** Sintaxe com poucos tons, todos escurecidos para texto legivel sobre o cinza claro. */
 const TONE: Record<TokenKind, string> = {
-  key: 'text-judge',
-  string: 'text-ok',
-  number: 'text-time',
-  boolean: 'text-spend',
+  key: 'text-ink',
+  string: 'text-ready-ink',
+  number: 'text-info-ink',
+  boolean: 'text-[#8145b5]',
   null: 'text-ink-muted',
-  punct: 'text-ink-muted',
+  punct: 'text-ink-subtle',
 };
 
 /**
@@ -43,7 +44,7 @@ export function JsonViewer({ data }: { data: unknown }) {
   }
 
   return (
-    <div className="overflow-auto font-mono text-xs leading-[1.6]">
+    <div className="overflow-auto py-1 font-mono text-xs leading-[1.6]">
       <table className="w-full border-collapse">
         <tbody>
           {lines.map((line, index) => {
@@ -52,8 +53,8 @@ export function JsonViewer({ data }: { data: unknown }) {
             const isFolded = folded.has(index);
 
             return (
-              <tr key={index} className="hover:bg-paper/60">
-                <td className="w-px pr-3 pl-2 text-right align-top text-ink-muted/70 select-none">
+              <tr key={index} className="hover:bg-hover">
+                <td className="w-px pr-3 pl-3 text-right align-top text-ink-subtle select-none">
                   {index + 1}
                 </td>
                 <td className="w-px pr-1 align-top select-none">
@@ -63,7 +64,7 @@ export function JsonViewer({ data }: { data: unknown }) {
                       onClick={() => toggle(index)}
                       aria-expanded={!isFolded}
                       aria-label={isFolded ? 'Expandir bloco' : 'Recolher bloco'}
-                      className="flex text-ink-muted/60 hover:text-time"
+                      className="flex rounded-xs text-ink-subtle hover:text-ink"
                     >
                       {isFolded ? (
                         <ChevronRight className="size-3" aria-hidden />
@@ -78,7 +79,7 @@ export function JsonViewer({ data }: { data: unknown }) {
                     <span
                       key={level}
                       aria-hidden
-                      className="inline-block w-4 self-stretch border-l border-rule/70"
+                      className="inline-block w-4 self-stretch border-l border-rule"
                     />
                   ))}
                   {line.tokens.map((token, position) => (
@@ -86,7 +87,7 @@ export function JsonViewer({ data }: { data: unknown }) {
                       {token.text}
                     </span>
                   ))}
-                  {isFolded ? <span className="text-ink-muted/70"> … </span> : null}
+                  {isFolded ? <span className="text-ink-subtle"> … </span> : null}
                 </td>
               </tr>
             );

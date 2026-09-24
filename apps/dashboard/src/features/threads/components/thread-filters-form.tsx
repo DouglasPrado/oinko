@@ -2,6 +2,9 @@
 
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useTransition } from 'react';
+import { Loader2 } from 'lucide-react';
+import { SearchField } from '@/components/shared/search-field';
+import { Input } from '@/components/ui/input';
 import type { ThreadFilters } from '../schemas/thread.schema';
 
 /**
@@ -27,59 +30,57 @@ export function ThreadFiltersForm({ filters }: { filters: ThreadFilters }) {
   }
 
   return (
-    <form className="flex flex-wrap items-end gap-4" onSubmit={(event) => event.preventDefault()}>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="q" className="text-[0.8125rem] text-ink-muted">
-          Buscar conversa
-        </label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          defaultValue={filters.q}
-          onChange={(event) => apply('q', event.target.value)}
-          placeholder="Identificador da conversa"
-          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm"
-          style={{ borderRadius: 'var(--radius-control)' }}
-        />
-      </div>
+    <form
+      className="flex flex-wrap items-center gap-2"
+      role="search"
+      aria-label="Filtrar conversas"
+      onSubmit={(event) => event.preventDefault()}
+    >
+      <SearchField
+        id="q"
+        name="q"
+        aria-label="Buscar conversa"
+        shortcut="f"
+        defaultValue={filters.q}
+        onChange={(event) => apply('q', event.target.value)}
+        placeholder="Buscar conversa…"
+        className="min-w-0 flex-1 basis-60"
+      />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="model" className="text-[0.8125rem] text-ink-muted">
-          Modelo
-        </label>
-        <input
-          id="model"
-          name="model"
-          type="search"
-          defaultValue={filters.model}
-          onChange={(event) => apply('model', event.target.value)}
-          placeholder="anthropic/claude"
-          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm"
-          style={{ borderRadius: 'var(--radius-control)' }}
-        />
-      </div>
+      <Input
+        id="model"
+        name="model"
+        type="search"
+        aria-label="Modelo"
+        defaultValue={filters.model}
+        onChange={(event) => apply('model', event.target.value)}
+        placeholder="Modelo, ex. anthropic/claude"
+        className="w-full font-mono text-[13px]! sm:w-64"
+      />
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="status" className="text-[0.8125rem] text-ink-muted">
-          Situacao
-        </label>
-        <select
-          id="status"
-          name="status"
-          defaultValue={filters.status}
-          onChange={(event) => apply('status', event.target.value)}
-          className="rounded-lg border border-rule bg-surface px-3 py-2 text-sm"
-          style={{ borderRadius: 'var(--radius-control)' }}
-        >
-          <option value="all">Todas</option>
-          <option value="ok">Concluidas</option>
-          <option value="error">Com erro</option>
-        </select>
-      </div>
+      <select
+        id="status"
+        name="status"
+        aria-label="Situacao"
+        defaultValue={filters.status}
+        onChange={(event) => apply('status', event.target.value)}
+        className="h-9 rounded-full border border-rule-strong bg-canvas pl-3.5 text-sm font-medium text-ink transition-colors hover:bg-hover"
+      >
+        <option value="all">Todas as situações</option>
+        <option value="ok">Concluidas</option>
+        <option value="error">Com erro</option>
+      </select>
 
-      <span aria-live="polite" className="pb-2 text-xs text-ink-muted">
-        {pending ? 'Filtrando…' : ''}
+      <span
+        aria-live="polite"
+        className="inline-flex min-w-20 items-center gap-1.5 text-xs text-ink-muted"
+      >
+        {pending ? (
+          <>
+            <Loader2 className="size-3 animate-spin" aria-hidden />
+            Filtrando…
+          </>
+        ) : null}
       </span>
     </form>
   );

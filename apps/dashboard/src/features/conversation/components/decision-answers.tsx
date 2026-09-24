@@ -32,7 +32,7 @@ export function DecisionAnswers({
   if (entries.length === 0) return null;
 
   return (
-    <dl className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-[0.8125rem] sm:pl-20">
+    <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
       {entries.map(([key, raw]) => {
         const answer = (typeof raw === 'object' && raw !== null ? raw : {}) as Answer;
         const confidence = percent(answer.confidence);
@@ -42,7 +42,7 @@ export function DecisionAnswers({
             <dt className="text-ink-muted">{labels[key] ?? key}</dt>
             <dd className="font-medium">{label(answer.value)}</dd>
             {confidence ? (
-              <dd className="tabular text-judge" title="confianca declarada pelo decisor">
+              <dd className="tabular text-ink-muted" title="confianca declarada pelo decisor">
                 {confidence}
               </dd>
             ) : null}
