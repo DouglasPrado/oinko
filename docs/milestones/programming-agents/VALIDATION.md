@@ -27,12 +27,15 @@
 ## Comandos
 
 ```bash
+pnpm validate:programming                                        # tudo abaixo + relatório em validation-reports/
 pnpm build && pnpm typecheck && pnpm lint && pnpm test          # gates agregados
 OINKO_DOCKER_TEST=1 pnpm --filter @oinko/environments test        # Docker real (runner, browser)
 pnpm --filter @oinko/dashboard test:e2e                           # UI
 pnpm --filter @oinko/agent-runtime test                           # runs, telemetria, avaliação
+OINKO_DOCKER_TEST=1 pnpm --filter @oinko/bots exec vitest run tests/programming.e2e.test.ts tests/evaluation.e2e.test.ts  # worker + runner + harness
+pnpm --filter @oinko/bots evaluate --bot <id> --dataset packages/bots/evaluation/programming-baseline.v1.json [--environment real]
 ```
 
 ## Relatório
 
-Cada execução de suíte grava `validation_suite_started/finished` com SHA, ambiente e lista de skipped. Relatórios separam: teste automatizado, Docker real, provedor real e aceite humano. Um skipped impede afirmar cobertura do cenário.
+Cada execução de suíte grava `validation_suite_started/finished` com SHA, ambiente e lista de skipped. Relatórios separam: teste automatizado, Docker real, provedor real e aceite humano. Um skipped impede afirmar cobertura do cenário. Relatórios gerados ficam em [`validation-reports/`](validation-reports/), um por revisão, inclusive os que registraram falhas.
