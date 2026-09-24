@@ -1,6 +1,10 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import { buttonVariants } from '@/components/ui/button';
+
+const inputClass =
+  'h-10 w-full rounded-md border border-rule-strong bg-canvas px-3 text-base font-normal text-ink outline-offset-0 transition-colors hover:border-ink-disabled md:text-sm';
 export function LoginForm({ setup }: { setup: boolean }) {
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -38,39 +42,39 @@ export function LoginForm({ setup }: { setup: boolean }) {
       onSubmit={(event) => {
         void submit(event);
       }}
-      className="grid gap-5"
+      className="grid gap-4"
     >
-      <label className="grid gap-2 text-sm">
+      <label className="grid gap-1.5 text-[13px] font-medium">
         {setup ? 'Crie sua senha' : 'Senha'}
         <input
           required
           minLength={setup ? 12 : 1}
           type="password"
           autoComplete={setup ? 'new-password' : 'current-password'}
-          className="border border-rule bg-surface p-3"
+          className={inputClass}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
         />
       </label>
       {setup && (
-        <label className="grid gap-2 text-sm">
+        <label className="grid gap-1.5 text-[13px] font-medium">
           Confirme sua senha
           <input
             required
             type="password"
             autoComplete="new-password"
-            className="border border-rule bg-surface p-3"
+            className={inputClass}
             value={confirmation}
             onChange={(event) => setConfirmation(event.target.value)}
           />
         </label>
       )}
       {error && (
-        <p role="alert" className="text-sm text-fault">
+        <p role="alert" className="text-[13px] text-error-ink">
           {error}
         </p>
       )}
-      <button disabled={busy} className="bg-ink px-5 py-3 text-sm text-surface disabled:opacity-50">
+      <button disabled={busy} className={buttonVariants({ size: 'lg', className: 'mt-1 w-full' })}>
         {busy ? 'Aguarde…' : setup ? 'Criar senha e entrar' : 'Entrar'}
       </button>
     </form>

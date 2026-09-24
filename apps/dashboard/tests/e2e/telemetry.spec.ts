@@ -61,6 +61,9 @@ test.describe('inspecao de telemetria', () => {
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
     await page.getByRole('link', { name: /chamada 1/ }).click();
+    // O painel da etapa so existe depois da navegacao: antes dela, o clique cai
+    // no painel anterior, que e trocado logo em seguida.
+    await page.waitForURL(/item=/);
 
     const requests: string[] = [];
     page.on('request', (request) => {
@@ -81,6 +84,7 @@ test.describe('inspecao de telemetria', () => {
     await page.getByRole('navigation', { name: 'Conversas' }).getByText('suporte-4821').click();
     await page.waitForURL(/\/threads\/suporte-4821\/[0-9a-f-]+/);
     await page.getByRole('link', { name: /chamada 1/ }).click();
+    await page.waitForURL(/item=/);
     await page.getByRole('button', { name: 'Ver completo' }).first().click();
 
     const modes = page.getByRole('group', { name: 'Como ler o conteudo' }).first();

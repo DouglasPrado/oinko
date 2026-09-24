@@ -40,9 +40,13 @@ export function PayloadBody({ text, truncated }: { text: string; truncated: bool
   const effective: Mode = messages && mode === 'auto' ? 'auto' : mode === 'auto' ? 'raw' : mode;
 
   return (
-    <div className="mt-1.5">
+    <div className="mt-2">
       {options.length > 1 ? (
-        <div className="mb-1.5 flex gap-1" role="group" aria-label="Como ler o conteudo">
+        <div
+          className="mb-2 inline-flex rounded-md bg-hover p-0.5"
+          role="group"
+          aria-label="Como ler o conteudo"
+        >
           {options.map((option) => (
             <button
               key={option.id}
@@ -50,12 +54,11 @@ export function PayloadBody({ text, truncated }: { text: string; truncated: bool
               onClick={() => setMode(option.id)}
               aria-pressed={effective === option.id}
               className={cn(
-                'border px-2 py-0.5 text-xs',
+                'h-6 rounded-sm px-2.5 text-xs transition-colors',
                 effective === option.id
-                  ? 'border-ink bg-ink text-paper'
-                  : 'border-rule bg-surface hover:bg-paper',
+                  ? 'bg-canvas font-medium text-ink shadow-[0_0_0_1px_var(--color-rule)]'
+                  : 'text-ink-muted hover:text-ink',
               )}
-              style={{ borderRadius: 'var(--radius-control)' }}
             >
               {option.label}
             </button>
@@ -63,11 +66,11 @@ export function PayloadBody({ text, truncated }: { text: string; truncated: bool
         </div>
       ) : null}
 
-      <div className="max-h-[28rem] overflow-auto border border-rule bg-surface">
+      <div className="max-h-[28rem] overflow-auto rounded-lg border border-rule bg-paper">
         {effective === 'auto' && messages ? <MessageList messages={messages} /> : null}
         {effective === 'json' && json !== undefined ? <JsonViewer data={json} /> : null}
         {effective === 'raw' ? (
-          <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre">
+          <pre className="p-3 font-mono text-xs leading-relaxed whitespace-pre text-ink">
             {text}
             {truncated ? '\n…' : ''}
           </pre>

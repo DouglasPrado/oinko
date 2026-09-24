@@ -14,7 +14,6 @@ import {
   Cpu,
   MemoryStick,
   Globe,
-  Search,
   MoreHorizontal,
   Play,
   Square,
@@ -23,14 +22,6 @@ import {
   ScrollText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -49,21 +40,63 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toast';
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion';
+import { PageHeader, SectionHeader } from '@/components/shared/page-header';
+import { SearchField } from '@/components/shared/search-field';
 import { EnvironmentEditor } from '@/features/environments/environment-editor';
+import { cn } from '@/lib/utils/cn';
 import { ProjectEditor } from './project-editor';
 import { NetworkSettings } from './network-settings';
 import { WorkspaceTasks } from './workspace-tasks';
-import { Blank, Metric, Status, Trail } from './workspace-ui';
+import { Blank, Metric, MetricGrid, Status, listStyle } from './workspace-ui';
 import { workspaceRequest, inputStyle, type RunnerCommandInput, type RunnerState } from './shared';
 
 const queryKey = ['workspaces'];
+
+/**
+ * O que dizer quando cada comando termina. Leitura de estado, de log e o
+ * terminal ficam de fora: o proprio resultado aparece na tela.
+ */
+const DONE: Partial<Record<RunnerCommandInput['action'], string>> = {
+  saveProject: 'Projeto salvo',
+  saveEnvironment: 'Ambiente salvo',
+  saveSettings: 'Acesso às prévias atualizado',
+  createTask: 'Tarefa criada',
+  startSandbox: 'Preparando o sandbox',
+  stopSandbox: 'Parando o sandbox',
+  startPreview: 'Subindo a prévia',
+  stopPreview: 'Parando a prévia',
+};
+const DONE_DETAIL: Partial<Record<RunnerCommandInput['action'], string>> = {
+  saveSettings: 'As próximas prévias usarão este endereço.',
+  createTask: 'A worktree está sendo preparada. Acompanhe em Atividade.',
+  startSandbox: 'Acompanhe o andamento em Atividade.',
+  startPreview: 'Os links aparecem aqui quando os serviços estiverem prontos.',
+};
+
+const JOB_LABEL: Record<string, string> = {
+  createTask: 'Preparar worktrees',
+  startPreview: 'Subir prévia',
+  stopPreview: 'Parar prévia',
+  startSandbox: 'Preparar sandbox',
+  stopSandbox: 'Parar sandbox',
+};
+
+/** Icone circular neutro que abre a identidade de cada linha. */
+function RowIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-rule bg-canvas text-ink-muted [&_svg]:size-4">
+      {children}
+    </span>
+  );
+}
+
 export function WorkspacesConsole({
   projectId,
   environmentId,
@@ -82,19 +115,20 @@ export function WorkspacesConsole({
   });
   const [editor, setEditor] = useState<'project' | 'environment' | 'network'>(),
     [search, setSearch] = useState(''),
-    [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [reuse, setReuse] = useState('');
   const [log, setLog] = useState<{ title: string; text: string }>();
-  async function act(command: RunnerCommandInput) {
+  /** `done` troca a mensagem padrão do comando; `false` silencia um passo intermediário. */
+  async function act(command: RunnerCommandInput, done?: string | false) {
     setBusy(true);
-    setError('');
     try {
       const value = await workspaceRequest(command);
       await client.invalidateQueries({ queryKey });
+      const title = done ?? DONE[command.action];
+      if (title) toast.success(title, done ? undefined : DONE_DETAIL[command.action]);
       return value;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Operação falhou.');
+      toast.error('Não foi possível concluir', e instanceof Error ? e.message : 'Operação falhou.');
       throw e;
     } finally {
       setBusy(false);
@@ -112,24 +146,30 @@ export function WorkspacesConsole({
   const state = query.data;
   if (!state)
     return (
-      <div className="space-y-5">
-        <h1 className="text-3xl font-semibold">Projetos</h1>
+      <div className="space-y-6">
+        <PageHeader title="Projetos" />
         {query.error ? (
           <Alert variant="destructive">
             <AlertTitle>Não foi possível carregar os projetos</AlertTitle>
             <AlertDescription>
-              {query.error.message}
-              <Button variant="outline" onClick={() => void query.refetch()}>
+              <p>{query.error.message}</p>
+              <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
                 Tentar novamente
               </Button>
             </AlertDescription>
           </Alert>
         ) : (
           <>
-            <Skeleton className="h-12 w-64" />
-            <div className="grid gap-4 md:grid-cols-3">
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <div className={listStyle}>
               {[1, 2, 3].map((n) => (
-                <Skeleton key={n} className="h-40" />
+                <div key={n} className="flex items-center gap-3 px-4 py-3.5">
+                  <Skeleton className="size-8 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3.5 w-40" />
+                    <Skeleton className="h-3 w-64 max-w-full" />
+                  </div>
+                </div>
               ))}
             </div>
           </>
@@ -171,116 +211,95 @@ export function WorkspacesConsole({
   const jobs = state.jobs.filter((j) => j.projectId === project?.id);
   const tab = params.get('tab') ?? (environment ? 'previews' : 'environments');
   const setTab = (value: string) => router.replace(`${current}?tab=${value}`, { scroll: false });
-  async function attach(id: string) {
+  const matches = state.projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  async function attach(id: string, done = 'Ambiente vinculado ao projeto') {
     if (!project) return;
-    await act({
-      action: 'saveProject',
-      definition: {
-        ...project,
-        environmentId: project.environmentId ?? id,
-        environmentIds: [...new Set([...envIds, id])],
+    await act(
+      {
+        action: 'saveProject',
+        definition: {
+          ...project,
+          environmentId: project.environmentId ?? id,
+          environmentIds: [...new Set([...envIds, id])],
+        },
+        revision: project.revision,
       },
-      revision: project.revision,
-    });
+      done,
+    );
     setEditor(undefined);
     router.push(`${base}/ambientes/${id}`);
   }
-  const activity = (
-    <div className="space-y-3">
-      {!jobs.length ? (
-        <Blank
-          icon={<Activity />}
-          title="Nenhuma operação ainda"
-          description="Preparações, builds e paradas deste projeto aparecerão aqui."
-        />
-      ) : (
-        jobs.slice(0, 20).map((job) => (
-          <Card key={job.id} className="py-0 shadow-none">
-            <CardContent className="flex flex-wrap items-center gap-3 p-4">
-              <Activity className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium">
-                {(
-                  {
-                    createTask: 'Preparar worktrees',
-                    startPreview: 'Subir prévia',
-                    stopPreview: 'Parar prévia',
-                    startSandbox: 'Preparar sandbox',
-                    stopSandbox: 'Parar sandbox',
-                  } as Record<string, string>
-                )[job.type] ?? job.type}
-              </span>
-              <Status state={job.state} />
-              <time className="text-xs text-muted-foreground">
-                {new Date(job.createdAt).toLocaleString('pt-BR')}
-              </time>
-              <Button
-                className="ml-auto"
-                variant="ghost"
-                onClick={() =>
-                  void showLogs({ action: 'jobLogs', jobId: job.id }, 'Saída da operação')
-                }
-              >
-                <ScrollText />
-                Ver saída
-              </Button>
-              {job.error && <p className="w-full text-sm text-destructive">{job.error}</p>}
-            </CardContent>
-          </Card>
-        ))
-      )}
+  const activity = !jobs.length ? (
+    <Blank
+      icon={<Activity />}
+      title="Nenhuma operação ainda"
+      description="Preparações, builds e paradas deste projeto aparecerão aqui."
+    />
+  ) : (
+    <div className={listStyle}>
+      {jobs.slice(0, 20).map((job) => (
+        <div
+          key={job.id}
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_9rem_11rem_auto]"
+        >
+          <span className="truncate text-sm font-medium">{JOB_LABEL[job.type] ?? job.type}</span>
+          <Status state={job.state} className="max-sm:hidden" />
+          <time className="tabular text-[13px] text-ink-muted max-sm:hidden">
+            {new Date(job.createdAt).toLocaleString('pt-BR')}
+          </time>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void showLogs({ action: 'jobLogs', jobId: job.id }, 'Saída da operação')}
+          >
+            <ScrollText aria-hidden />
+            Ver saída
+          </Button>
+          <div className="col-span-full flex items-center gap-3 sm:hidden">
+            <Status state={job.state} />
+            <time className="tabular text-xs text-ink-muted">
+              {new Date(job.createdAt).toLocaleString('pt-BR')}
+            </time>
+          </div>
+          {job.error && (
+            <p className="col-span-full text-[13px] whitespace-pre-wrap text-error-ink">
+              {job.error}
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   );
   return (
-    <div className="space-y-7">
-      <Trail
-        items={[
-          { label: 'Projetos', ...(project ? { href: '/projetos' } : {}) },
-          ...(project ? [{ label: project.name, ...(environment ? { href: base } : {}) }] : []),
-          ...(environment ? [{ label: environment.name }] : []),
-        ]}
-      />
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 gap-4">
-          <div className="hidden size-12 shrink-0 items-center justify-center rounded-xl border bg-card sm:flex">
-            {environment ? (
-              <Boxes className="size-6 text-primary" />
-            ) : (
-              <FolderGit2 className="size-6 text-primary" />
-            )}
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-semibold tracking-tight">
-                {environment?.name ?? project?.name ?? 'Seus projetos'}
-              </h1>
-              {environment && <Badge variant="secondary">Ambiente</Badge>}
-            </div>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              {environment
-                ? 'Serviços, configurações e prévias deste ambiente.'
-                : project
-                  ? 'Do código à prévia, tudo no contexto deste projeto.'
-                  : 'Organize o código, conecte seus bots e teste cada mudança.'}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {project ? (
+    <div className="space-y-6">
+      <PageHeader
+        {...(project && {
+          trail: [
+            { label: 'Projetos', href: '/projetos' },
+            { label: project.name, ...(environment ? { href: base } : {}) },
+            ...(environment ? [{ label: environment.name }] : []),
+          ],
+        })}
+        title={environment?.name ?? project?.name ?? 'Projetos'}
+        {...(project && { icon: environment ? <Boxes aria-hidden /> : <FolderGit2 aria-hidden /> })}
+        {...(environment && { badges: <Badge variant="secondary">Ambiente</Badge> })}
+        actions={
+          project ? (
             <>
               <Button
                 variant="outline"
                 onClick={() => setEditor(environment ? 'environment' : 'project')}
               >
-                <Settings2 />
+                <Settings2 aria-hidden />
                 Configurar
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="icon" aria-label="Ações do projeto">
-                    <MoreHorizontal />
+                    <MoreHorizontal aria-hidden />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="min-w-52!">
                   <DropdownMenuItem
                     disabled={!project.environmentId || busy}
                     onSelect={() => trigger({ action: 'startSandbox', projectId: project.id })}
@@ -305,25 +324,25 @@ export function WorkspacesConsole({
             </>
           ) : (
             <Button onClick={() => setEditor('project')}>
-              <Plus />
+              <Plus aria-hidden />
               Novo projeto
             </Button>
-          )}
-        </div>
-      </header>
-      {(error || query.error) && (
+          )
+        }
+      />
+      {query.error && (
         <Alert variant="destructive">
-          <AlertTitle>Não foi possível concluir</AlertTitle>
-          <AlertDescription>{error || query.error?.message}</AlertDescription>
+          <AlertTitle>Não foi possível atualizar os projetos</AlertTitle>
+          <AlertDescription>{query.error.message}</AlertDescription>
         </Alert>
       )}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <MetricGrid>
         {!project ? (
           <>
             <Metric
               label="Projetos"
               value={state.projects.length}
-              icon={<FolderGit2 className="size-4" />}
+              icon={<FolderGit2 aria-hidden />}
             />
             <Metric
               label="Ambientes"
@@ -334,129 +353,121 @@ export function WorkspacesConsole({
                   ),
                 ).length
               }
-              icon={<Boxes className="size-4" />}
+              icon={<Boxes aria-hidden />}
             />
             <Metric
               label="Prévias disponíveis"
               value={previews.filter((p) => p.state === 'ready').length}
-              icon={<MonitorPlay className="size-4" />}
+              icon={<MonitorPlay aria-hidden />}
             />
-            <Metric
-              label="Worktrees"
-              value={state.tasks.length}
-              icon={<GitBranch className="size-4" />}
-            />
+            <Metric label="Worktrees" value={state.tasks.length} icon={<GitBranch aria-hidden />} />
           </>
         ) : environment ? (
           <>
             <Metric
               label="Serviços"
               value={environment.compose ? 'Compose' : environment.services.length}
-              icon={<Boxes className="size-4" />}
+              icon={<Boxes aria-hidden />}
             />
             <Metric
               label="Prévias disponíveis"
               value={previews.filter((p) => p.state === 'ready').length}
               hint={`Até ${environment.maxPreviews} simultâneas`}
-              icon={<MonitorPlay className="size-4" />}
+              icon={<MonitorPlay aria-hidden />}
             />
             <Metric
               label="CPU por container"
               value={`${environment.cpus} vCPU`}
-              icon={<Cpu className="size-4" />}
+              icon={<Cpu aria-hidden />}
             />
             <Metric
               label="Memória por container"
               value={`${environment.memoryMb} MB`}
-              icon={<MemoryStick className="size-4" />}
+              icon={<MemoryStick aria-hidden />}
             />
           </>
         ) : (
           <>
-            <Metric
-              label="Ambientes"
-              value={environments.length}
-              icon={<Boxes className="size-4" />}
-            />
-            <Metric
-              label="Worktrees"
-              value={tasks.length}
-              icon={<GitBranch className="size-4" />}
-            />
+            <Metric label="Ambientes" value={environments.length} icon={<Boxes aria-hidden />} />
+            <Metric label="Worktrees" value={tasks.length} icon={<GitBranch aria-hidden />} />
             <Metric
               label="Prévias disponíveis"
               value={previews.filter((p) => p.state === 'ready').length}
-              icon={<MonitorPlay className="size-4" />}
+              icon={<MonitorPlay aria-hidden />}
             />
             <Metric
               label="Bots autorizados"
               value={project.allowedBotIds.length}
-              icon={<Bot className="size-4" />}
+              icon={<Bot aria-hidden />}
             />
           </>
         )}
-      </div>
+      </MetricGrid>
       {!project ? (
         <>
-          <div className="relative max-w-sm">
-            <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
+          <div className="flex flex-wrap items-center gap-3">
+            <SearchField
+              className="max-w-sm"
               aria-label="Buscar projetos"
               placeholder="Buscar projetos…"
+              shortcut="f"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <span className="tabular ml-auto text-[13px] text-ink-muted">
+              {matches.length} de {state.projects.length}
+            </span>
           </div>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {state.projects
-              .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-              .map((p) => (
-                <Card
-                  key={p.id}
-                  className="gap-4 shadow-none transition-colors hover:border-primary/40"
-                >
-                  <CardHeader>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle>
+          {!!matches.length && (
+            <section aria-label="Lista de projetos" className={listStyle}>
+              {matches.map((p) => {
+                const count = new Set(
+                  [p.environmentId, ...(p.environmentIds ?? [])].filter(Boolean),
+                ).size;
+                return (
+                  <article
+                    key={p.id}
+                    aria-label={p.name}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-paper lg:grid-cols-[minmax(0,1fr)_10rem_minmax(0,16rem)_auto] lg:gap-x-6"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <RowIcon>
+                        <FolderGit2 aria-hidden />
+                      </RowIcon>
+                      <div className="min-w-0">
                         <Link
                           href={`/projetos/${p.id}`}
-                          className="flex items-center gap-2 hover:text-primary"
+                          className="block truncate font-medium text-ink underline-offset-4 hover:underline"
                         >
-                          <FolderGit2 className="size-5" />
                           {p.name}
                         </Link>
-                      </CardTitle>
-                      <Status state={state.sandboxes[p.id] ?? 'absent'} />
+                        <p
+                          className="mt-0.5 truncate font-mono text-xs text-ink-muted"
+                          title={p.repositories[0]?.source}
+                        >
+                          {p.repositories[0]?.source}
+                        </p>
+                      </div>
                     </div>
-                    <CardDescription className="truncate">
-                      {p.repositories[0]?.source}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    <Badge variant="secondary">{p.repositories.length} repositórios</Badge>
-                    <Badge variant="outline">
-                      {new Set([p.environmentId, ...(p.environmentIds ?? [])].filter(Boolean)).size}{' '}
-                      ambientes
-                    </Badge>
-                    <Badge variant="outline">
-                      {state.tasks.filter((t) => t.projectId === p.id).length} worktrees
-                    </Badge>
-                  </CardContent>
-                  <CardFooter className="border-t pt-4">
-                    <span className="text-xs text-muted-foreground">
-                      {p.allowedBotIds.length} bots autorizados
-                    </span>
-                    <Button asChild variant="ghost" className="ml-auto">
+                    <Button asChild variant="ghost" size="sm" className="lg:order-last">
                       <Link href={`/projetos/${p.id}`}>
                         Abrir projeto
-                        <ArrowUpRight />
+                        <ArrowUpRight aria-hidden />
                       </Link>
                     </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-          </div>
+                    <div className="col-span-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 pl-11 lg:contents">
+                      <Status state={state.sandboxes[p.id] ?? 'absent'} />
+                      <p className="text-[13px] text-ink-muted">
+                        {p.repositories.length} repositórios · {count} ambientes ·{' '}
+                        {state.tasks.filter((t) => t.projectId === p.id).length} worktrees ·{' '}
+                        {p.allowedBotIds.length} bots
+                      </p>
+                    </div>
+                  </article>
+                );
+              })}
+            </section>
+          )}
           {!state.projects.length && (
             <Blank
               icon={<FolderGit2 />}
@@ -464,23 +475,22 @@ export function WorkspacesConsole({
               description="Comece com seu repositório Git. Em seguida, adicione ambientes e publique prévias das suas worktrees."
             >
               <Button onClick={() => setEditor('project')}>
-                <Plus />
+                <Plus aria-hidden />
                 Criar primeiro projeto
               </Button>
             </Blank>
           )}
-          {!!state.projects.length &&
-            !state.projects.some((p) => p.name.toLowerCase().includes(search.toLowerCase())) && (
-              <Blank
-                icon={<Search />}
-                title="Nenhum projeto encontrado"
-                description="Tente outro nome para localizar o projeto."
-              />
-            )}
+          {!!state.projects.length && !matches.length && (
+            <Blank
+              icon={<FolderGit2 />}
+              title="Nenhum projeto encontrado"
+              description="Tente outro nome para localizar o projeto."
+            />
+          )}
         </>
       ) : (
         <Tabs value={tab} onValueChange={setTab} className="gap-6">
-          <TabsList variant="line" className="max-w-full overflow-x-auto border-b">
+          <TabsList variant="line" className="w-full! max-w-full overflow-x-auto">
             {environment ? (
               <>
                 <TabsTrigger value="previews">
@@ -513,83 +523,97 @@ export function WorkspacesConsole({
               Atividade
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="environments">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">Ambientes do projeto</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Cada configuração tem seus serviços e suas prévias.
-                </p>
-              </div>
-              <Button onClick={() => setEditor('environment')}>
-                <Plus />
-                Novo ambiente
-              </Button>
-            </div>
-            <div className="grid gap-4 xl:grid-cols-2">
-              {environments.map((env) => (
-                <Card key={env.id} className="shadow-none">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle>
-                        <Link className="hover:text-primary" href={`${base}/ambientes/${env.id}`}>
-                          {env.name}
-                        </Link>
-                      </CardTitle>
-                      {env.id === project.environmentId && (
-                        <Badge variant="secondary">Padrão do sandbox</Badge>
-                      )}
+          <TabsContent value="environments" className="space-y-4">
+            <SectionHeader
+              title="Ambientes do projeto"
+              description="Cada configuração tem seus serviços e suas prévias."
+              actions={
+                <Button onClick={() => setEditor('environment')}>
+                  <Plus aria-hidden />
+                  Novo ambiente
+                </Button>
+              }
+            />
+            {environments.length ? (
+              <div className={listStyle}>
+                {environments.map((env) => (
+                  <article
+                    key={env.id}
+                    aria-label={env.name}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-paper lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)_9rem_auto] lg:gap-x-6"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <RowIcon>
+                        <Boxes aria-hidden />
+                      </RowIcon>
+                      <div className="min-w-0">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Link
+                            className="truncate font-medium text-ink underline-offset-4 hover:underline"
+                            href={`${base}/ambientes/${env.id}`}
+                          >
+                            {env.name}
+                          </Link>
+                          {env.id === project.environmentId && (
+                            <Badge variant="info">Padrão do sandbox</Badge>
+                          )}
+                        </div>
+                        <p className="mt-0.5 truncate text-[13px] text-ink-muted">
+                          {env.compose ? (
+                            <>
+                              Compose ·{' '}
+                              <span className="font-mono text-xs">{env.compose.path}</span>
+                            </>
+                          ) : (
+                            `${env.services.length} serviços configurados`
+                          )}
+                        </p>
+                      </div>
                     </div>
-                    <CardDescription>
-                      {env.compose
-                        ? `Compose · ${env.compose.path}`
-                        : `${env.services.length} serviços configurados`}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    <Badge variant="outline">
-                      <Cpu />
-                      {env.cpus} vCPU
-                    </Badge>
-                    <Badge variant="outline">
-                      <MemoryStick />
-                      {env.memoryMb} MB
-                    </Badge>
-                    <Badge variant="outline">
-                      <Globe />
-                      {env.network === 'none' ? 'Sem rede externa' : 'Internet'}
-                    </Badge>
-                  </CardContent>
-                  <CardFooter className="border-t pt-4">
-                    <span className="text-xs text-muted-foreground">
-                      {
-                        state.previews.filter(
-                          (p) =>
-                            p.projectId === project.id &&
-                            p.environmentId === env.id &&
-                            p.state === 'ready',
-                        ).length
-                      }{' '}
-                      prévias disponíveis
-                    </span>
-                    <Button asChild variant="ghost" className="ml-auto">
+                    <Button asChild variant="ghost" size="sm" className="lg:order-last">
                       <Link href={`${base}/ambientes/${env.id}`}>
                         Abrir ambiente
-                        <ArrowUpRight />
+                        <ArrowUpRight aria-hidden />
                       </Link>
                     </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
-            {!environments.length && (
+                    <div className="col-span-2 flex flex-wrap items-center gap-x-5 gap-y-2 pl-11 lg:contents">
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant="outline">
+                          <Cpu aria-hidden />
+                          {env.cpus} vCPU
+                        </Badge>
+                        <Badge variant="outline">
+                          <MemoryStick aria-hidden />
+                          {env.memoryMb} MB
+                        </Badge>
+                        <Badge variant="outline">
+                          <Globe aria-hidden />
+                          {env.network === 'none' ? 'Sem rede externa' : 'Internet'}
+                        </Badge>
+                      </div>
+                      <span className="tabular text-[13px] text-ink-muted">
+                        {
+                          state.previews.filter(
+                            (p) =>
+                              p.projectId === project.id &&
+                              p.environmentId === env.id &&
+                              p.state === 'ready',
+                          ).length
+                        }{' '}
+                        prévias disponíveis
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
               <Blank
                 icon={<Boxes />}
                 title="Prepare o primeiro ambiente"
                 description="Escolha as ferramentas e os serviços para trabalhar e testar este projeto."
               >
                 <Button onClick={() => setEditor('environment')}>
-                  <Plus />
+                  <Plus aria-hidden />
                   Adicionar ambiente
                 </Button>
               </Blank>
@@ -614,64 +638,81 @@ export function WorkspacesConsole({
               showLogs={showLogs}
             />
           </TabsContent>
-          <TabsContent value="repositories">
-            <div className="space-y-4">
+          <TabsContent value="repositories" className="space-y-4">
+            <SectionHeader
+              title="Repositórios"
+              description="Origens Git clonadas para cada worktree deste projeto."
+            />
+            <div className={listStyle}>
               {project.repositories.map((repo) => (
-                <Card key={repo.id} className="shadow-none">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FolderGit2 className="size-4" />
-                      {repo.id}
-                    </CardTitle>
-                    <CardDescription className="break-all">{repo.source}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Badge variant="outline">
-                      <GitBranch />
-                      {repo.ref}
-                    </Badge>
-                  </CardContent>
-                </Card>
+                <div
+                  key={repo.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3"
+                >
+                  <RowIcon>
+                    <FolderGit2 aria-hidden />
+                  </RowIcon>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-mono text-sm font-medium">{repo.id}</h3>
+                    <p className="mt-0.5 font-mono text-xs break-all text-ink-muted">
+                      {repo.source}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="font-mono">
+                    <GitBranch aria-hidden />
+                    {repo.ref}
+                  </Badge>
+                </div>
               ))}
-              <Alert>
-                <Bot />
-                <AlertTitle>Bots autorizados</AlertTitle>
-                <AlertDescription>
-                  {project.allowedBotIds.join(', ') ||
-                    'Nenhum bot autorizado. Configure o projeto para conceder acesso.'}
-                </AlertDescription>
-              </Alert>
             </div>
+            <Alert>
+              <Bot aria-hidden />
+              <AlertTitle>Bots autorizados</AlertTitle>
+              <AlertDescription>
+                {project.allowedBotIds.join(', ') ||
+                  'Nenhum bot autorizado. Configure o projeto para conceder acesso.'}
+              </AlertDescription>
+            </Alert>
           </TabsContent>
-          <TabsContent value="services">
+          <TabsContent value="services" className="space-y-4">
+            <SectionHeader
+              title="Serviços"
+              description="O que sobe em cada prévia deste ambiente."
+              actions={
+                <Button variant="outline" onClick={() => setEditor('environment')}>
+                  <Settings2 aria-hidden />
+                  Configurar serviços
+                </Button>
+              }
+            />
             {environment?.compose ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Serviços definidos por Compose</CardTitle>
-                  <CardDescription>
-                    {environment.compose.repositoryId} · {environment.compose.path}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+              <div className="rounded-xl border border-rule px-4 py-3.5">
+                <h3 className="text-sm font-medium">Serviços definidos por Compose</h3>
+                <p className="mt-0.5 font-mono text-xs text-ink-muted">
+                  {environment.compose.repositoryId} · {environment.compose.path}
+                </p>
+                <p className="mt-3 text-[13px] text-ink-muted">
                   O arquivo da worktree selecionada define os serviços desta prévia.
-                </CardContent>
-              </Card>
+                </p>
+              </div>
             ) : environment?.services.length ? (
-              <Accordion type="multiple" className="rounded-xl border bg-card px-5">
+              <Accordion type="multiple" className="rounded-xl border border-rule px-4">
                 {environment.services.map((service) => (
                   <AccordionItem key={service.id} value={service.id}>
                     <AccordionTrigger>
-                      <span className="flex flex-wrap items-center gap-3">
-                        <Boxes className="size-4" />
-                        {service.id}
-                        <Badge variant="secondary">{service.builder}</Badge>
+                      <span className="flex flex-wrap items-center gap-2.5">
+                        <Boxes className="size-4 text-ink-muted" aria-hidden />
+                        <span className="font-mono">{service.id}</span>
+                        <Badge variant="secondary" className="font-mono">
+                          {service.builder}
+                        </Badge>
                         <Badge variant="outline">
                           {service.mode === 'development' ? 'Hot reload' : 'Imagem'}
                         </Badge>
                       </span>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <dl className="grid gap-4 sm:grid-cols-2">
+                      <dl className="grid gap-px overflow-hidden rounded-lg border border-rule bg-rule sm:grid-cols-2">
                         {Object.entries({
                           Origem: service.repositoryId ?? service.image,
                           Contexto: service.context,
@@ -680,9 +721,9 @@ export function WorkspacesConsole({
                           Comando: service.command || 'Padrão da imagem',
                           Dependências: service.dependsOn.join(', ') || 'Nenhuma',
                         }).map(([label, value]) => (
-                          <div key={label}>
-                            <dt className="text-xs text-muted-foreground">{label}</dt>
-                            <dd className="mt-1 break-all font-mono text-xs">{value}</dd>
+                          <div key={label} className="bg-canvas px-3 py-2.5">
+                            <dt className="text-xs text-ink-muted">{label}</dt>
+                            <dd className="mt-1 font-mono text-xs break-all">{value}</dd>
                           </div>
                         ))}
                       </dl>
@@ -695,15 +736,14 @@ export function WorkspacesConsole({
                 icon={<Boxes />}
                 title="Adicione os serviços da aplicação"
                 description="Use imagem pronta, Dockerfile, Railpack ou um arquivo Compose."
-              >
-                <Button onClick={() => setEditor('environment')}>Configurar serviços</Button>
-              </Blank>
+              />
             )}
           </TabsContent>
-          <TabsContent value="activity">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Operações de todos os ambientes deste projeto.
-            </p>
+          <TabsContent value="activity" className="space-y-4">
+            <SectionHeader
+              title="Atividade"
+              description="Operações de todos os ambientes deste projeto."
+            />
             {activity}
           </TabsContent>
         </Tabs>
@@ -735,47 +775,36 @@ export function WorkspacesConsole({
                   : 'Conecte os repositórios e autorize os bots.'}
             </SheetDescription>
           </SheetHeader>
-          <div className="p-6">
-            {error && (
-              <Alert variant="destructive" className="mb-5">
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            {editor === 'project' && (
-              <ProjectEditor
-                project={project}
-                cancel={() => setEditor(undefined)}
-                save={async (c) => {
-                  await act(c);
-                  setEditor(undefined);
-                  if (c.action === 'saveProject') router.push(`/projetos/${c.definition.id}`);
-                }}
-              />
-            )}
-            {editor === 'environment' && (
-              <>
-                <EnvironmentEditor
-                  environment={environment}
-                  cancel={() => setEditor(undefined)}
-                  save={async (c) => {
-                    await act(c);
-                    if (c.action === 'saveEnvironment' && !environment)
-                      await attach(c.definition.id);
-                    else setEditor(undefined);
-                  }}
-                />
-                {!environment && state.environments.some((e) => !envIds.includes(e.id)) && (
-                  <Accordion type="single" collapsible className="mt-6">
-                    <AccordionItem value="reuse">
-                      <AccordionTrigger>Reutilizar configuração existente</AccordionTrigger>
-                      <AccordionContent>
-                        <p className="mb-3 text-sm text-muted-foreground">
-                          Alterações em uma configuração compartilhada afetam os projetos que a
-                          utilizam.
-                        </p>
+          {editor === 'project' && (
+            <ProjectEditor
+              project={project}
+              cancel={() => setEditor(undefined)}
+              save={async (c) => {
+                await act(c);
+                setEditor(undefined);
+                if (c.action === 'saveProject') router.push(`/projetos/${c.definition.id}`);
+              }}
+            />
+          )}
+          {editor === 'environment' && (
+            <>
+              {!environment && state.environments.some((e) => !envIds.includes(e.id)) && (
+                <Accordion
+                  type="single"
+                  collapsible
+                  className="mx-6 mt-5 w-auto! rounded-xl border border-rule px-4"
+                >
+                  <AccordionItem value="reuse">
+                    <AccordionTrigger>Reutilizar configuração existente</AccordionTrigger>
+                    <AccordionContent className="space-y-3">
+                      <p className="text-[13px] text-ink-muted">
+                        Alterações em uma configuração compartilhada afetam os projetos que a
+                        utilizam.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
                         <select
                           aria-label="Ambiente existente"
-                          className={inputStyle}
+                          className={cn(inputStyle, 'min-w-48! flex-1')}
                           value={reuse}
                           onChange={(e) => setReuse(e.target.value)}
                         >
@@ -789,27 +818,37 @@ export function WorkspacesConsole({
                             ))}
                         </select>
                         <Button
-                          className="mt-3"
                           disabled={!reuse || busy}
                           onClick={() => void attach(reuse).catch(() => {})}
                         >
                           Vincular ambiente
                         </Button>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                )}
-              </>
-            )}
-            {editor === 'network' && state.settings && (
-              <NetworkSettings
-                state={state}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+              <EnvironmentEditor
+                environment={environment}
+                cancel={() => setEditor(undefined)}
                 save={async (c) => {
-                  await act(c);
+                  // Um ambiente novo so esta pronto depois de vinculado: um aviso so.
+                  const created = c.action === 'saveEnvironment' && !environment;
+                  await act(c, created ? false : undefined);
+                  if (created) await attach(c.definition.id, 'Ambiente criado');
+                  else setEditor(undefined);
                 }}
               />
-            )}
-          </div>
+            </>
+          )}
+          {editor === 'network' && state.settings && (
+            <NetworkSettings
+              state={state}
+              save={async (c) => {
+                await act(c);
+              }}
+            />
+          )}
         </SheetContent>
       </Sheet>
       <Sheet
@@ -825,7 +864,7 @@ export function WorkspacesConsole({
               Saída registrada pelo gerenciador. Segredos conhecidos são ocultados.
             </SheetDescription>
           </SheetHeader>
-          <pre className="m-6 overflow-auto rounded-xl bg-zinc-950 p-5 text-xs text-zinc-100 whitespace-pre-wrap">
+          <pre className="m-6 overflow-auto rounded-lg border border-rule bg-paper p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap text-ink">
             {log?.text}
           </pre>
         </SheetContent>

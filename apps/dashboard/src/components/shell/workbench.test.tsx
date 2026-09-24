@@ -1,11 +1,12 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { vi, expect, it } from 'vitest';
+import { render } from '../../../tests/helpers/render';
 import { Workbench } from './workbench';
 
 let pathname = '/bots';
 vi.mock('next/navigation', () => ({
   usePathname: () => pathname,
-  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock('./thread-rail', () => ({
   ThreadRail: () => <nav aria-label="Conversas">Conversa de teste</nav>,

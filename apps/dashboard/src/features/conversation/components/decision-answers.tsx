@@ -21,22 +21,28 @@ function percent(confidence: unknown): string | null {
  * traz dezesseis casas decimais, e nenhuma delas muda a leitura de quem esta
  * investigando por que o agente decidiu assim.
  */
-export function DecisionAnswers({ answers }: { answers: Record<string, unknown> }) {
+export function DecisionAnswers({
+  answers,
+  labels = {},
+}: {
+  answers: Record<string, unknown>;
+  labels?: Record<string, string>;
+}) {
   const entries = Object.entries(answers);
   if (entries.length === 0) return null;
 
   return (
-    <dl className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-[0.8125rem] sm:pl-20">
+    <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[13px]">
       {entries.map(([key, raw]) => {
         const answer = (typeof raw === 'object' && raw !== null ? raw : {}) as Answer;
         const confidence = percent(answer.confidence);
 
         return (
           <div key={key} className="flex items-baseline gap-1.5">
-            <dt className="text-ink-muted">{key}</dt>
+            <dt className="text-ink-muted">{labels[key] ?? key}</dt>
             <dd className="font-medium">{label(answer.value)}</dd>
             {confidence ? (
-              <dd className="tabular text-judge" title="confianca declarada pelo decisor">
+              <dd className="tabular text-ink-muted" title="confianca declarada pelo decisor">
                 {confidence}
               </dd>
             ) : null}

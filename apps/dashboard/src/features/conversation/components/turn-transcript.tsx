@@ -4,9 +4,9 @@ function Bubble({ who, payload, tone }: { who: string; payload: PayloadRef | nul
   if (!payload || payload.sizeBytes === 0) return null;
 
   return (
-    <div className="border-b border-rule/60 px-5 py-3">
-      <p className={`text-[0.6875rem] ${tone}`}>{who}</p>
-      <p className="mt-1 max-w-[70ch] text-sm leading-relaxed whitespace-pre-wrap">
+    <div className="grid gap-1 px-4 py-3 sm:grid-cols-[5rem_minmax(0,1fr)] sm:gap-4">
+      <p className={`text-xs font-medium ${tone}`}>{who}</p>
+      <p className="max-w-[72ch] text-sm leading-relaxed whitespace-pre-wrap">
         {payload.preview}
         {payload.preview.length < payload.sizeBytes ? '…' : ''}
       </p>
@@ -31,9 +31,12 @@ export function TurnTranscript({
   if (!userInput && !assistantText) return null;
 
   return (
-    <section aria-label="Transcricao do turno" className="border-t border-rule">
+    <section
+      aria-label="Transcricao do turno"
+      className="divide-y divide-rule overflow-hidden rounded-xl border border-rule"
+    >
       <Bubble who="Pessoa" payload={userInput} tone="text-ink-muted" />
-      <Bubble who="Agente" payload={assistantText} tone="text-time" />
+      <Bubble who="Agente" payload={assistantText} tone="text-ink" />
     </section>
   );
 }

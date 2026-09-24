@@ -1,15 +1,4 @@
-import Link from 'next/link';
-import { Fragment, type ReactNode } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import {
-  Breadcrumb,
-  BreadcrumbList,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
+import type { ReactNode } from 'react';
 import {
   Empty,
   EmptyHeader,
@@ -18,47 +7,43 @@ import {
   EmptyDescription,
   EmptyContent,
 } from '@/components/ui/empty';
+import { StatusDot, stateTone } from '@/components/shared/status-dot';
+import { cn } from '@/lib/utils/cn';
 import { stateLabel } from './shared';
 
-export function Trail({ items }: { items: { label: string; href?: string }[] }) {
+export { Trail } from '@/components/shared/page-header';
+
+export function Status({ state, className }: { state: string; className?: string }) {
+  const { tone, pulse } = stateTone(state);
   return (
-    <Breadcrumb>
-      <BreadcrumbList>
-        {items.map((item, i) => (
-          <Fragment key={i}>
-            {i > 0 && <BreadcrumbSeparator />}
-            <BreadcrumbItem>
-              {item.href ? (
-                <BreadcrumbLink asChild>
-                  <Link href={item.href}>{item.label}</Link>
-                </BreadcrumbLink>
-              ) : (
-                <BreadcrumbPage>{item.label}</BreadcrumbPage>
-              )}
-            </BreadcrumbItem>
-          </Fragment>
-        ))}
-      </BreadcrumbList>
-    </Breadcrumb>
+    <StatusDot
+      tone={tone}
+      pulse={pulse}
+      label={stateLabel[state] ?? state}
+      {...(className !== undefined && { className })}
+    />
   );
 }
-export function Status({ state }: { state: string }) {
+
+/**
+ * Faixa de numeros separados por hairline, num unico contorno.
+ *
+ * Um cartao elevado por metrica disputaria atencao com a lista logo abaixo, que
+ * e a protagonista da pagina.
+ */
+export function MetricGrid({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <Badge
-      variant="outline"
-      className={
-        ['ready', 'running', 'succeeded', 'connected'].includes(state)
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-          : state === 'failed' || state === 'unavailable'
-            ? 'border-red-200 bg-red-50 text-red-800'
-            : 'bg-muted text-muted-foreground'
-      }
+    <div
+      className={cn(
+        'grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-rule bg-rule xl:grid-cols-4',
+        className,
+      )}
     >
-      <span className="size-1.5 rounded-full bg-current" />
-      {stateLabel[state] ?? state}
-    </Badge>
+      {children}
+    </div>
   );
 }
+
 export function Metric({
   label,
   value,
@@ -71,18 +56,19 @@ export function Metric({
   hint?: string;
 }) {
   return (
-    <Card className="gap-0 py-0 shadow-none">
-      <CardContent className="p-5">
-        <div className="mb-3 flex items-center justify-between text-sm text-muted-foreground">
-          {label}
-          {icon}
-        </div>
-        <div className="text-2xl font-semibold tabular-nums tracking-tight">{value}</div>
-        {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
-      </CardContent>
-    </Card>
+    <div className="min-w-0 bg-canvas px-4 py-3.5">
+      <div className="flex items-center gap-2 text-[13px] text-ink-muted [&_svg]:size-4 [&_svg]:shrink-0">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className="mt-1.5 truncate text-xl leading-[1.3] font-semibold tracking-[-0.3px] tabular-nums">
+        {value}
+      </div>
+      {hint && <p className="mt-0.5 truncate text-xs text-ink-muted">{hint}</p>}
+    </div>
   );
 }
+
 export function Blank({
   title,
   description,
@@ -95,7 +81,7 @@ export function Blank({
   children?: ReactNode;
 }) {
   return (
-    <Empty className="min-h-60 border bg-card">
+    <Empty className="min-h-56">
       <EmptyHeader>
         <EmptyMedia variant="icon">{icon}</EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>
@@ -105,3 +91,7 @@ export function Blank({
     </Empty>
   );
 }
+
+/** Contorno de lista densa: linhas separadas por hairline, nunca um cartao por registro. */
+export const listStyle =
+  'divide-y divide-rule overflow-hidden rounded-xl border border-rule bg-canvas';

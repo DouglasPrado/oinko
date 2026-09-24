@@ -1,4 +1,5 @@
 import { Workbench } from '@/components/shell/workbench';
+import { PageBody, PageHeader } from '@/components/shared/page-header';
 import { credentialStatus } from '@/server/higgsfield/credential-store';
 import { ConnectionCard } from '@/features/higgsfield/components/connection-card';
 
@@ -15,12 +16,15 @@ export default async function IntegrationsPage({
 
   return (
     <Workbench>
-      <header className="border-b border-rule px-5 py-4">
-        <h1 className="text-base font-medium">Integrações</h1>
-        <p className="mt-1 text-[0.8125rem] text-ink-muted">Servicos que o agente usa por MCP.</p>
-      </header>
+      <PageBody>
+        <PageHeader title="Integrações">
+          <p className="text-sm text-ink-muted">Serviços que o agente usa por MCP.</p>
+        </PageHeader>
 
-      <ConnectionCard status={credentialStatus()} {...(result !== undefined && { result })} />
+        <div className="divide-y divide-rule overflow-hidden rounded-xl border border-rule">
+          <ConnectionCard status={credentialStatus()} {...(result !== undefined && { result })} />
+        </div>
+      </PageBody>
     </Workbench>
   );
 }

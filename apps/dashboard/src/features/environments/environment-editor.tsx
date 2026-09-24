@@ -7,10 +7,14 @@ import {
   type Service,
 } from '@oinko/environments/contracts';
 import type { Saved } from '@oinko/workspaces/contracts';
+import { SwitchField } from '@/components/shared/switch-field';
 import {
   Field,
   inputStyle,
+  textareaStyle,
   buttonStyle,
+  primaryButtonStyle,
+  dangerButtonStyle,
   panelStyle,
   slug,
   variables,
@@ -104,12 +108,9 @@ export function EnvironmentEditor({
     <form
       aria-label="Configuração do ambiente"
       onSubmit={(event) => void submit(event)}
-      className="space-y-5"
+      className="flex flex-1 flex-col"
     >
-      <h2 className="text-xl font-medium">
-        {environment ? `Configurar ${environment.name}` : 'Novo ambiente'}
-      </h2>
-      <fieldset disabled={busy} className="space-y-5">
+      <fieldset disabled={busy} className="space-y-5 px-6 py-6 disabled:opacity-60">
         <section className={`${panelStyle} grid gap-4 md:grid-cols-2`}>
           <Field label="Nome do ambiente">
             <input
@@ -194,22 +195,21 @@ export function EnvironmentEditor({
           </Field>
         </section>
         <section className={panelStyle}>
-          <h3 className="font-medium">Receita da aplicação</h3>
-          <label className="flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={!!definition.compose}
-              onChange={(event) =>
-                change(
-                  'compose',
-                  event.target.checked ? { repositoryId: 'app', path: 'compose.yaml' } : undefined,
-                )
-              }
-            />
-            Usar Compose do repositório
-          </label>
+          <h3 className="text-sm font-semibold">Receita da aplicação</h3>
+          <SwitchField
+            className="py-0"
+            label="Usar Compose do repositório"
+            description="Imagens, builds e dependências passam a vir do arquivo Compose da worktree."
+            checked={!!definition.compose}
+            onChange={(event) =>
+              change(
+                'compose',
+                event.target.checked ? { repositoryId: 'app', path: 'compose.yaml' } : undefined,
+              )
+            }
+          />
           {definition.compose && (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid items-start gap-4 md:grid-cols-2">
               <Field label="Repositório do Compose">
                 <input
                   className={inputStyle}
@@ -238,7 +238,7 @@ export function EnvironmentEditor({
         </section>
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-medium">Serviços</h3>
+            <h3 className="text-sm font-semibold">Serviços</h3>
             <button
               className={buttonStyle}
               type="button"
@@ -261,8 +261,11 @@ export function EnvironmentEditor({
           )}
           {definition.services.map((service, index) => (
             <details key={serviceKeys[index]} open className={panelStyle}>
-              <summary className="cursor-pointer font-medium">
+              <summary className="-mx-5 -mt-5 flex h-11 items-center gap-2 rounded-t-xl border-b border-rule bg-paper px-5 font-mono text-[13px] font-medium marker:content-none">
                 {service.id || `Serviço ${index + 1}`}
+                <span className="ml-auto font-sans text-xs font-normal text-ink-muted">
+                  Serviço {index + 1}
+                </span>
               </summary>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label={`ID do serviço ${index + 1}`}>
@@ -395,14 +398,13 @@ export function EnvironmentEditor({
                     />
                   </Field>
                 )}
-                <label className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={service.expose}
-                    onChange={(event) => serviceChange(index, { expose: event.target.checked })}
-                  />
-                  Disponibilizar serviço {index + 1} no navegador
-                </label>
+                <SwitchField
+                  className="border-y border-rule md:col-span-2"
+                  label={`Disponibilizar serviço ${index + 1} no navegador`}
+                  description="Publica uma rota da prévia para abrir este serviço no navegador."
+                  checked={service.expose}
+                  onChange={(event) => serviceChange(index, { expose: event.target.checked })}
+                />
                 {service.expose && (
                   <>
                     <Field label={`Porta interna ${index + 1}`}>
@@ -433,7 +435,7 @@ export function EnvironmentEditor({
                   help="KEY=VALUE, uma por linha. Use os campos de segredos para credenciais."
                 >
                   <textarea
-                    className={inputStyle}
+                    className={textareaStyle}
                     name={`env-${index}`}
                     rows={3}
                     defaultValue={variableText(service.environment)}
@@ -445,7 +447,7 @@ export function EnvironmentEditor({
                     help="Valores usados para construir a imagem. Não coloque senhas aqui."
                   >
                     <textarea
-                      className={inputStyle}
+                      className={textareaStyle}
                       name={`build-env-${index}`}
                       rows={3}
                       defaultValue={variableText(service.buildEnvironment)}
@@ -480,7 +482,7 @@ export function EnvironmentEditor({
                     help="Um nome:/destino por linha. Os dados ficam separados por prévia."
                   >
                     <textarea
-                      className={inputStyle}
+                      className={textareaStyle}
                       name={`volumes-${index}`}
                       rows={2}
                       defaultValue={service.volumes
@@ -492,7 +494,7 @@ export function EnvironmentEditor({
               </div>
               <button
                 type="button"
-                className={buttonStyle}
+                className={dangerButtonStyle}
                 onClick={() => {
                   setServiceKeys((keys) => keys.filter((_, i) => i !== index));
                   change(
@@ -507,8 +509,8 @@ export function EnvironmentEditor({
           ))}
         </section>
         <section className={panelStyle}>
-          <h3 className="font-medium">Segredos do ambiente</h3>
-          <p className="text-xs leading-5 text-ink-muted">
+          <h3 className="text-sm font-semibold">Segredos do ambiente</h3>
+          <p className="-mt-3 text-[13px] text-ink-muted">
             Os valores são cifrados. Deixe em branco para manter o valor salvo. Só os serviços
             selecionados recebem cada segredo.
           </p>
@@ -573,19 +575,19 @@ export function EnvironmentEditor({
           </div>
         </section>
         {error && (
-          <p role="alert" className="text-sm text-fault whitespace-pre-wrap">
+          <p role="alert" className="text-sm whitespace-pre-wrap text-error-ink">
             {error}
           </p>
         )}
-        <div className="flex gap-3">
-          <button className={buttonStyle} type="submit">
-            {busy ? 'Salvando…' : 'Salvar ambiente'}
-          </button>
-          <button className={buttonStyle} type="button" onClick={cancel}>
-            Cancelar
-          </button>
-        </div>
       </fieldset>
+      <div className="sticky bottom-0 mt-auto flex flex-wrap items-center gap-2 border-t border-rule bg-paper px-6 py-3">
+        <button className={primaryButtonStyle} type="submit" disabled={busy}>
+          {busy ? 'Salvando…' : 'Salvar ambiente'}
+        </button>
+        <button className={buttonStyle} type="button" onClick={cancel}>
+          Cancelar
+        </button>
+      </div>
     </form>
   );
 }

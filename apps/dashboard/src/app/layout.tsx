@@ -1,19 +1,18 @@
 import type { Metadata } from 'next';
-import { Archivo, IBM_Plex_Mono } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import { Providers } from './providers';
 import '@/styles/globals.css';
 
-const archivo = Archivo({
+const geistSans = Geist({
   subsets: ['latin'],
-  variable: '--font-archivo',
+  variable: '--font-geist-sans',
   display: 'swap',
 });
 
-// Mono so para dado literal — payload, id, timestamp. Nunca para rotulo.
-const plexMono = IBM_Plex_Mono({
+// Mono so para dado literal — payload, id, hash, branch. Nunca para rotulo.
+const geistMono = Geist_Mono({
   subsets: ['latin'],
-  weight: ['400', '500'],
-  variable: '--font-plex-mono',
+  variable: '--font-geist-mono',
   display: 'swap',
 });
 
@@ -25,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${archivo.variable} ${plexMono.variable}`}>
+    <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <Providers>{children}</Providers>
       </body>

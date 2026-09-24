@@ -1,11 +1,14 @@
 'use client';
 import { useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { SwitchField, SwitchList } from '@/components/shared/switch-field';
 import { ProjectSchema, type Project, type Saved } from '@oinko/workspaces/contracts';
 import {
   Field,
   inputStyle,
   buttonStyle,
+  primaryButtonStyle,
+  dangerButtonStyle,
   panelStyle,
   slug,
   type RunnerCommandInput,
@@ -61,12 +64,9 @@ export function ProjectEditor({
     <form
       onSubmit={(event) => void submit(event)}
       aria-label="Configuração do projeto"
-      className="space-y-5"
+      className="flex flex-1 flex-col"
     >
-      <h2 className="text-xl font-medium">
-        {project ? `Configurar ${project.name}` : 'Novo projeto'}
-      </h2>
-      <fieldset disabled={busy} className="space-y-5">
+      <fieldset disabled={busy} className="space-y-5 px-6 py-6 disabled:opacity-60">
         <div className={`${panelStyle} grid gap-4 md:grid-cols-2`}>
           <Field label="Nome do projeto">
             <input
@@ -95,8 +95,8 @@ export function ProjectEditor({
           </Field>
         </div>
         <section className={panelStyle}>
-          <h3 className="font-medium">Repositórios</h3>
-          <p className="text-sm text-ink-muted">
+          <h3 className="text-sm font-semibold">Repositórios</h3>
+          <p className="-mt-3 text-[13px] text-ink-muted">
             Um monorepo entra como um único repositório. Adicione outros quando fizerem parte do
             mesmo trabalho.
           </p>
@@ -104,7 +104,7 @@ export function ProjectEditor({
             <div className="grid gap-3 border-t border-rule pt-4 md:grid-cols-4" key={index}>
               <Field label={`ID do repositório ${index + 1}`}>
                 <input
-                  className={inputStyle}
+                  className={`${inputStyle} font-mono`}
                   required
                   value={repo.id}
                   onChange={(event) =>
@@ -123,7 +123,7 @@ export function ProjectEditor({
                   help="URL HTTPS ou caminho absoluto de um repositório local. Será criado um clone separado."
                 >
                   <input
-                    className={inputStyle}
+                    className={`${inputStyle} font-mono`}
                     required
                     value={repo.source}
                     onChange={(event) =>
@@ -140,7 +140,7 @@ export function ProjectEditor({
               </div>
               <Field label={`Referência inicial ${index + 1}`}>
                 <input
-                  className={inputStyle}
+                  className={`${inputStyle} font-mono`}
                   required
                   value={repo.ref}
                   onChange={(event) =>
@@ -156,7 +156,7 @@ export function ProjectEditor({
               {definition.repositories.length > 1 && (
                 <button
                   type="button"
-                  className={buttonStyle}
+                  className={`${dangerButtonStyle} w-fit`}
                   onClick={() =>
                     change(
                       'repositories',
@@ -183,14 +183,19 @@ export function ProjectEditor({
           </button>
         </section>
         <section className={panelStyle}>
-          <h3 className="font-medium">Bots autorizados</h3>
-          <p className="text-sm text-ink-muted">
+          <h3 className="text-sm font-semibold">Bots autorizados</h3>
+          <p className="-mt-3 text-[13px] text-ink-muted">
             Habilite também a opção de programação no cadastro do bot.
           </p>
-          {bots.data?.map((bot) => (
-            <label key={bot.id} className="flex items-center gap-3 text-sm">
-              <input
-                type="checkbox"
+          {bots.data?.length === 0 && (
+            <p className="text-[13px] text-ink-muted">Nenhum bot cadastrado ainda.</p>
+          )}
+          <SwitchList className="-my-3.5">
+            {bots.data?.map((bot) => (
+              <SwitchField
+                key={bot.id}
+                label={bot.name}
+                description={<span className="font-mono text-xs">{bot.id}</span>}
                 checked={definition.allowedBotIds.includes(bot.id)}
                 onChange={(event) =>
                   change(
@@ -201,24 +206,23 @@ export function ProjectEditor({
                   )
                 }
               />
-              {bot.name}
-            </label>
-          ))}
+            ))}
+          </SwitchList>
         </section>
         {error && (
-          <p role="alert" className="text-sm text-fault">
+          <p role="alert" className="text-sm text-error-ink">
             {error}
           </p>
         )}
-        <div className="flex gap-3">
-          <button className={buttonStyle} type="submit">
-            {busy ? 'Salvando…' : 'Salvar projeto'}
-          </button>
-          <button className={buttonStyle} type="button" onClick={cancel}>
-            Cancelar
-          </button>
-        </div>
       </fieldset>
+      <div className="sticky bottom-0 mt-auto flex flex-wrap items-center gap-2 border-t border-rule bg-paper px-6 py-3">
+        <button className={primaryButtonStyle} type="submit" disabled={busy}>
+          {busy ? 'Salvando…' : 'Salvar projeto'}
+        </button>
+        <button className={buttonStyle} type="button" onClick={cancel}>
+          Cancelar
+        </button>
+      </div>
     </form>
   );
 }

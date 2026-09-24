@@ -12,12 +12,16 @@ import { TurnTranscript } from '@/features/conversation/components/turn-transcri
 import { formatUsd } from '@/lib/utils/format-usd';
 import { formatDuration } from '@/lib/utils/format-duration';
 import { formatTokens } from '@/lib/utils/format-tokens';
+import { Badge } from '@/components/ui/badge';
+import { CircleAlert } from 'lucide-react';
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string | undefined }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-[0.6875rem] tracking-wide text-ink-muted">{label}</span>
-      <span className={`tabular text-lg leading-tight font-medium ${tone ?? ''}`}>{value}</span>
+    <div className="min-w-0 bg-canvas px-4 py-3">
+      <div className="truncate text-xs text-ink-muted">{label}</div>
+      <div className={`tabular mt-1 truncate text-base leading-snug font-semibold ${tone ?? ''}`}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -59,70 +63,83 @@ export default async function ExecutionPage({
         />
       }
     >
-      <header className="border-b border-rule px-5 py-4">
-        <div className="flex flex-wrap items-baseline gap-x-3">
-          <h1 className="text-base font-medium">{execution.model}</h1>
-          <span className="font-mono text-xs text-ink-muted">{execution.traceId}</span>
-          {execution.status === 'error' ? (
-            <span className="text-xs text-fault">{execution.endReason ?? 'erro'}</span>
+      <div className="space-y-5 px-4 py-6 md:px-6">
+        <section aria-labelledby="execution-heading" className="space-y-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <h2
+              id="execution-heading"
+              className="truncate font-mono text-base leading-[1.4] font-medium tracking-[-0.1px]"
+            >
+              {execution.model}
+            </h2>
+            {execution.status === 'error' ? (
+              <Badge variant="destructive">{execution.endReason ?? 'erro'}</Badge>
+            ) : null}
+            <span
+              className="min-w-0 truncate font-mono text-xs text-ink-muted"
+              title={execution.traceId}
+            >
+              {execution.traceId}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-3 2xl:grid-cols-6">
+            <Stat label="Tempo total" value={formatDuration(execution.durationMs)} />
+            <Stat
+              label={
+                execution.costStatus === 'confirmed'
+                  ? 'Custo cobrado'
+                  : execution.costStatus === 'pending'
+                    ? 'Custo aguardando'
+                    : 'Custo nao informado'
+              }
+              value={formatUsd(execution.costUsd)}
+            />
+            <Stat label="Tokens" value={formatTokens(execution.totalTokens)} />
+            <Stat
+              label="Entrada / saida"
+              value={`${formatTokens(execution.inputTokens)} / ${formatTokens(execution.outputTokens)}`}
+            />
+            <Stat label="Etapas" value={String(detail.items.length)} />
+            <Stat
+              label="Fim"
+              value={execution.endReason ?? execution.status}
+              tone={execution.status === 'error' ? 'text-error-ink' : undefined}
+            />
+          </div>
+
+          <RoutingNote
+            model={execution.model}
+            requestedModel={execution.requestedModel}
+            items={detail.items}
+          />
+
+          {execution.errorMessage ? (
+            <p
+              role="alert"
+              className="flex gap-2 rounded-xl border border-error/40 bg-canvas px-3 py-2.5 text-[13px] text-error-ink"
+            >
+              <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+              {execution.errorMessage}
+            </p>
           ) : null}
-        </div>
+        </section>
 
-        <div className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
-          <Stat label="Tempo total" value={formatDuration(execution.durationMs)} tone="text-time" />
-          <Stat
-            label={
-              execution.costStatus === 'confirmed'
-                ? 'Custo cobrado'
-                : execution.costStatus === 'pending'
-                  ? 'Custo aguardando'
-                  : 'Custo nao informado'
-            }
-            value={formatUsd(execution.costUsd)}
-            tone="text-spend"
-          />
-          <Stat label="Tokens" value={formatTokens(execution.totalTokens)} />
-          <Stat
-            label="Entrada / saida"
-            value={`${formatTokens(execution.inputTokens)} / ${formatTokens(execution.outputTokens)}`}
-          />
-          <Stat label="Etapas" value={String(detail.items.length)} />
-          <Stat
-            label="Fim"
-            value={execution.endReason ?? execution.status}
-            tone={execution.status === 'error' ? 'text-fault' : 'text-ok'}
-          />
-        </div>
-
-        <RoutingNote
-          model={execution.model}
-          requestedModel={execution.requestedModel}
-          items={detail.items}
-        />
-
-        {execution.errorMessage ? (
-          <p className="mt-3 border-l-2 border-fault bg-surface px-3 py-1.5 text-sm text-fault">
-            {execution.errorMessage}
-          </p>
-        ) : null}
-      </header>
-
-      <div className="px-5 py-4">
         <ContextComposition
           injections={detail.injections}
           contextTokens={execution.contextTokens}
         />
         <ToolSummary available={detail.availableTools} items={detail.items} />
+
+        <TurnTranscript userInput={detail.userInput} assistantText={detail.assistantText} />
+
+        <ExecutionTape
+          items={detail.items}
+          startedAt={execution.startedAt}
+          {...(selectedId !== undefined && { selectedId })}
+          basePath={basePath}
+        />
       </div>
-
-      <TurnTranscript userInput={detail.userInput} assistantText={detail.assistantText} />
-
-      <ExecutionTape
-        items={detail.items}
-        startedAt={execution.startedAt}
-        {...(selectedId !== undefined && { selectedId })}
-        basePath={basePath}
-      />
     </Workbench>
   );
 }
