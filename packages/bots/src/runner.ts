@@ -21,7 +21,8 @@ import { telegramChannel } from '@oinko/channel-telegram';
 import { higgsfieldMcp, HIGGSFIELD_INSTRUCTIONS } from '@oinko/mcp-higgsfield';
 import { BotError } from './schema.js';
 import type { BotStore } from './store.js';
-import { programmingTools, PROGRAMMING_INSTRUCTIONS } from './programming-tools.js';
+import { programmingTools } from './programming-tools.js';
+import { chatProgramming } from './programming/chat-setup.js';
 import { openProgramming } from './programming/runtime.js';
 import { isOinkoMcp, scopeOinkoMcp } from './programming/equivalence.js';
 import { programmingRunTools } from './programming/run-tools.js';
@@ -66,13 +67,9 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
         tools: bot.higgsfieldTools,
       },
     });
-  // Tools this bot already has internally: an Oinko MCP connection must not add copies.
-  const internalTools = new Set<string>([
-    ...(bot.programming
-      ? ['workspace_status', 'workspace_task', 'workspace_exec', 'workspace_read', 'workspace_write', 'workspace_preview', 'workspace_logs']
-      : []),
-    ...(bot.programmingPolicy?.enabled ? ['programming_start', 'programming_status', 'programming_steer', 'programming_control'] : []),
-  ]);
+  // With durable runs the chat delegates changes to a run; the Oinko MCP adds no copies.
+  const chat = chatProgramming(bot);
+  const internalTools = chat.internalTools;
   for (const mcp of bot.mcps)
     connections.mcps.push({
       id: mcp.id,
@@ -81,7 +78,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
       options:
         mcp.transport === 'stdio'
           ? isOinkoMcp(mcp.command, mcp.args)
-            ? { transport: 'stdio', command: mcp.command, ...scopeOinkoMcp(bot.id, mcp.args, internalTools) }
+            ? { transport: 'stdio', command: mcp.command, ...scopeOinkoMcp(bot.id, mcp.args, internalTools, chat.mcpExcluded) }
             : { transport: 'stdio', command: mcp.command, args: mcp.args }
           : {
               transport: 'http',
@@ -140,7 +137,11 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
         capturePayloads: bot.telemetry.capture,
         retentionDays: bot.telemetry.retentionDays,
         tools: [
-          ...(bot.programming ? programmingTools(store.root, bot.id) : []),
+          ...(chat.legacyTools === 'all'
+            ? programmingTools(store.root, bot.id)
+            : chat.legacyTools === 'read-only'
+              ? programmingTools(store.root, bot.id).filter((tool) => internalTools.has(tool.name))
+              : []),
           ...(programming
             ? programmingChatTools({
                 botId: bot.id,
@@ -227,7 +228,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
           systemPrompt:
             bot.systemPrompt +
             (bot.higgsfield ? HIGGSFIELD_INSTRUCTIONS : '') +
-            (bot.programming ? PROGRAMMING_INSTRUCTIONS : '') +
+            chat.legacyInstructions +
             (programming ? PROGRAMMING_CHAT_INSTRUCTIONS : ''),
           transcription: {
             apiKey: secrets.transcriptionKey,

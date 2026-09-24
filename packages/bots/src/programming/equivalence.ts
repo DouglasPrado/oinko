@@ -51,9 +51,10 @@ export function isOinkoMcp(command: string, args: readonly string[]): boolean {
  * installation administrator) and does not load copies of tools the bot
  * already has internally, so the model sees one tool per capability.
  */
-export function scopeOinkoMcp(botId: string, args: readonly string[], internalTools: ReadonlySet<string>) {
+export function scopeOinkoMcp(botId: string, args: readonly string[], internalTools: ReadonlySet<string>, excluded: ReadonlySet<string> = new Set()) {
   const scoped = args.includes('--bot') ? [...args] : [...args, '--bot', botId];
   const tools = OINKO_MCP_TOOLS.filter((name) => {
+    if (excluded.has(name)) return false;
     const equivalent = OINKO_TOOL_EQUIVALENTS[name];
     return !equivalent || !internalTools.has(equivalent);
   });
