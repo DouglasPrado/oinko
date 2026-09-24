@@ -136,3 +136,102 @@ describe('E2E background context summary', () => {
     expect(JSON.stringify(chats.at(-1)!.messages)).toContain('[Working summary of earlier conversation');
   });
 });
+
+describe('E2E background summary: races, retries and budgets', () => {
+  it('serializes summaries of one conversation and never overlaps them', async () => {
+    let active = 0;
+    let peak = 0;
+    const hold = gate();
+    const { agent } = setup({
+      summary: async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await hold.opened;
+        active--;
+        return createSSEResponse(textResponseFrames({ content: 'Resumo serializado.' }));
+      },
+    });
+    for (const n of [1, 2, 3, 4]) await agent.chat(long(`pedido-${n}`), { threadId: 's' });
+    const first = agent.prepareContext('s');
+    for (const n of [5, 6]) await agent.chat(long(`pedido-${n}`), { threadId: 's' });
+    const second = agent.prepareContext('s');
+    hold.open();
+    await Promise.all([first, second]);
+    expect(peak).toBe(1);
+    expect(agent.getCheckpoint('s')?.summary).toContain('Resumo serializado');
+  });
+
+  it('keeps a message sent while the summary runs and uses both next turn', async () => {
+    const hold = gate();
+    const { agent, chats } = setup({
+      summary: async () => {
+        await hold.opened;
+        return createSSEResponse(textResponseFrames({ content: 'Resumo dos pedidos antigos.' }));
+      },
+    });
+    for (const n of [1, 2, 3, 4]) await agent.chat(long(`pedido-${n}`), { threadId: 'n' });
+    const pending = agent.prepareContext('n');
+    await agent.chat('mensagem nova durante o resumo', { threadId: 'n' });
+    hold.open();
+    expect((await pending)?.status).toBe('finished');
+    await agent.chat('e agora?', { threadId: 'n' });
+    const sent = JSON.stringify(chats.at(-1)!.messages);
+    expect(sent).toContain('Resumo dos pedidos antigos.');
+    expect(sent).toContain('mensagem nova durante o resumo');
+  });
+
+  it('retries a summary once the provider comes back', async () => {
+    let calls = 0;
+    const { agent, events } = setup({
+      summary: async () => (++calls === 1 ? new Response('unavailable', { status: 503 }) : createSSEResponse(textResponseFrames({ content: 'Resumo após retry.' }))),
+    });
+    for (const n of [1, 2, 3, 4]) await agent.chat(long(`pedido-${n}`), { threadId: 'rt' });
+    expect((await agent.prepareContext('rt'))?.status).toBe('finished');
+    expect(calls).toBeGreaterThanOrEqual(2); // the 503 was retried; a replanned range may add one more
+    expect(events.some((event) => event.type === 'summary_finished')).toBe(true);
+  }, 20_000);
+});
+
+describe('E2E per-model context budgets and history isolation', () => {
+  it('gives the fast model its own smaller budget and the main model the full one', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oinko-budget-'));
+    dirs.push(dir);
+    const requests: { model: string; chars: number }[] = [];
+    const agent = Agent.create({
+      apiKey: 'test',
+      model: 'main',
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      logLevel: 'silent',
+      dbPath: join(dir, 'data.db'),
+      context: { enabled: true, maxInputTokens: 16_000, fastInputTokens: 2048, recentTokens: 1024, summaryTokens: 256, selectTools: false, summaryMode: 'background' },
+      routing: { fastModel: 'fast', minConfidence: 0.8 },
+      decider: {
+        decide: async (state: string, questions: Record<string, unknown>) =>
+          Object.fromEntries(Object.keys(questions).map((key) => [key, key === 'tier' ? { value: state.includes('rápido') ? 'fast' : 'capable', confidence: 1 } : { value: false, confidence: 1 }])),
+      } as never,
+      fetch: async (request) => {
+        const body = (await request.json()) as Body & { model: string };
+        if (!isSummary(body)) requests.push({ model: body.model, chars: JSON.stringify(body.messages).length });
+        return createSSEResponse(textResponseFrames({ content: 'ok' }));
+      },
+    });
+    agents.push(agent);
+    for (const n of [1, 2, 3, 4, 5, 6]) await agent.chat(long(`contexto-${n}`), { threadId: 'b' });
+    await agent.chat('responda rápido: ok?', { threadId: 'b' });
+    await agent.chat('agora com calma, revise tudo', { threadId: 'b' });
+    const fast = requests.filter((item) => item.model === 'fast').at(-1)!;
+    const main = requests.filter((item) => item.model === 'main').at(-1)!;
+    expect(fast).toBeDefined();
+    expect(fast.chars).toBeLessThan(main.chars);
+    expect(fast.chars).toBeLessThan(2048 * 4 * 1.5);
+  });
+
+  it('never lets one bot read another bot conversation history', async () => {
+    const a = setup();
+    const b = setup();
+    await b.agent.chat('segredo operacional do bot B', { threadId: 'shared-id' });
+    expect(JSON.stringify(a.agent.getHistory('shared-id'))).not.toContain('segredo operacional do bot B');
+    expect(JSON.stringify(b.agent.getHistory('shared-id'))).toContain('segredo operacional do bot B');
+  });
+});

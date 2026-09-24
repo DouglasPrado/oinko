@@ -19,6 +19,9 @@ export class DeliveryRunner extends LocalRunner {
   readonly published: any[] = [];
   ci: string[] = ['running', 'passed'];
   reconcile: any = undefined;
+  /** Environment definition served by `state`; changing it changes the configuration fingerprint. */
+  environment: Record<string, unknown> = { id: 'web', name: 'Web', cpus: 2 };
+  failPreview = false;
   private built = '';
   private clicked = false;
   private seq = 0;
@@ -53,7 +56,7 @@ export class DeliveryRunner extends LocalRunner {
         return {
           ...base,
           projects: [{ id: 'shop', environmentId: 'web' }],
-          environments: [{ id: 'web', name: 'Web', cpus: 2 }],
+          environments: [this.environment],
           previews: this.previews,
           tasks: [{ id: 'fix', state: 'ready', branch: 'task/fix' }],
         } as T;
@@ -62,9 +65,9 @@ export class DeliveryRunner extends LocalRunner {
         this.calls.push({ action: command.action, correlation: options.correlation });
         this.built = readFileSync(join(this.worktree, 'page.txt'), 'utf8');
         this.clicked = false;
-        const job = { id: `pjob-${++this.seq}`, state: 'succeeded' };
+        const job = { id: `pjob-${++this.seq}`, state: this.failPreview ? 'failed' : 'succeeded', ...(this.failPreview && { error: 'healthcheck falhou: porta 3000 não respondeu' }) };
         this.jobs.set(job.id, job);
-        this.previews.splice(0, this.previews.length, { id: 'fix', projectId: 'shop', taskId: 'fix', environmentId: 'web', state: 'ready', urls: [{ serviceId: 'web', url: PREVIEW_URL }] });
+        this.previews.splice(0, this.previews.length, { id: 'fix', projectId: 'shop', taskId: 'fix', environmentId: 'web', state: this.failPreview ? 'failed' : 'ready', urls: this.failPreview ? [] : [{ serviceId: 'web', url: PREVIEW_URL }] });
         return job as T;
       }
       case 'previewLogs':
@@ -96,6 +99,7 @@ export class DeliveryRunner extends LocalRunner {
       case 'browserDiagnostics':
         return { console: [], network: this.clicked ? [{ status: 422, origin: PREVIEW_URL }] : [], dropped: 0 } as T;
       case 'browserClose':
+        this.calls.push({ action: command.action, correlation: options.correlation });
         return { closed: true, reason: 'requested' } as T;
       case 'reviewPublication':
         this.calls.push({ action: command.action, correlation: options.correlation });

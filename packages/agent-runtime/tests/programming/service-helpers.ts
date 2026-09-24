@@ -10,6 +10,7 @@ import {
   type CycleInput,
   type CycleOutcome,
   type Reconciler,
+  type RevisionProbe,
   type RunExecutor,
 } from '../../src/programming/index.js';
 import type { MutableAccess } from './helpers.js';
@@ -46,6 +47,7 @@ export function createService(
     ownerId?: string;
     leaseTtlMs?: number;
     serves?: (botId: string) => boolean;
+    probe?: RevisionProbe;
   } = {},
 ) {
   const { database, store, journal } = openServiceDb(dir);

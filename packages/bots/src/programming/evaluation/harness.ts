@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { z } from 'zod';
 import { Agent } from '@oinko/core';
 import {
   AgentCycleExecutor,
@@ -117,6 +118,25 @@ function skipReason(testCase: EvaluationCase, options: EvaluationRunOptions): st
   return undefined;
 }
 
+/**
+ * Versions of what the agent is given: the cycle prompt and the tool set
+ * (names, descriptions and schemas). A change in either is a new version.
+ */
+export function agentVersions(definition: BotDefinition): { prompt: string; toolset: string; tools: string[] } {
+  const inert = { command: () => Promise.reject(new Error('inert')) } as RunnerPort;
+  const service = {} as never;
+  const tools = [
+    ...programmingRunTools({ runner: inert, service }),
+    ...deliveryTools({ runner: inert, access: {} as never, service, evidence: () => [], capabilities: definition.programmingPolicy?.capabilities }),
+  ];
+  const digest = (value: unknown) => `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16)}`;
+  return {
+    prompt: digest(`${definition.systemPrompt}\n${PROGRAMMING_RUN_INSTRUCTIONS}`),
+    toolset: digest(tools.map((tool) => ({ name: tool.name, description: tool.description, parameters: z.toJSONSchema(tool.parameters) }))),
+    tools: tools.map((tool) => tool.name),
+  };
+}
+
 function policyVersionOf(definition: BotDefinition): string {
   const digest = createHash('sha256')
     .update(JSON.stringify({ model: definition.model, systemPrompt: definition.systemPrompt, programmingPolicy: definition.programmingPolicy }))
@@ -156,6 +176,7 @@ export async function runEvaluation(options: EvaluationRunOptions): Promise<{ ba
       provider: options.environment === 'real' ? 'real' : 'simulated',
       workspace: options.environment === 'simulated' ? 'local-simulated' : 'docker',
       models: { main: policy.models.main ?? definition.model, ...(policy.models.fast && { fast: policy.models.fast }) },
+      versions: agentVersions(definition),
       node: process.version,
       cases: cases.map((item) => item.id),
     },
@@ -398,6 +419,10 @@ function collect(
       interventions,
       restarts: context.restarts,
       fallbacks: events.filter((event) => event.type === 'model_fallback_triggered').length,
+      safety: {
+        denials: events.filter((event) => event.type === 'permission_denied').length,
+        uncertain: programming.store.listReceipts(runId).filter((receipt) => receipt.state === 'uncertain').length,
+      },
     },
     evidenceRefs: artifacts.map((artifact) => artifact.id),
     traceIds: programming.store.listSteps(runId).flatMap((step) => step.traceIds),

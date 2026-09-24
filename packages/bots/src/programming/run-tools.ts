@@ -82,6 +82,8 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     command: z.string().min(1).max(4000).optional().describe('Omita para usar o comando descoberto/configurado do projeto.'),
     cwd: RelPath.optional(),
     timeoutSeconds: z.number().int().min(1).max(3600).optional(),
+    scope: z.enum(['package', 'repository']).default('package').describe('package: só o pacote afetado (padrão); repository: todo o repositório, exige justificativa.'),
+    justification: z.string().min(10).max(500).optional().describe('Por que a verificação precisa ir além do pacote afetado.'),
     repositoryId: Repo,
   });
   const exec = z.object({ command: z.string().min(1).max(20_000), timeoutSeconds: z.number().int().min(1).max(600).default(120), repositoryId: Repo });
@@ -194,7 +196,9 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       const { repositoryId, ...rest } = args;
       const where = location(context, repositoryId);
       const result = await send<Json>(context, { action: 'readRange', ...where, ...rest }).catch(classify);
-      context.emit('workspace_read', { repositoryId: where.repositoryId, path: args.path, startLine: result.startLine, endLine: result.endLine, hash: result.hash, bytes: String(result.content ?? '').length, truncated: result.truncated, truncatedReason: result.truncatedReason ?? 'none' });
+      const bytes = String(result.content ?? '').length;
+      // What the range costs in the model's input, estimated like the SDK does (~4 chars per token).
+      context.emit('workspace_read', { repositoryId: where.repositoryId, path: args.path, startLine: result.startLine, endLine: result.endLine, hash: result.hash, bytes, estimatedTokens: Math.ceil(bytes / 4), truncated: result.truncated, truncatedReason: result.truncatedReason ?? 'none' });
       context.record({ kind: 'information', source: 'read', fingerprint: `${args.path}:${String(result.hash)}:${String(result.startLine)}` });
       return result;
     }, { readOnly: true }),
@@ -220,8 +224,13 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
 
     tool('workspace_check', 'Executa instalação/teste/lint/build/typecheck do pacote na worktree do run e aguarda o resultado ligado à revisão testada. Skipped/timeout/infra nunca contam como aprovado.', check, async (args, context) => {
       const where = location(context, args.repositoryId);
+      // Widening a check beyond the affected package is allowed only with a stated reason.
+      if (args.scope === 'repository' && !args.justification)
+        throw new KnownFailure('justification_required', 'Verificação do repositório inteiro exige justificativa; por padrão verifique o pacote afetado (cwd).');
+      if (args.scope === 'repository' && args.cwd && args.cwd !== '.')
+        throw new KnownFailure('invalid_scope', 'Verificação do repositório inteiro roda na raiz (sem cwd).');
       let command = args.command;
-      let cwd = args.cwd ?? '.';
+      let cwd = args.scope === 'repository' ? '.' : (args.cwd ?? '.');
       let origin = 'explicit';
       if (!command) {
         const discovered = await send<{ commands: { kind: string; command: string; cwd: string; origin: string }[] }>(context, { action: 'projectContext', ...where, targets: args.cwd ? [args.cwd] : [] }).catch(classify);
@@ -238,7 +247,7 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
         async (operation) => {
           const job = await send<{ id: string }>(context, { action: 'startCheck', ...where, operationId: operation.operationId, kind: args.kind, command: command!, cwd, timeoutSeconds }, operation.operationId, operation.attemptId);
           operation.bindExecutor('runner', job.id);
-          context.emit('check_started', { kind: args.kind, repositoryId: where.repositoryId, origin, jobId: job.id, cwd }, 'started', { operationId: operation.operationId });
+          context.emit('check_started', { kind: args.kind, repositoryId: where.repositoryId, origin, jobId: job.id, cwd, scope: args.scope, ...(args.justification && { justification: args.justification }) }, 'started', { operationId: operation.operationId });
           for (;;) {
             if (context.signal.aborted) {
               await send(context, { action: 'stopJob', jobId: job.id, graceSeconds: 5 }).catch(() => undefined);

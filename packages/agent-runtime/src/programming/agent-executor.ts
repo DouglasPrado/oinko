@@ -65,6 +65,10 @@ export class AgentCycleExecutor implements RunExecutor {
     let model = policy.models?.main ?? 'unknown';
     // Tool calls whose results say what was expanded or retrieved.
     const watched = new Map<string, string>();
+    // Where the cycle's time went: context preparation, model wait, tools.
+    const cycleStarted = Date.now();
+    let modelFrom: number | undefined;
+    const toolStarts = new Map<string, number>();
     for await (const event of this.agent.stream(cyclePrompt(input), {
       threadId: this.options.threadId?.(input.run.id) ?? `programming:${input.run.id}`,
       signal: input.context.signal,
@@ -78,7 +82,23 @@ export class AgentCycleExecutor implements RunExecutor {
         stepId: input.context.stepId,
       },
     })) {
+      const now = Date.now();
+      if (event.type === 'tool_call_start') {
+        if (modelFrom !== undefined) input.context.interval('model', modelFrom, now);
+        modelFrom = undefined;
+        toolStarts.set(event.toolCall.id, now);
+      } else if (event.type === 'tool_call_end') {
+        const started = toolStarts.get(event.toolCallId);
+        toolStarts.delete(event.toolCallId);
+        if (started !== undefined) input.context.interval('tool', started, now);
+        if (!toolStarts.size) modelFrom = now;
+      } else if (event.type === 'agent_end' && modelFrom !== undefined) {
+        input.context.interval('model', modelFrom, now);
+        modelFrom = undefined;
+      }
       if (event.type === 'agent_start') {
+        input.context.interval('context', cycleStarted, now);
+        modelFrom = now;
         traceIds.push(event.traceId);
         model = event.model;
         input.context.emit('routing_decision', { model: event.model, tier: event.model === policy.models?.fast ? 'fast' : 'main' });

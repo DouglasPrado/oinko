@@ -25,7 +25,7 @@ import { programmingTools, PROGRAMMING_INSTRUCTIONS } from './programming-tools.
 import { openProgramming } from './programming/runtime.js';
 import { isOinkoMcp, scopeOinkoMcp } from './programming/equivalence.js';
 import { programmingRunTools } from './programming/run-tools.js';
-import { deliveryTools } from './programming/delivery-tools.js';
+import { createDeliveryTools } from './programming/delivery-tools.js';
 
 export interface RunBotOptions {
   /** Test seam: in-process model provider instead of the network (never set by the CLI/dashboard). */
@@ -95,6 +95,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
   const policy = bot.programmingPolicy;
   const runner = policy?.enabled ? new EnvironmentClient(store.root, bot.id) : undefined;
   let cycles: RunExecutor | undefined;
+  let delivery: ReturnType<typeof createDeliveryTools> | undefined;
   const programming = runner
     ? openProgramming({
         root: store.root,
@@ -108,6 +109,8 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
             return cycles.runCycle(input);
           },
         },
+        probe: (run, known) => delivery?.probe(run, known) ?? Promise.resolve(undefined),
+        onRunFinished: (run) => void delivery?.closeRun(run.id, run.state),
         secrets: () =>
           [
             secrets.apiKey,
@@ -157,14 +160,16 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
             programming: {
               tools: [
                 ...programmingRunTools({ runner, service: programming.service }),
-                ...deliveryTools({
+                ...(delivery = createDeliveryTools({
                   runner,
                   access: programming.access,
                   service: programming.service,
                   evidence: (runId) => programming.store.evidence<Evidence>(runId).map((item) => item.value),
                   journal: programming.journal,
                   capabilities: policy.capabilities,
-                }),
+                  onSessionClosed: ({ runId, sessionId, reason }) =>
+                    programming.journal.record('browser_session_closed', { botId: bot.id, runId }, { sessionId, reason: `run_${reason}` }, 'succeeded'),
+                })).tools,
               ],
               systemPrompt: `${bot.systemPrompt}\n${PROGRAMMING_RUN_INSTRUCTIONS}`,
               overrides: {

@@ -1321,13 +1321,19 @@ export class Agent {
         records: [],
         onRecord: (record) => telemetry?.write(record),
       });
-      const outcome = await runSummaryPlan({
-        manager: this.conversations,
-        threadId,
-        policy,
-        summarize,
-        plan,
-      }).catch((error: unknown): SummaryOutcome => ({ status: 'failed', reason: error instanceof Error ? error.message : String(error) }));
+      // An earlier summary in the queue may have advanced the checkpoint: plan
+      // again from the current state instead of writing over it.
+      const through = this.conversations.getCheckpoint(threadId)?.through ?? 0;
+      const current = through === plan.through ? plan : planSummary(this.conversations.getHistory(threadId), through, policy);
+      const outcome = !current
+        ? ({ status: 'finished', through } satisfies SummaryOutcome)
+        : await runSummaryPlan({
+            manager: this.conversations,
+            threadId,
+            policy,
+            summarize,
+            plan: current,
+          }).catch((error: unknown): SummaryOutcome => ({ status: 'failed', reason: error instanceof Error ? error.message : String(error) }));
       notify({
         type: outcome.status === 'finished' ? 'summary_finished' : outcome.status === 'discarded' ? 'summary_discarded' : 'summary_failed',
         durationMs: Date.now() - started,

@@ -162,4 +162,32 @@ describe('Oinko MCP run tools', () => {
       await observer.close();
     }
   });
+
+  it('reads evidence through oinko_artifact within scope, redacted and bounded', async () => {
+    const root = installation();
+    const runtime = openProgramming({ root, producer: 'seed' });
+    const run = runtime.service.start({ kind: 'operator', id: 'ops' }, { botId: 'alpha', projectId: 'loja', text: 'x' }).run;
+    const log = runtime.artifacts.put(run, { type: 'log', content: `PASS\nAuthorization: Bearer sk-mcp-0123456789abcdef\n${'linha\n'.repeat(200)}`, mediaType: 'text/plain' });
+    const shot = runtime.artifacts.put(run, { type: 'screenshot', content: new Uint8Array([137, 80, 78, 71]), mediaType: 'image/png' });
+    await runtime.close();
+    const admin = await connect(root);
+    const text = await admin.call('oinko_artifact', { artifactId: log.id, maxChars: 100 });
+    expect(text.error).toBe(false);
+    expect(text.data).toMatchObject({ artifact: { id: log.id, type: 'log', runId: run.id }, truncated: true });
+    expect(text.data.text).toContain('PASS');
+    expect(text.data.text).not.toContain('sk-mcp-0123456789abcdef');
+    expect((await admin.call('oinko_artifact', { artifactId: shot.id })).data).toMatchObject({ note: expect.stringMatching(/binário/) });
+    // A connection scoped to another bot gets the same answer as a missing artifact.
+    const beta = await connect(root, 'beta');
+    const text_ = async (artifactId: string) => {
+      const result = await beta.client.callTool({ name: 'oinko_artifact', arguments: { artifactId } });
+      return { error: result.isError, content: JSON.stringify(result.content) };
+    };
+    const denied = await text_(log.id);
+    const missing = await text_('art-inexistente');
+    expect(denied.error).toBe(true);
+    expect(denied.content).toMatch(/não encontrad/i);
+    expect(denied.content).toBe(missing.content);
+    expect((await (await connect(root, 'alpha')).call('oinko_artifact', { artifactId: log.id })).error).toBe(false);
+  });
 });

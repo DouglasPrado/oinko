@@ -206,6 +206,52 @@ export class EvaluationService {
     return { datasetVersion, rows, note: 'Mesma versão de dataset para todos; bots sem lote concluído aparecem sem números.' };
   }
 
+  /**
+   * Live runs grouped by bot, project, policy version or model: completion
+   * with its sample and cost coverage, and the runs behind each number so
+   * an operator can open their traces. Tasks are not equivalent here; use
+   * datasets to compare like with like.
+   */
+  liveComparison(
+    actor: Actor,
+    input: { groupBy: 'bot' | 'project' | 'policy' | 'model'; botIds?: readonly string[]; since?: number; minRuns?: number; usage?: { metrics(runId: string): { tokens: { total: number; byModel: Record<string, number> }; cost: { confirmedUsd: number; confirmedCalls: number; pendingCalls: number; unavailableCalls: number } } } },
+  ) {
+    this.operator(actor);
+    const groups = new Map<string, ProgrammingRun[]>();
+    const runs: ProgrammingRun[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = this.options.runs.listRuns({ ...(input.botIds && { botIds: input.botIds }), ...(input.since !== undefined && { createdAfter: input.since }), limit: 100, ...(cursor && { cursor }) });
+      runs.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor);
+    for (const run of runs.filter((item) => (TERMINAL as readonly string[]).includes(item.state))) {
+      const policy = run.policySnapshot.policy as { models?: { main?: string } };
+      const key = input.groupBy === 'bot' ? run.botId : input.groupBy === 'project' ? run.projectId : input.groupBy === 'policy' ? run.policySnapshot.version : (policy.models?.main ?? 'desconhecido');
+      groups.set(key, [...(groups.get(key) ?? []), run]);
+    }
+    const minRuns = input.minRuns ?? 5;
+    const rows = [...groups.entries()].map(([key, items]) => {
+      const usage = items.map((run) => input.usage?.metrics(run.id));
+      const calls = usage.reduce((sum, item) => sum + (item ? item.cost.confirmedCalls + item.cost.pendingCalls + item.cost.unavailableCalls : 0), 0);
+      const confirmed = usage.reduce((sum, item) => sum + (item?.cost.confirmedCalls ?? 0), 0);
+      const completed = items.filter((run) => run.state === 'completed').length;
+      return {
+        key,
+        runs: items.length,
+        completed,
+        completionRate: items.length ? completed / items.length : null,
+        insufficientSample: items.length < minRuns,
+        tokens: usage.reduce((sum, item) => sum + (item?.tokens.total ?? 0), 0),
+        confirmedUsd: usage.reduce((sum, item) => sum + (item?.cost.confirmedUsd ?? 0), 0),
+        costCoverage: !calls ? 'none' : confirmed === calls ? 'complete' : confirmed ? 'partial' : 'none',
+        runIds: items.map((run) => run.id),
+      };
+    });
+    this.record('efficiency_comparison_generated', undefined, { datasetVersion: 'live', groupBy: input.groupBy, groups: rows.length });
+    return { groupBy: input.groupBy, rows, note: 'Trabalhos reais não são tarefas equivalentes: diferenças indicam onde investigar, não causa.' };
+  }
+
   // ---- candidates -----------------------------------------------------------
 
   createCandidate(
@@ -360,9 +406,15 @@ export class EvaluationService {
     return report;
   }
 
-  /** Redacted export of one bot's evaluation history; never mixes bots. */
-  export(actor: Actor, botId: string): { format: 'json'; content: string } {
-    const report = this.report(actor, botId);
+  /**
+   * Redacted export of one bot's evaluation history; never mixes bots.
+   * Batches older than the retention window are left out and counted.
+   */
+  export(actor: Actor, botId: string, options: { retentionDays?: number } = {}): { format: 'json'; content: string } {
+    const full = this.report(actor, botId);
+    const cutoff = options.retentionDays !== undefined ? this.now() - options.retentionDays * 86_400_000 : undefined;
+    const kept = cutoff === undefined ? full.batches : full.batches.filter((batch) => batch.startedAt >= cutoff);
+    const report = { ...full, batches: kept, retention: { retentionDays: options.retentionDays ?? null, omittedBatches: full.batches.length - kept.length } };
     const results = report.batches.flatMap((batch) =>
       this.store.results(batch.id).map((result) => ({
         batchId: batch.id,

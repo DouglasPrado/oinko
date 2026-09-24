@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- journal payloads are untyped JSON */
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Agent } from '@oinko/core';
 import { WorkspaceStore } from '@oinko/workspaces';
-import { AgentCycleExecutor, PROGRAMMING_RUN_INSTRUCTIONS, readJournal, type Evidence, type RunExecutor } from '@oinko/agent-runtime/programming';
+import { AgentCycleExecutor, PROGRAMMING_RUN_INSTRUCTIONS, TELEMETRY_CATALOG, channelActor, readJournal, type Actor, type Evidence, type RunExecutor } from '@oinko/agent-runtime/programming';
 import { BotStore } from '../src/store.js';
 import { openProgramming } from '../src/programming/runtime.js';
 import { programmingRunTools } from '../src/programming/run-tools.js';
-import { DELIVERY_TOOL_NAMES, deliveryTools } from '../src/programming/delivery-tools.js';
+import { DELIVERY_TOOL_NAMES, createDeliveryTools } from '../src/programming/delivery-tools.js';
 import { RunnerReconciler } from '../src/programming/reconciler.js';
 import { gitRepo, lastResult, scriptedProvider, type ScriptStep } from './helpers/programming.js';
 import { DeliveryRunner } from './helpers/delivery.js';
@@ -47,6 +47,7 @@ const validate: Step[] = [
 ];
 
 function setup(options: { steps: Step[]; publish?: boolean; browser?: boolean; projectBrowser?: boolean }) {
+  let delivery: ReturnType<typeof createDeliveryTools> | undefined;
   const root = mkdtempSync(join(tmpdir(), 'oinko-delivery-'));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const bots = new BotStore(root);
@@ -96,6 +97,8 @@ function setup(options: { steps: Step[]; publish?: boolean; browser?: boolean; p
     executor: { runCycle: (input) => cycles.current!.runCycle(input) },
     secrets: () => ['sk-test-key-0123456789abcdef'],
     dashboardUrl: 'http://127.0.0.1:3000/',
+    probe: (run, known) => delivery?.probe(run, known) ?? Promise.resolve(undefined),
+    onRunFinished: (run) => void delivery?.closeRun(run.id, run.state),
   });
   const agent = Agent.create({
     apiKey: 'sk-test-key-0123456789abcdef',
@@ -108,16 +111,17 @@ function setup(options: { steps: Step[]; publish?: boolean; browser?: boolean; p
   });
   const tools = [
     ...programmingRunTools({ runner, service: programming.service, pollMs: 10 }),
-    ...deliveryTools({
+    ...(delivery = createDeliveryTools({
       runner,
       access: programming.access,
       service: programming.service,
       evidence: (runId) => programming.store.evidence<Evidence>(runId).map((item) => item.value),
       journal: programming.journal,
       capabilities: { browser: options.browser ?? true, publication: options.publish ?? true },
+      onSessionClosed: ({ runId, sessionId, reason }) => programming.journal.record('browser_session_closed', { botId: 'alpha', runId }, { sessionId, reason: `run_${reason}` }, 'succeeded'),
       pollMs: 10,
       ciPollMs: 10,
-    }),
+    })).tools,
   ];
   for (const tool of tools) agent.addTool(tool);
   cycles.current = new AgentCycleExecutor(agent);
@@ -130,9 +134,9 @@ function setup(options: { steps: Step[]; publish?: boolean; browser?: boolean; p
 }
 const operator = { kind: 'operator' as const, id: 'test' };
 
-async function runOnce(context: ReturnType<typeof setup>, text = 'Valide o CEP no checkout.', mode?: 'analysis') {
+async function runOnce(context: ReturnType<typeof setup>, text = 'Valide o CEP no checkout.', mode?: 'analysis', actor: Actor = operator) {
   const { service } = context.programming;
-  const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text, ...(mode && { mode }) }).run.id;
+  const id = service.start(actor, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text, ...(mode && { mode }) }).run.id;
   service.kick();
   await service.idle();
   return id;
@@ -288,4 +292,128 @@ describe('RunnerReconciler for previews and publications', () => {
     expect((await reconciler.reconcile(run, receipt('workspace.startPreview', { jobId: job.id }))).resolution).toBe('applied');
     expect((await reconciler.reconcile(run, receipt('workspace.startPreview', { jobId: 'missing' }))).resolution).toBe('unknown');
   });
+});
+
+describe('M05/M02 delivery lifecycle', () => {
+  const route = { channel: 'telegram', connectionId: '123', conversationId: '42' };
+
+  it('invalidates the functional check when the environment changes, then revalidates on a new preview', async () => {
+    const holder: { runner?: ReturnType<typeof setup>['runner'] } = {};
+    const change: Step = () => {
+      // Someone edits the environment between the check and the completion.
+      holder.runner!.environment = { id: 'web', name: 'Web', cpus: 4 };
+      return { tool: 'programming_complete', args: { summary: 'Pronto.' } };
+    };
+    const context = setup({
+      steps: [
+        ...fix,
+        ...validate,
+        () => ({ text: 'Fluxo validado.' }),
+        change,
+        () => ({ text: 'Tentei concluir.' }),
+        ...validate.filter((_, index) => index !== 1 && index !== 3),
+        () => ({ tool: 'programming_complete', args: { summary: 'Revalidado na configuração nova.' } }),
+        () => ({ text: 'Concluído.' }),
+      ],
+      publish: false,
+    });
+    holder.runner = context.runner;
+    const id = await runOnce(context);
+    const { store, database } = context.programming;
+    expect(store.getRun(id)?.state).toBe('completed');
+    const observed = readJournal(database, { runId: id, type: 'revision_observed' }).map((event) => event.envelope.payload?.key);
+    expect(observed).toContain('env:web');
+    expect(readJournal(database, { runId: id, type: 'evidence_invalidated' }).map((event) => event.envelope.payload?.criterionId)).toContain('checkout_cep');
+    const verdicts = readJournal(database, { runId: id, type: 'acceptance_evaluated' }).map((event) => event.envelope.payload?.verdict);
+    expect(verdicts).toEqual(['rejected', 'accepted']);
+    // The finished run leaves no browser session open.
+    expect(context.runner.calls.filter((call) => call.action === 'browserClose').length).toBeGreaterThan(0);
+    expect(readJournal(database, { runId: id, type: 'browser_session_closed' }).map((event) => event.envelope.payload?.reason)).toContain('run_completed');
+  }, 60_000);
+
+  it('binds a failed preview to the step that ran it, with its log', async () => {
+    const context = setup({
+      steps: [...fix, () => ({ tool: 'workspace_preview', args: {} }), () => ({ text: 'A prévia falhou; vou investigar.' })],
+      publish: false,
+    });
+    context.runner.failPreview = true;
+    const id = await runOnce(context);
+    const { database, store } = context.programming;
+    const failed = readJournal(database, { runId: id, type: 'preview_failed' })[0]?.envelope;
+    const cycle = store.listSteps(id).filter((step) => step.kind === 'cycle')[0];
+    expect(failed).toMatchObject({ stepId: cycle!.id, status: 'failed', payload: { code: 'build_or_health_failed', artifactId: expect.any(String) } });
+    expect(store.listReceipts(id).find((receipt) => receipt.kind === 'workspace.startPreview')?.state).toBe('failed');
+    const reply = context.provider.requests.flatMap((request) => request.messages).find((message) => message.role === 'tool' && String(message.content).includes('preview_failed'));
+    expect(String(reply?.content)).toContain('healthcheck falhou');
+  }, 60_000);
+
+  it('delivers the final summary with the draft link and the authorized run page to the Telegram conversation', async () => {
+    const context = setup({
+      steps: [
+        ...fix,
+        () => ({ tool: 'publication_publish', args: { title: 'Valida CEP', body: 'Mudança.', commitMessage: 'fix: CEP' } }),
+        () => ({ tool: 'programming_complete', args: { summary: 'CEP validado; draft aberto.' } }),
+        () => ({ text: 'Concluído.' }),
+      ],
+    });
+    const sent: { key: string; text: string }[] = [];
+    context.programming.notifier.register('telegram', async (key, text) => {
+      sent.push({ key, text });
+    });
+    const id = await runOnce(context, 'Valide o CEP.', undefined, channelActor('alpha', route, '42'));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const final = sent.find((item) => item.text.includes('CEP validado; draft aberto.'));
+    expect(final?.key).toBe('123:42');
+    expect(final?.text).toContain('https://github.com/acme/shop/pull/12 — sem resultado de CI — draft não validado integralmente');
+    expect(final?.text).toContain(`Detalhes: http://127.0.0.1:3000/bots/alpha/trabalhos/${id}`);
+    expect(final?.text).toContain('test aprovado');
+  }, 60_000);
+
+  it('widens a check beyond the affected package only with a justification and estimates read tokens', async () => {
+    const context = setup({
+      steps: [
+        () => ({ tool: 'workspace_read_range', args: { path: 'page.txt' } }),
+        () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'node check.cjs', scope: 'repository' } }),
+        () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'node check.cjs', scope: 'repository', justification: 'A mudança afeta o script de teste compartilhado na raiz.' } }),
+        () => ({ text: 'Verificado.' }),
+      ],
+      publish: false,
+    });
+    const id = await runOnce(context, 'Analise o teste.', 'analysis');
+    const { database } = context.programming;
+    const refused = context.provider.requests.flatMap((request) => request.messages).find((message) => message.role === 'tool' && String(message.content).includes('justification_required'));
+    expect(refused).toBeDefined();
+    const started = readJournal(database, { runId: id, type: 'check_started' }).map((event) => event.envelope.payload);
+    expect(started).toEqual([expect.objectContaining({ scope: 'repository', justification: expect.stringContaining('compartilhado') })]);
+    const read = readJournal(database, { runId: id, type: 'workspace_read' })[0]?.envelope.payload as any;
+    expect(read.estimatedTokens).toBe(Math.ceil(read.bytes / 4));
+  }, 60_000);
+});
+
+describe('M09-S01 audit of a complete delivery', () => {
+  it('journals only catalogued events with full correlation and keeps planted secrets out of every store', async () => {
+    const context = setup({
+      steps: [
+        ...fix,
+        ...validate,
+        () => ({ tool: 'publication_publish', args: { title: 'Valida CEP', body: 'token sk-test-key-0123456789abcdef não deve vazar', commitMessage: 'fix: CEP' } }),
+        () => ({ tool: 'publication_ci', args: { waitSeconds: 1 } }),
+        () => ({ tool: 'programming_complete', args: { summary: 'Pronto.' } }),
+        () => ({ text: 'Concluído.' }),
+      ],
+    });
+    const id = await runOnce(context);
+    await context.programming.deliverer.flush();
+    const events = readJournal(context.programming.database, { runId: id }).map((event) => event.envelope);
+    const unknown = events.filter((event) => !(event.type in TELEMETRY_CATALOG)).map((event) => event.type);
+    expect(unknown).toEqual([]);
+    for (const event of events) expect(event, event.type).toMatchObject({ botId: 'alpha', runId: id, schemaVersion: expect.any(Number), eventId: expect.any(String) });
+    expect(events.filter((event) => event.stepId).length).toBeGreaterThan(events.length / 2);
+    // Planted key: never in the run database, the bot telemetry or any artifact.
+    const secret = 'sk-test-key-0123456789abcdef';
+    const files = [join(context.root, '.harness/programming.db'), join(context.root, '.harness/programming.db-wal')].filter((path) => existsSync(path));
+    const walk = (dir: string): string[] => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)])) : []);
+    for (const path of [...files, ...walk(join(context.root, '.harness/programming-artifacts')), ...walk(join(context.root, '.harness/bots'))])
+      expect(readFileSync(path).toString('latin1').includes(secret), path).toBe(false);
+  }, 60_000);
 });

@@ -13,6 +13,8 @@ import {
   RunQueries,
   EvaluationService,
   EvaluationStore,
+  type ProgrammingRun,
+  type RevisionProbe,
   SqliteTelemetryRepository,
   TelemetryDeliverer,
   TelemetryJournal,
@@ -38,6 +40,10 @@ export interface ProgrammingRuntimeOptions {
   bots?: BotStore;
   /** Literal secrets to scrub from events and artifacts (API keys, tokens). */
   secrets?: () => readonly string[];
+  /** Current code/configuration revisions after each cycle (external changes invalidate evidence). */
+  probe?: RevisionProbe;
+  /** Called when a run ends (completed, failed or cancelled), e.g. to close its browser sessions. */
+  onRunFinished?: (run: ProgrammingRun) => void;
   /** Executor lease; short in evaluation harnesses that simulate restarts. */
   leaseTtlMs?: number;
   /** Dashboard base URL for run links in final messages (default: OINKO_DASHBOARD_URL). */
@@ -127,7 +133,11 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
       if (path) usage.collectFromTelemetry(run, path, outcome.traceIds);
       usage.publish(run);
     },
-    onRunEvent: (run, event) => void notifier.notify(run, event),
+    onRunEvent: (run, event) => {
+      void notifier.notify(run, event);
+      if (['run_completed', 'run_failed', 'run_cancelled'].includes(event.type)) options.onRunFinished?.(run);
+    },
+    ...(options.probe && { probe: options.probe }),
     // The dashboard page enforces its own access; the link only points to it.
     runLink: (run) => (dashboardUrl ? `${dashboardUrl}/bots/${encodeURIComponent(run.botId)}/trabalhos/${encodeURIComponent(run.id)}` : undefined),
     ...(options.now && { now: options.now }),

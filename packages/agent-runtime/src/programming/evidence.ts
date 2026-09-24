@@ -62,6 +62,8 @@ export type Evidence =
       fingerprint: string;
     }
   | { kind: 'report'; artifactId?: string; fingerprint: string }
+  /** Current revision of a repository or `env:<id>` configuration, observed outside an edit. */
+  | { kind: 'revision'; key: string; revision: string; fingerprint: string }
   | { kind: 'error'; fingerprint: string; message: string };
 
 export function evidenceFingerprint(item: Evidence): string {
@@ -70,6 +72,8 @@ export function evidenceFingerprint(item: Evidence): string {
       return `edit:${item.repositoryId}:${item.revision}`;
     case 'error':
       return `error:${item.fingerprint}`;
+    case 'revision':
+      return `revision:${item.key}:${item.revision}`;
     default:
       return `${item.kind}:${item.fingerprint}`;
   }
@@ -100,6 +104,8 @@ export interface RunContext {
     status?: EventStatus,
     correlation?: { operationId?: string; durationMs?: number },
   ): void;
+  /** Records where the cycle's time went (context preparation, model wait, tools). */
+  interval(kind: 'context' | 'model' | 'tool', startedAt: number, endedAt: number): void;
   /** Stores evidence content (diff, log, screenshot) under the run's capture policy. */
   saveArtifact(input: Omit<ArtifactInput, 'stepId'>): Artifact | undefined;
   /**
@@ -145,6 +151,7 @@ export interface RunContextOptions {
   onOperation?: (delta: 1 | -1) => void;
   /** Persists each fact as soon as it is observed, so a crash cannot lose it. */
   onEvidence?: (item: Evidence) => void;
+  onInterval?: (kind: 'context' | 'model' | 'tool', startedAt: number, endedAt: number) => void;
   journal?: TelemetryJournal;
   artifacts?: ArtifactStore;
 }
@@ -160,6 +167,9 @@ export function createRunContext(options: RunContextOptions): RunContext {
     evidence,
     signals: {},
     revisions: options.revisions,
+    interval(kind, startedAt, endedAt) {
+      if (endedAt > startedAt) options.onInterval?.(kind, startedAt, endedAt);
+    },
     emit(type, payload, status = 'info', correlation = {}) {
       options.journal?.emit({
         type,
@@ -224,6 +234,8 @@ export function assessProgress(cycle: readonly Evidence[], seen: ReadonlySet<str
       continue;
     }
     if (item.kind === 'check' && item.result === 'infrastructure') continue;
+    // Observing that the code or configuration changed is not work done by the run.
+    if (item.kind === 'revision') continue;
     if (!seen.has(fingerprint) && !newFacts.includes(fingerprint)) newFacts.push(fingerprint);
   }
   return {
@@ -303,7 +315,7 @@ export function evaluateCriteria(
         // A preview only speaks for the exact code (and configuration) it was built from.
         const currentFor = (item: Extract<Evidence, { kind: 'functional' }>) =>
           item.revisions
-            ? Object.entries(item.revisions).every(([key, value]) => key.startsWith('env:') || current(key) === value)
+            ? Object.entries(item.revisions).every(([key, value]) => (key.startsWith('env:') && current(key) === undefined) || current(key) === value)
             : repositories.includes(item.revision) || !repositories.length;
         const latest = checks.filter(currentFor).at(-1);
         status = latest ? (latest.result === 'passed' ? 'satisfied' : 'failed') : 'pending';

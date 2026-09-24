@@ -201,6 +201,7 @@ export function programmingChatTools(options: ChannelCommandsOptions): AgentTool
     request: z.string().min(1).max(20_000),
     mode: z.enum(['change', 'analysis']).default('change'),
     taskId: z.string().optional(),
+    confirmNew: z.boolean().default(false).describe('true só depois que a pessoa confirmar que é um trabalho novo, não um complemento do ativo.'),
   });
   const status = z.object({ runId: z.string().optional() });
   const steer = z.object({ runId: z.string().min(1), text: z.string().min(1).max(8000), objective: z.string().max(8000).optional(), confirm: z.boolean().default(false) });
@@ -212,7 +213,15 @@ export function programmingChatTools(options: ChannelCommandsOptions): AgentTool
         'Inicia um trabalho de programação durável em segundo plano (retorna runId imediatamente). Use quando a pessoa pedir uma alteração ou análise de código em um projeto autorizado; se já houver trabalho ativo e o pedido parecer um complemento, use programming_steer ou pergunte.',
       parameters: start,
       execute: wrap(start, (args, context) => {
-        const { actor } = actorOf(context);
+        const { actor, route } = actorOf(context);
+        // With work already active here, a new run needs the person's confirmation.
+        const active = options.queries.list(actor, { states: ['queued', 'running', 'paused', 'blocked'], limit: 10 }, route.channel).items;
+        if (active.length && !args.confirmNew)
+          return {
+            needsConfirmation: true,
+            activeRuns: active.map((summary) => ({ runId: summary.id, shortId: shortId(summary.id), state: summary.state, request: summary.request.slice(0, 200) })),
+            hint: 'Pergunte se é um complemento (use programming_steer no trabalho ativo) ou um trabalho novo (chame de novo com confirmNew=true).',
+          };
         const started = options.service.start(actor, {
           botId: options.botId,
           projectId: args.projectId,

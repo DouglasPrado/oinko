@@ -15,6 +15,8 @@ export interface AttemptMetrics {
   interventions: number;
   restarts: number;
   fallbacks: number;
+  /** Safety incidents: permission denials and effects left uncertain. */
+  safety?: { denials: number; uncertain: number };
 }
 
 export interface AttemptResult {
@@ -40,6 +42,7 @@ export const EMPTY_METRICS: AttemptMetrics = {
   interventions: 0,
   restarts: 0,
   fallbacks: 0,
+  safety: { denials: 0, uncertain: 0 },
 };
 
 /**
@@ -89,6 +92,7 @@ export interface Aggregate {
   interventions: { total: number; perAttempt: number | null };
   restarts: number;
   fallbacks: number;
+  safety: { denials: number; uncertain: number; perAttempt: number | null };
   durationMs: { median?: number; p90?: number };
   tokens: { total: number; byRole: Record<string, number>; perCompleted: number | null };
   /** Cost of every executed attempt (failed ones too) per completed case. */
@@ -118,6 +122,8 @@ export function aggregate(results: readonly AttemptResult[], options: { minRepet
   let interventions = 0;
   let restarts = 0;
   let fallbacks = 0;
+  let denials = 0;
+  let uncertain = 0;
   const durations: number[] = [];
   for (const result of results) {
     verdicts[result.verdict]++;
@@ -133,6 +139,8 @@ export function aggregate(results: readonly AttemptResult[], options: { minRepet
     interventions += result.metrics.interventions;
     restarts += result.metrics.restarts;
     fallbacks += result.metrics.fallbacks;
+    denials += result.metrics.safety?.denials ?? 0;
+    uncertain += result.metrics.safety?.uncertain ?? 0;
     if (result.metrics.durationMs !== undefined) durations.push(result.metrics.durationMs);
   }
   const executed = results.length - verdicts.skipped;
@@ -153,6 +161,7 @@ export function aggregate(results: readonly AttemptResult[], options: { minRepet
     interventions: { total: interventions, perAttempt: executed ? interventions / executed : null },
     restarts,
     fallbacks,
+    safety: { denials, uncertain, perAttempt: executed ? (denials + uncertain) / executed : null },
     durationMs: { ...(median(durations) !== undefined && { median: median(durations) }), ...(percentile(durations, 90) !== undefined && { p90: percentile(durations, 90) }) },
     tokens: { total: tokens, byRole, perCompleted: verdicts.passed ? tokens / verdicts.passed : null },
     cost: {
@@ -231,6 +240,10 @@ export function compare(
   } else if (regressions.length || (deltas.completionRate ?? 0) < 0) {
     recommendation = 'reject';
     reasons.push(`Qualidade piorou${regressions.length ? ` em ${regressions.map((item) => item.caseId).join(', ')}` : ''}.`);
+  } else if ((candidate.safety.perAttempt ?? 0) > (baseline.safety.perAttempt ?? 0)) {
+    // More permission denials or uncertain effects is a safety regression, whatever it saves.
+    recommendation = 'reject';
+    reasons.push(`Segurança piorou: ${candidate.safety.denials} negativa(s) de permissão e ${candidate.safety.uncertain} efeito(s) incerto(s) contra ${baseline.safety.denials} e ${baseline.safety.uncertain} no baseline.`);
   } else {
     const quality = (deltas.completionRate ?? 0) > 0;
     const cheaper = (deltas.tokensPerCompleted ?? 0) < 0 || (deltas.costPerCompletedUsd ?? 0) < 0;

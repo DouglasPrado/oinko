@@ -130,6 +130,8 @@ export interface ProgrammingRunServiceOptions {
   onCycleFinished?: (run: ProgrammingRun, outcome: CycleOutcome) => void | Promise<void>;
   /** Called on relevant state changes, e.g. to notify the originating channel. */
   onRunEvent?: (run: ProgrammingRun, event: { type: string; message: string }) => void;
+  /** Reads current code/configuration revisions after each cycle (external changes invalidate evidence). */
+  probe?: RevisionProbe;
   /** Authorized page of a run (e.g. the dashboard), included in final messages. */
   runLink?: (run: ProgrammingRun) => string | undefined;
   now?: () => number;
@@ -147,7 +149,15 @@ interface ActiveExecution {
 export function observeRevision(revisions: Map<string, string>, item: Evidence): void {
   if (item.kind === 'edit') revisions.set(item.repositoryId, item.revision);
   else if (item.kind === 'check') revisions.set(item.repositoryId, item.revisionAfter ?? item.revision);
+  else if (item.kind === 'revision') revisions.set(item.key, item.revision);
 }
+
+/**
+ * Current revisions of a run's repositories and relevant configuration
+ * (`env:<id>`), read from the environment. Lets the service notice changes
+ * made outside the run's own edits before judging criteria.
+ */
+export type RevisionProbe = (run: ProgrammingRun, known: ReadonlyMap<string, string>) => Promise<Record<string, string> | undefined>;
 
 function correlationOf(run: ProgrammingRun, stepId?: string) {
   return {
@@ -615,6 +625,7 @@ export class ProgrammingRunService {
         journal: this.journal,
         ...(this.options.artifacts && { artifacts: this.options.artifacts }),
         onEvidence: (item) => this.store.addEvidence(run.id, stepId, item.kind, evidenceFingerprint(item), item),
+        onInterval: (kind, startedAt, endedAt) => this.options.usage.recordInterval(run.id, kind, startedAt, endedAt),
         onOperation: (delta) => {
           execution.inFlight += delta;
           if (execution.inFlight === 0 && execution.interrupt === 'pause') execution.controller.abort(new SafePointInterrupt('pause'));
@@ -689,6 +700,7 @@ export class ProgrammingRunService {
         await Promise.resolve(this.options.onCycleFinished?.(run, outcome)).catch(() => undefined);
       }
       run = this.store.requireRun(run.id);
+      await this.observeExternal(run, stepId, revisions);
       // Criteria are re-evaluated against all evidence for the current revision.
       const all = this.store.evidence<Evidence>(run.id).map((item) => item.value);
       this.adoptFunctionalCriteria(run.id, all);
@@ -955,6 +967,23 @@ export class ProgrammingRunService {
     const updated = this.store.updateRun(run.id, run.revision, { taskId });
     this.journal.record('decision_recorded', correlationOf(updated), { point: 'task_selected', choice: taskId });
     return updated;
+  }
+
+  /**
+   * Records revisions that changed outside the run's own edits (a person
+   * editing the worktree, a changed environment). A probe failure only
+   * means nothing new was observed; it never approves anything.
+   */
+  private async observeExternal(run: ProgrammingRun, stepId: string, revisions: Map<string, string>): Promise<void> {
+    if (!this.options.probe) return;
+    const observed = await this.options.probe(run, revisions).catch(() => undefined);
+    for (const [key, revision] of Object.entries(observed ?? {})) {
+      if (revisions.get(key) === revision) continue;
+      const item: Evidence = { kind: 'revision', key, revision, fingerprint: `${key}:${revision}` };
+      this.store.addEvidence(run.id, stepId, item.kind, evidenceFingerprint(item), item);
+      observeRevision(revisions, item);
+      this.journal.record('revision_observed', correlationOf(run, stepId), { key, revision });
+    }
   }
 
   /**

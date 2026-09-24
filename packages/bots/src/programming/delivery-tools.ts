@@ -7,6 +7,7 @@ import {
   type AccessPort,
   type Evidence,
   type ProgrammingRunService,
+  type RevisionProbe,
   type RunContext,
   type TelemetryJournal,
 } from '@oinko/agent-runtime/programming';
@@ -49,6 +50,8 @@ export interface DeliveryToolsOptions {
   evidence: (runId: string) => Evidence[];
   /** Journal that receives the runner's publication telemetry. */
   journal?: Pick<TelemetryJournal, 'ingest'>;
+  /** Called for each browser session closed because its run ended. */
+  onSessionClosed?: (event: { runId: string; sessionId: string; reason: string }) => void;
   /** Tool families offered to the model; every call is still authorized per run. */
   capabilities?: { browser?: boolean; publication?: boolean };
   pollMs?: number;
@@ -73,12 +76,26 @@ function unwrap<T extends Json>(result: T & RunnerFailure, onFailure?: (code: st
  * run may do comes from its policy and the project, checked on every call.
  */
 export function deliveryTools(options: DeliveryToolsOptions): AgentTool[] {
+  return createDeliveryTools(options).tools;
+}
+
+/**
+ * The tools plus the lifecycle hooks the runtime needs: closing a run's
+ * browser sessions when it ends, and probing the current code/configuration
+ * revisions so external changes invalidate evidence.
+ */
+export function createDeliveryTools(options: DeliveryToolsOptions): {
+  tools: AgentTool[];
+  closeRun: (runId: string, reason: string) => Promise<void>;
+  probe: RevisionProbe;
+} {
   const { runner, access } = options;
   const { location, send, tool } = toolKit(runner);
   const pollMs = options.pollMs ?? 1000;
   const previews = new Map<string, PreviewBinding>();
   const sessions = new Map<string, Session>();
   const cursors = new Map<string, number>();
+  const closed = options.onSessionClosed;
 
   function guard(context: RunContext, klass: 'browser' | 'publish', name: string) {
     const decision = checkOperation(access, context.run, { class: klass, name });
@@ -518,9 +535,40 @@ export function deliveryTools(options: DeliveryToolsOptions): AgentTool[] {
   ];
   const browser = options.capabilities?.browser ?? true;
   const publication = options.capabilities?.publication ?? true;
-  return tools.filter((item) =>
-    item.name.startsWith('browser_') || item.name === 'functional_check' ? browser : item.name.startsWith('publication_') ? publication : true,
-  );
+  return {
+    tools: tools.filter((item) =>
+      item.name.startsWith('browser_') || item.name === 'functional_check' ? browser : item.name.startsWith('publication_') ? publication : true,
+    ),
+    // A finished run leaves no browser session behind; its evidence stays.
+    async closeRun(runId, reason) {
+      for (const [key, current] of [...sessions]) {
+        if (!key.startsWith(`${runId}:`)) continue;
+        sessions.delete(key);
+        await runner.command({ action: 'browserClose', sessionId: current.sessionId, runId }).catch(() => undefined);
+        closed?.({ runId, sessionId: current.sessionId, reason });
+      }
+      previews.delete(runId);
+    },
+    async probe(run) {
+      if (!run.taskId) return undefined;
+      const correlation = { runId: run.id };
+      const observed: Record<string, string> = {};
+      for (const repositoryId of run.repositoryIds) {
+        const snapshot = await runner.command<{ revision?: string }>({ action: 'gitSnapshot', taskId: run.taskId, repositoryId }, { correlation });
+        if (snapshot.revision) observed[repositoryId] = snapshot.revision;
+      }
+      // Configuration only matters for runs that validated on a preview.
+      const binding = previews.get(run.id);
+      const validated = options.evidence(run.id).find((item): item is Extract<Evidence, { kind: 'functional' }> => item.kind === 'functional' && !!item.revisions);
+      const environmentId = binding?.environmentId ?? Object.keys(validated?.revisions ?? {}).find((key) => key.startsWith('env:'))?.slice(4);
+      if (environmentId) {
+        const state = await runner.command<{ environments: ({ id: string } & Json)[] }>({ action: 'state' }, { correlation });
+        const environment = state.environments.find((item) => item.id === environmentId);
+        if (environment) observed[`env:${environmentId}`] = `cfg:${hash(environment)}`;
+      }
+      return observed;
+    },
+  };
 }
 
 export const DELIVERY_TOOL_NAMES = [

@@ -262,3 +262,74 @@ describe('M08-S04 reports and exports', () => {
     expect(types(context.database)).toContain('efficiency_comparison_generated');
   });
 });
+
+describe('M08 gaps: safety, interventions, live comparison and export retention', () => {
+  it('rejects a candidate that saves tokens but causes more denials or uncertain effects', () => {
+    const baseline = [1, 2, 3].map((n) => attempt('a', 'passed', {}, n));
+    const unsafe = [1, 2, 3].map((n) => attempt('a', 'passed', { tokens: { total: 400, byRole: { main: 400 } }, safety: { denials: 1, uncertain: 1 } }, n));
+    const result = compare({ baseline: 'd@1', candidate: 'd@1' }, baseline, unsafe, { minRepetitions: 3 });
+    expect(result.recommendation).toBe('reject');
+    expect(result.reasons[0]).toMatch(/Segurança piorou/);
+    expect(result.candidate.safety).toMatchObject({ denials: 3, uncertain: 3, perAttempt: 2 });
+  });
+
+  it('counts human interventions and shows trade-offs next to a recommended gain', () => {
+    const baseline = [1, 2, 3].map((n) => attempt('a', 'passed', { durationMs: 10_000 }, n));
+    const slower = [1, 2, 3].map((n) => attempt('a', 'passed', { tokens: { total: 600, byRole: { main: 600 } }, durationMs: 40_000, interventions: 1 }, n));
+    const result = compare({ baseline: 'd@1', candidate: 'd@1' }, baseline, slower, { minRepetitions: 3 });
+    expect(result.recommendation).toBe('promote');
+    expect(result.candidate.interventions).toEqual({ total: 3, perAttempt: 1 });
+    expect(result.tradeoffs).toEqual(expect.arrayContaining([expect.stringMatching(/a mais na mediana/), 'exigiu mais intervenção humana']));
+  });
+
+  it('classifies model and tool failures', () => {
+    const blocked = { state: 'blocked' as const, blocked: { code: 'no_progress', message: 'x' } };
+    expect(classifyRun(blocked, [], [{ type: 'model_attempt_finished', status: 'failed' }])?.category).toBe('model');
+    expect(classifyRun(blocked, [{ kind: 'error', fingerprint: 'edit_conflict', message: 'conflito' }], [])?.category).toBe('tool');
+  });
+
+  it('compares live runs by bot, project, policy and model with the runs behind each number', () => {
+    const context = setup();
+    const access = twoBotMatrix();
+    const finish = (botId: string, projectId: string, state: 'completed' | 'failed', key: string) => {
+      const run = context.store.insertRun(makeRun(access, botId, projectId), key).run;
+      context.store.transitionRun(run.id, run.revision, 'running', { phase: 'working' });
+      context.store.transitionRun(run.id, context.store.requireRun(run.id).revision, state, { phase: 'done' });
+      return run.id;
+    };
+    const alphaOne = finish('alpha', 'one', 'completed', 'k1');
+    finish('alpha', 'two', 'failed', 'k2');
+    const betaTwo = finish('beta', 'two', 'completed', 'k3');
+    const usage = { metrics: () => ({ tokens: { total: 100, byModel: {} }, cost: { confirmedUsd: 0, confirmedCalls: 0, pendingCalls: 2, unavailableCalls: 0 } }) };
+    const byBot = context.service.liveComparison(operator, { groupBy: 'bot', usage });
+    expect(byBot.rows.find((row) => row.key === 'alpha')).toMatchObject({ runs: 2, completed: 1, completionRate: 0.5, insufficientSample: true, tokens: 200, costCoverage: 'none' });
+    expect(byBot.rows.find((row) => row.key === 'beta')?.runIds).toEqual([betaTwo]);
+    const byProject = context.service.liveComparison(operator, { groupBy: 'project', usage });
+    expect(byProject.rows.find((row) => row.key === 'one')?.runIds).toEqual([alphaOne]);
+    expect(context.service.liveComparison(operator, { groupBy: 'model' }).rows.map((row) => row.key).sort()).toEqual(['model-alpha', 'model-beta']);
+    expect(context.service.liveComparison(operator, { groupBy: 'policy' }).rows).toHaveLength(3);
+    expect(() => context.service.liveComparison({ kind: 'bot', botId: 'alpha' }, { groupBy: 'bot' })).toThrow(/operador/);
+  });
+
+  it('exports within retention, flags expired evidence and refuses another bot', () => {
+    let now = Date.now();
+    const { database, store, journal } = openStore(tempRoot(), () => now);
+    const bots = new MemoryBots();
+    const artifacts = { get: (id: string) => (id === 'art-expired' ? { id, expiredAt: now } : id === 'art-live' ? { id } : undefined) };
+    const service = new EvaluationService({ store: new EvaluationStore(database), runs: store, journal, bots, artifacts: artifacts as never, now: () => now });
+    const { version } = service.createDataset(operator, DATASET);
+    const old = service.startBatch(operator, { datasetVersion: version, botId: 'alpha', subject: 'baseline', policyVersion: 'pv-old', environment: 'simulated', repetitions: 1, manifest: {} });
+    service.caseFinished(old.id, { ...attempt('bug', 'passed'), evidenceRefs: ['art-expired'] });
+    service.finishBatch(old.id);
+    now += 40 * 86_400_000;
+    const recent = service.startBatch(operator, { datasetVersion: version, botId: 'alpha', subject: 'baseline', policyVersion: 'pv-new', environment: 'simulated', repetitions: 1, manifest: {} });
+    service.caseFinished(recent.id, { ...attempt('bug', 'passed'), evidenceRefs: ['art-live'] });
+    service.finishBatch(recent.id);
+    const all = JSON.parse(service.export(operator, 'alpha').content);
+    expect(all.results.flatMap((result: { evidenceRefs: unknown[] }) => result.evidenceRefs)).toEqual(expect.arrayContaining([{ artifactId: 'art-expired', expired: true }, { artifactId: 'art-live', expired: false }]));
+    const retained = JSON.parse(service.export(operator, 'alpha', { retentionDays: 30 }).content);
+    expect(retained.retention).toEqual({ retentionDays: 30, omittedBatches: 1 });
+    expect(retained.batches.map((batch: { id: string }) => batch.id)).toEqual([recent.id]);
+    expect(() => service.export({ kind: 'bot', botId: 'beta' }, 'alpha')).toThrow(/não encontrada/);
+  });
+});

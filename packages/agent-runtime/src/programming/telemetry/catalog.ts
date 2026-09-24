@@ -77,6 +77,7 @@ export const TELEMETRY_CATALOG = {
   capture_policy_applied: entry('artifact', ['capture'], { capture: z.string() }, { capture: 'full' }),
   evidence_opened: entry('artifact', ['artifactId', 'interface']),
   evidence_invalidated: entry('artifact', ['criterionId', 'reason', 'revision']),
+  revision_observed: entry('artifact', ['key', 'revision']),
   // Usage
   usage_reported: entry('usage', ['callId', 'role', 'model', 'costStatus'], { callId: z.string() }, { callId: 'call-1' }),
   usage_reconciled: entry('usage', ['callId', 'costStatus']),
@@ -92,7 +93,7 @@ export const TELEMETRY_CATALOG = {
   project_instructions_resolved: entry('workspace', ['repositoryId']),
   project_commands_discovered: entry('workspace', ['repositoryId']),
   git_diff_captured: entry('workspace', ['repositoryId', 'treeHash', 'baseSha']),
-  check_started: entry('workspace', ['kind', 'repositoryId', 'origin', 'revision', 'jobId']),
+  check_started: entry('workspace', ['kind', 'repositoryId', 'origin', 'revision', 'jobId', 'scope']),
   check_finished: entry('workspace', ['kind', 'repositoryId', 'result', 'classification', 'revision', 'jobId']),
   // Cycles
   cycle_started: entry('cycle', ['phase'], { cycle: z.number() }, { cycle: 1 }),

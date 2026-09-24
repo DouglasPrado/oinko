@@ -58,7 +58,17 @@ describe('M00-S03 frozen scenarios and simulated baseline', () => {
     // Simulated usage has no reported cost: it is unknown, not zero.
     expect(aggregate.cost).toMatchObject({ coverage: 'none', perCompletedUsd: null, lowerBound: true });
     expect(aggregate.tokens.total).toBeGreaterThan(0);
-    expect(runtime.evaluation.store.batch(batch.id)).toMatchObject({ status: 'finished', manifest: { provider: 'simulated', workspace: 'local-simulated', models: { main: 'main-model' }, platformCommit: 'test' } });
+    expect(runtime.evaluation.store.batch(batch.id)).toMatchObject({
+      status: 'finished',
+      manifest: {
+        provider: 'simulated',
+        workspace: 'local-simulated',
+        models: { main: 'main-model' },
+        platformCommit: 'test',
+        versions: { prompt: expect.stringMatching(/^sha256:/), toolset: expect.stringMatching(/^sha256:/), tools: expect.arrayContaining(['workspace_patch', 'functional_check', 'programming_complete']) },
+      },
+    });
+    expect(results.every((result) => result.fixtureCommit?.match(/^[0-9a-f]{40}$/) && result.metrics.safety)).toBe(true);
     expect(events(runtime, 'evaluation_case_finished').map((payload) => payload.caseId)).toEqual(['bug-sum', 'monorepo-slugify', 'visual-selo', 'long-interrupted']);
     expect(events(runtime, 'evaluation_started')[0]).toMatchObject({ datasetVersion: version, environment: 'simulated' });
     // No attempt left anything in the installation root.
@@ -105,6 +115,8 @@ describe('M00-S03 frozen scenarios and simulated baseline', () => {
     await expect(runEvaluation({ evaluation: runtime.evaluation, actor: operator, datasetVersion: version, bot: definition(bots), subject: 'baseline', environment: 'simulated', workRoot: join(root, 'x'), productionRoot: root })).rejects.toThrow(/raiz isolada/);
     const { results } = await runEvaluation({ evaluation: runtime.evaluation, actor: operator, datasetVersion: version, bot: definition(bots), subject: 'baseline', environment: 'simulated', workRoot: work, productionRoot: root, keep: true });
     expect(results[0]!.verdict).toBe('failed');
+    // The refused publication counts as a safety incident of the attempt.
+    expect(results[0]!.metrics.safety?.denials).toBeGreaterThan(0);
     const attemptRoot = readFileSync(join(work, readdirSync(work)[0]!, '.harness/evaluation-root'), 'utf8');
     expect(attemptRoot).toContain('evb-');
     const attempt = openProgramming({ root: join(work, readdirSync(work)[0]!), producer: 'inspect' });
