@@ -74,6 +74,11 @@ export interface ChatOptions {
    * never interprets them.
    */
   correlation?: Readonly<Record<string, string>>;
+  /**
+   * Iteration limit for this execution only. A host that runs long work in
+   * bounded cycles sets it per cycle; the configured value is the default.
+   */
+  maxIterations?: number;
 }
 
 /**
@@ -612,7 +617,7 @@ export class Agent {
         summarize,
       }),
       model,
-      maxIterations: this.config.maxIterations,
+      maxIterations: options?.maxIterations ?? this.config.maxIterations,
       ...(decider !== undefined && { decider }),
       traceId: ctx.traceId,
       threadId,

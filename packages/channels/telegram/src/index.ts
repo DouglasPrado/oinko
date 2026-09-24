@@ -1,5 +1,10 @@
-import { Bot, type Context } from 'grammy';
-import { TranscriptionError, type AgentRuntime, type ChannelProvider } from '@oinko/agent-runtime';
+import { Bot, GrammyError, type Context } from 'grammy';
+import {
+  TranscriptionError,
+  type AgentRuntime,
+  type ChannelProvider,
+  type NotificationRegistry,
+} from '@oinko/agent-runtime';
 import { buildAgentInput, MEDIA_ERROR_MESSAGES } from './media.js';
 import { startTyping } from './typing.js';
 
@@ -23,6 +28,33 @@ export interface TelegramOptions {
   onReady?: () => void;
   allowedUserIds: readonly string[];
   allowAllPrivateChats?: boolean;
+  /** Registers this connection as the sender of asynchronous run progress. */
+  notifications?: NotificationRegistry;
+}
+
+/**
+ * Sends a message to a chat outside a reply (run progress). Rate limits are
+ * surfaced with their retry delay so the caller can back off; failures never
+ * reach the run itself.
+ */
+export async function sendToChat(bot: Pick<Bot, 'api' | 'botInfo'>, conversationKey: string, text: string) {
+  const separator = conversationKey.indexOf(':');
+  const connectionId = conversationKey.slice(0, separator);
+  const chatId = conversationKey.slice(separator + 1);
+  // Only the connection that owns the conversation may write to it.
+  if (connectionId !== String(bot.botInfo.id) || !/^-?\d+$/.test(chatId)) return;
+  for (const chunk of splitMessage(text)) {
+    try {
+      await bot.api.sendMessage(Number(chatId), chunk);
+    } catch (error) {
+      if (error instanceof GrammyError && error.error_code === 429)
+        throw Object.assign(new Error('Telegram rate limit'), {
+          name: 'RateLimited',
+          retryAfterMs: (error.parameters.retry_after ?? 1) * 1000,
+        });
+      throw error;
+    }
+  }
 }
 
 export { buildAgentInput, MAX_IMAGE_BYTES, MAX_AUDIO_BYTES } from './media.js';
@@ -76,6 +108,11 @@ export function createTelegramBot(
           },
           input,
           signal,
+          {
+            userId: String(ctx.from.id),
+            // A redelivered update keeps its id: requests are deduplicated by it.
+            idempotencyKey: `telegram:${ctx.me.id}:${ctx.chat.id}:${ctx.message.message_id}`,
+          },
         );
         if (!signal.aborted)
           await respond(
@@ -111,6 +148,7 @@ export async function runTelegram(
   signal: AbortSignal,
 ): Promise<void> {
   const bot = createTelegramBot(config, runtime, signal);
+  let unregister: (() => void) | undefined;
   let stopping: Promise<void> | undefined;
   const stop = () => {
     if (bot.isRunning())
@@ -123,6 +161,7 @@ export async function runTelegram(
     // native signals implement the same cancellation protocol at runtime.
     await bot.init(signal as unknown as Parameters<Bot['init']>[0]);
     if (signal.aborted) return;
+    unregister = config.notifications?.register('telegram', (key, text) => sendToChat(bot, key, text));
     await bot.start({
       allowed_updates: ['message'],
       onStart: () => {
@@ -136,6 +175,7 @@ export async function runTelegram(
   } catch (error) {
     if (!signal.aborted) throw error;
   } finally {
+    unregister?.();
     signal.removeEventListener('abort', stop);
     await stopping;
   }
@@ -158,6 +198,7 @@ export const telegramChannel: ChannelProvider = async (options, context) => {
       allowedUserIds,
       allowAllPrivateChats: allowAllPrivateChats === true,
       onReady: context.ready,
+      ...(context.notifications && { notifications: context.notifications }),
     },
     context.runtime,
     context.signal,

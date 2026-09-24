@@ -44,13 +44,20 @@ export async function startEnvironmentService(root: string) {
         if (body.length > 1_000_000) return send(413, { error: 'Requisição muito grande.' });
       }
       send(200, await controller.handle(JSON.parse(body)));
-    })().catch((error) =>
+    })().catch((error) => {
+      const structured = error as { code?: unknown; details?: unknown };
       send(400, {
         error:
           controller?.redact(error instanceof Error ? error.message : 'Operação falhou.') ??
           'Gerenciador indisponível.',
-      }),
-    );
+        // Codes let callers tell a conflict (nothing written) from a failure.
+        ...(typeof structured.code === 'string' && { code: structured.code }),
+        ...(structured.details !== undefined &&
+          controller && {
+            details: JSON.parse(controller.redact(JSON.stringify(structured.details))) as unknown,
+          }),
+      });
+    });
   });
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);

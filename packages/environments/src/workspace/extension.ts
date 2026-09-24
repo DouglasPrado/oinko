@@ -147,10 +147,25 @@ export class WorkspaceExtension implements RunnerExtension {
         void _r;
         return ops({ op: action, ...rest });
       }
-      case 'gitSnapshot':
-        return ops({ op: 'gitSnapshot' });
-      case 'gitDiff':
-        return ops({ op: 'gitDiff', baseline: command.baseline, maxPatchBytes: command.maxPatchBytes }, 120_000);
+      case 'gitSnapshot': {
+        if (!command.saveAs) return ops({ op: 'gitSnapshot' });
+        const path = this.baselinePath(context, command.saveAs, task.id, command.repositoryId);
+        if (existsSync(path)) return { ...(JSON.parse(readFileSync(path, 'utf8')) as object), saved: false };
+        const snapshot = await ops({ op: 'gitSnapshot' });
+        writeFileSync(path, JSON.stringify(snapshot), { mode: 0o600, flag: 'wx' });
+        return { ...snapshot, saved: true };
+      }
+      case 'gitDiff': {
+        let baseline = command.baseline;
+        if (command.baselineRef) {
+          const path = this.baselinePath(context, command.baselineRef, task.id, command.repositoryId);
+          if (existsSync(path)) {
+            const saved = JSON.parse(readFileSync(path, 'utf8')) as { headSha: string; files: Record<string, string> };
+            baseline = { headSha: saved.headSha, files: saved.files };
+          }
+        }
+        return ops({ op: 'gitDiff', baseline, maxPatchBytes: command.maxPatchBytes }, 120_000);
+      }
       case 'projectContext':
         return ops({
           op: 'projectContext',
@@ -180,6 +195,13 @@ export class WorkspaceExtension implements RunnerExtension {
   }
 
   // ---- edits --------------------------------------------------------------
+
+  private baselinePath(context: Pick<RunnerContext, 'root' | 'botId'>, key: string, taskId: string, repositoryId: string) {
+    const directory = join(context.root, '.harness/runtime/baselines');
+    mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const name = createHash('sha256').update(JSON.stringify([context.botId ?? '', key, taskId, repositoryId])).digest('hex').slice(0, 32);
+    return join(directory, `${name}.json`);
+  }
 
   private journalPath(context: Pick<RunnerContext, 'root'>, operationId: string) {
     const directory = join(context.root, '.harness/runtime/edits');

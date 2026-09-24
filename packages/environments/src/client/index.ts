@@ -8,9 +8,9 @@ import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Project, Task, Saved } from '@oinko/workspaces/contracts';
 import type { Environment, Job, Preview, Settings } from '../contracts/index.js';
-import type { RunnerCommandInput } from '../contracts/requests.js';
+import type { RunnerCommandInput, RunnerCorrelationValue } from '../contracts/requests.js';
 
-export type { RunnerCommandInput } from '../contracts/requests.js';
+export type { RunnerCommandInput, RunnerCorrelationValue } from '../contracts/requests.js';
 export interface RunnerState {
   pid: number;
   projects: Saved<Project>[];
@@ -60,7 +60,12 @@ export function environmentRequest<T>(
           try {
             const value = JSON.parse(text);
             if ((response.statusCode ?? 500) >= 400)
-              reject(new Error(value.error ?? 'Operação recusada pelo gerenciador.'));
+              reject(
+                Object.assign(new Error(value.error ?? 'Operação recusada pelo gerenciador.'), {
+                  ...(typeof value.code === 'string' && { code: value.code }),
+                  ...(value.details !== undefined && { details: value.details }),
+                }),
+              );
             else resolve(value as T);
           } catch (error) {
             reject(error);
@@ -146,13 +151,17 @@ export class EnvironmentClient {
     private readonly botId?: string,
     private readonly options: { runnerPath?: string } = {},
   ) {}
-  async command<T = unknown>(command: RunnerCommandInput): Promise<T> {
+  async command<T = unknown>(
+    command: RunnerCommandInput,
+    options: { correlation?: RunnerCorrelationValue; timeoutMs?: number } = {},
+  ): Promise<T> {
     await ensureEnvironmentRunner(this.root, this.options.runnerPath);
     return environmentRequest<T>(
       this.root,
       '/command',
-      { command, botId: this.botId },
-      command.action === 'shell' ? ((command.timeoutSeconds ?? 120) + 30) * 1000 : 90_000,
+      { command, botId: this.botId, ...(options.correlation && { correlation: options.correlation }) },
+      options.timeoutMs ??
+        (command.action === 'shell' ? ((command.timeoutSeconds ?? 120) + 30) * 1000 : 90_000),
     );
   }
   state() {

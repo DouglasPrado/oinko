@@ -21,6 +21,10 @@
     "./manager": {
       "types": "./dist/manager.d.ts",
       "import": "./dist/manager.js"
+    },
+    "./programming": {
+      "types": "./dist/programming/index.d.ts",
+      "import": "./dist/programming/index.js"
     }
   },
   "scripts": {
@@ -37,7 +41,8 @@
     "@oinko/channel-cli": "workspace:*",
     "@oinko/channel-telegram": "workspace:*",
     "@oinko/mcp-higgsfield": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@oinko/workspaces": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

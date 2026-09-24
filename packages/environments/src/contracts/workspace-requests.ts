@@ -74,7 +74,12 @@ export const WORKSPACE_COMMANDS = [
     edits: z.array(EditSchema).min(1).max(50),
   }),
   z.object({ action: z.literal('reconcileEdit'), ...Location, operationId: z.string().min(1).max(200) }),
-  z.object({ action: z.literal('gitSnapshot'), ...Location }),
+  z.object({
+    action: z.literal('gitSnapshot'),
+    ...Location,
+    /** Persist as the baseline of this key (a run id); the first snapshot wins. */
+    saveAs: z.string().min(1).max(100).optional(),
+  }),
   z.object({
     action: z.literal('gitDiff'),
     ...Location,
@@ -82,6 +87,8 @@ export const WORKSPACE_COMMANDS = [
     baseline: z
       .object({ headSha: z.string().max(64), files: z.record(z.string(), z.string()).default({}) })
       .optional(),
+    /** Use the baseline saved with `gitSnapshot.saveAs`. */
+    baselineRef: z.string().min(1).max(100).optional(),
     maxPatchBytes: z.number().int().min(1000).max(2_000_000).default(200_000),
   }),
   z.object({

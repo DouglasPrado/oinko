@@ -31,6 +31,7 @@ export async function startAgentService(options: ServiceOptions) {
   let host: ReturnType<typeof createAgentHost> | undefined;
   let connections: ConnectionManager | undefined;
   const controller = new AbortController();
+  const cliNotifications = new Map<string, string[]>();
   let reloading = false;
   let closed: Promise<void> | undefined;
   const server = createServer((request, response) => {
@@ -98,7 +99,11 @@ export async function startAgentService(options: ServiceOptions) {
         text,
         AbortSignal.any([controller.signal, disconnected.signal]),
       );
-      send(response, 200, { answer });
+      // CLI has no push channel: progress queued for this session rides on the next answer.
+      const key = `${connectionId}:${sessionId}`;
+      const pending = cliNotifications.get(key) ?? [];
+      cliNotifications.delete(key);
+      send(response, 200, { answer: pending.length ? `${pending.join('\n')}\n\n${answer}` : answer });
     } finally {
       response.removeListener('close', onClose);
     }
@@ -157,6 +162,11 @@ export async function startAgentService(options: ServiceOptions) {
     if (process.platform !== 'win32') await chmod(options.socketPath, 0o600);
     const config = await options.loadConnections();
     host = options.createHost();
+    host.notifications?.register('cli', async (key, text) => {
+      const queue = cliNotifications.get(key) ?? [];
+      queue.push(text);
+      cliNotifications.set(key, queue.slice(-20));
+    });
     connections = new ConnectionManager(host, options.channels, options.mcps);
     await connections.reconcile(config);
     return { close, status: () => connections!.status(), runtime: host.runtime };

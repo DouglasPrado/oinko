@@ -26,6 +26,7 @@ import {
   type RunContext,
 } from './evidence.js';
 import type { OperationRecorder } from './operations.js';
+import type { ArtifactStore } from './artifacts.js';
 import {
   canAccessRun,
   resolveEffectivePolicy,
@@ -110,6 +111,7 @@ export interface ProgrammingRunServiceOptions {
   access: AccessPort;
   recorder: OperationRecorder;
   usage: UsageLedger;
+  artifacts?: ArtifactStore;
   /** Present only in the process that executes runs (the bot worker). */
   executor?: RunExecutor;
   reconciler?: Reconciler;
@@ -560,7 +562,7 @@ export class ProgrammingRunService {
     for (const item of this.store.evidence<Evidence>(run.id)) observeRevision(revisions, item.value);
     let feedback: string | undefined;
     let previousSummary = this.store.listSteps(run.id).filter((step) => step.kind === 'cycle').at(-1)?.summary;
-    if (recovering) this.notify(run, 'run_resumed', 'Execução retomada após reinício.');
+    this.notify(run, recovering ? 'run_resumed' : 'run_started', recovering ? 'Execução retomada após reinício.' : 'Trabalho iniciado.');
     for (;;) {
       if (this.closed) return;
       run = this.store.requireRun(run.id);
@@ -600,6 +602,8 @@ export class ProgrammingRunService {
         recorder: this.options.recorder,
         revisions,
         interrupt: () => execution.interrupt,
+        journal: this.journal,
+        ...(this.options.artifacts && { artifacts: this.options.artifacts }),
         onOperation: (delta) => {
           execution.inFlight += delta;
           if (execution.inFlight === 0 && execution.interrupt === 'pause') execution.controller.abort(new SafePointInterrupt('pause'));
@@ -626,6 +630,17 @@ export class ProgrammingRunService {
         failure = error;
       } finally {
         this.options.usage.endInterval(interval);
+      }
+      // Declarations made through the control tools count even when the
+      // executor returned only text.
+      if (outcome) {
+        const signals = context.signals;
+        outcome = {
+          ...outcome,
+          ...(signals.completion && !outcome.completion && { completion: signals.completion }),
+          ...(signals.needsInput && !outcome.needsInput && { needsInput: signals.needsInput }),
+          ...(signals.planUpdate && !outcome.planUpdate && { planUpdate: signals.planUpdate }),
+        };
       }
       // Shutdown is not a failure of the work: leave the run for recovery.
       if (this.closed && !execution.interrupt) {
@@ -686,6 +701,8 @@ export class ProgrammingRunService {
         this.applySafePoint(execution, run);
         return;
       }
+      if (verdict.progressed && outcome?.summary)
+        this.notify(run, 'cycle_progress', `ciclo ${cycle}: ${outcome.summary.slice(0, 400)}`);
       if (outcome?.planUpdate?.length) {
         const current = this.store.planRevisions(run.id).at(-1)!;
         this.store.addPlanRevision({ ...current, revision: current.revision + 1, plan: outcome.planUpdate, reason: 'Plano atualizado pelo agente', source: 'agent', compatible: true, createdAt: this.now() });
@@ -901,6 +918,19 @@ export class ProgrammingRunService {
     for (const execution of this.active.values()) execution.controller.abort(new Error('shutdown'));
     await Promise.all([...this.active.values()].map((execution) => execution.done));
     await this.dispatching?.catch(() => undefined);
+  }
+
+  /**
+   * Binds the run to the Task (worktree) it prepared. Set once: later tools
+   * always use this task, never one chosen by the model per call.
+   */
+  attachTask(runId: string, taskId: string): ProgrammingRun {
+    const run = this.store.requireRun(runId);
+    if (run.taskId === taskId) return run;
+    if (run.taskId) throw new ProgrammingError('invalid_request', 'Este run já está ligado a outra tarefa.');
+    const updated = this.store.updateRun(run.id, run.revision, { taskId });
+    this.journal.record('decision_recorded', correlationOf(updated), { point: 'task_selected', choice: taskId });
+    return updated;
   }
 
   /** States considered in queue order for a bot; exposed for status views. */

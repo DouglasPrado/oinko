@@ -44,6 +44,19 @@ type AgentPort = Pick<Agent, 'chat' | 'transcribe' | 'clearHistory' | 'remember'
 export const HELP =
   'Agente: envie uma mensagem de texto.\n/reset — limpar histórico desta conversa (inclusive o que a busca encontra)\n/memory <texto> — guardar uma memória desta conversa\n/usage — tokens usados nesta execução do aplicativo\n/help — ajuda';
 
+/** Slash commands answered from persisted state, outside the LLM queue (e.g. run control). */
+export interface RuntimeCommands {
+  handles(text: string): boolean;
+  handle(route: ConversationRoute, text: string, meta: MessageMeta): string | Promise<string>;
+  help?: string;
+}
+
+/** Channel facts about an incoming message: who sent it and its unique update id. */
+export interface MessageMeta {
+  userId?: string;
+  idempotencyKey?: string;
+}
+
 export class AgentRuntime {
   // The SDK has mutable tool/skill state. Serialize turns across adapters,
   // including reset, so commands cannot race an active response.
@@ -52,13 +65,22 @@ export class AgentRuntime {
   constructor(
     private readonly agentId: string,
     private readonly agent: AgentPort,
+    private readonly commands?: RuntimeCommands,
   ) {}
 
   get name(): string {
     return this.agentId;
   }
 
-  handle(route: ConversationRoute, input: AgentInput, signal?: AbortSignal): Promise<string> {
+  handle(
+    route: ConversationRoute,
+    input: AgentInput,
+    signal?: AbortSignal,
+    meta: MessageMeta = {},
+  ): Promise<string> {
+    // Control commands never wait for a long LLM call in progress.
+    if (typeof input === 'string' && this.commands?.handles(input))
+      return Promise.resolve().then(() => this.commands!.handle(route, input.trim(), meta));
     return this.exclusive(async () => {
       signal?.throwIfAborted();
       if (typeof input === 'string') return this.execute(route, input.trim(), signal);
@@ -96,7 +118,8 @@ export class AgentRuntime {
     signal?: AbortSignal,
   ): Promise<string> {
     const threadId = threadIdFor(this.agentId, route);
-    if (!text || text === '/help' || text === '/start') return HELP;
+    if (!text || text === '/help' || text === '/start')
+      return this.commands?.help ? `${HELP}\n${this.commands.help}` : HELP;
     if (text === '/reset') {
       this.agent.clearHistory(threadId);
       return 'Histórico desta conversa apagado. Memórias salvas foram mantidas.';

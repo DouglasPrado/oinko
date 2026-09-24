@@ -2,6 +2,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Actor, Criterion, ProgrammingRun } from './contracts.js';
 import { ProgrammingError } from './errors.js';
 import type { OperationRecorder, OperationSpec, OperationOutcome, OperationContext } from './operations.js';
+import type { ArtifactInput, ArtifactStore } from './artifacts.js';
+import type { Artifact } from './contracts.js';
+import type { TelemetryEventType } from './telemetry/catalog.js';
+import type { EventStatus } from './telemetry/envelope.js';
+import type { TelemetryJournal } from './telemetry/journal.js';
 
 /**
  * Observable facts produced during a cycle. Progress is defined only by
@@ -37,6 +42,13 @@ export function evidenceFingerprint(item: Evidence): string {
   }
 }
 
+/** What the agent declared during the cycle, through its control tools. */
+export interface CycleSignals {
+  completion?: { summary: string };
+  needsInput?: string;
+  planUpdate?: string[];
+}
+
 /** Where a cycle's tools report what they observed and ask for safe points. */
 export interface RunContext {
   run: ProgrammingRun;
@@ -44,9 +56,19 @@ export interface RunContext {
   actor: Actor;
   signal: AbortSignal;
   evidence: Evidence[];
+  signals: CycleSignals;
   /** Latest known revision per repository (tree hash or commit). */
   revisions: Map<string, string>;
   record(item: Evidence): void;
+  /** Journals a catalog event correlated with this run and step. */
+  emit(
+    type: TelemetryEventType,
+    payload?: Record<string, unknown>,
+    status?: EventStatus,
+    correlation?: { operationId?: string; durationMs?: number },
+  ): void;
+  /** Stores evidence content (diff, log, screenshot) under the run's capture policy. */
+  saveArtifact(input: Omit<ArtifactInput, 'stepId'>): Artifact | undefined;
   /**
    * Throws when a pause or cancel was requested: tools call it before an
    * operation with effects, so the run stops between effects, not inside one.
@@ -88,17 +110,39 @@ export interface RunContextOptions {
   revisions: Map<string, string>;
   interrupt: () => SafePointInterrupt['reason'] | undefined;
   onOperation?: (delta: 1 | -1) => void;
+  journal?: TelemetryJournal;
+  artifacts?: ArtifactStore;
 }
 
 export function createRunContext(options: RunContextOptions): RunContext {
   const evidence: Evidence[] = [];
+  const run = options.run;
   const context: RunContext = {
-    run: options.run,
+    run,
     stepId: options.stepId,
     actor: options.actor,
     signal: options.signal,
     evidence,
+    signals: {},
     revisions: options.revisions,
+    emit(type, payload, status = 'info', correlation = {}) {
+      options.journal?.emit({
+        type,
+        status,
+        botId: run.botId,
+        projectId: run.projectId,
+        ...(run.taskId && { taskId: run.taskId }),
+        runId: run.id,
+        stepId: options.stepId,
+        policyVersion: run.policySnapshot.version,
+        ...(correlation.operationId && { operationId: correlation.operationId }),
+        ...(correlation.durationMs !== undefined && { durationMs: correlation.durationMs }),
+        ...(payload && { payload }),
+      });
+    },
+    saveArtifact(input) {
+      return options.artifacts?.put(run, { ...input, stepId: options.stepId });
+    },
     record(item) {
       evidence.push(item);
       if (item.kind === 'edit') options.revisions.set(item.repositoryId, item.revision);

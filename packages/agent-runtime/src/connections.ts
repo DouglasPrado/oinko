@@ -11,12 +11,17 @@ const Entry = z.object({
 });
 const Schema = z.object({ channels: z.array(Entry).default([]), mcps: z.array(Entry).default([]) });
 export type Connections = z.infer<typeof Schema>;
+/** Lets a channel deliver asynchronous messages (e.g. run progress) to a conversation. */
+export interface NotificationRegistry {
+  register(channel: string, sender: (conversationKey: string, text: string) => Promise<void>): () => void;
+}
 export interface ConnectionContext {
   id: string;
   runtime: AgentRuntime;
   agent: Agent;
   signal: AbortSignal;
   ready(): void;
+  notifications?: NotificationRegistry;
 }
 export type ChannelProvider = (
   options: Record<string, unknown>,
@@ -80,7 +85,7 @@ export class ConnectionManager {
   private readonly running = new Map<string, Running>();
   private pending: Promise<unknown> = Promise.resolve();
   constructor(
-    private readonly host: { runtime: AgentRuntime; agent: Agent },
+    private readonly host: { runtime: AgentRuntime; agent: Agent; notifications?: NotificationRegistry },
     private readonly channels: Record<string, ChannelProvider>,
     private readonly mcps: Record<string, McpProvider> = {},
   ) {}
