@@ -42,7 +42,20 @@ function bugScript(): (messages: any[], call: number) => ScriptStep {
   return (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Aguardando avaliação.' });
 }
 
-function setup(options: { maxIterations?: number; script?: (messages: any[], call: number) => ScriptStep } = {}) {
+/** A runner process started before the workspace extensions existed: only base commands. */
+class OutdatedRunner extends LocalRunner {
+  readonly refused: string[] = [];
+  override async command<T>(command: any, options: { correlation?: any } = {}): Promise<T> {
+    if (['state', 'createTask', 'shell', 'readFile', 'writeFile', 'jobLogs'].includes(command.action)) return super.command<T>(command, options);
+    this.refused.push(command.action);
+    throw Object.assign(new Error(`O gerenciador de ambientes em execução (pid 4242) é de uma versão anterior e não conhece a operação "${command.action}". Reinicie o gerenciador para carregar a versão atual.`), {
+      code: 'runner_outdated',
+      details: { action: command.action, pid: 4242 },
+    });
+  }
+}
+
+function setup(options: { maxIterations?: number; script?: (messages: any[], call: number) => ScriptStep; runner?: (worktree: string) => LocalRunner } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'oinko-programming-run-'));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const bots = new BotStore(root);
@@ -63,7 +76,7 @@ function setup(options: { maxIterations?: number; script?: (messages: any[], cal
   workspaces.close();
   const repo = gitRepo(BUG);
   cleanup.push(repo.cleanup);
-  const runner = new LocalRunner(repo.worktree);
+  const runner = options.runner?.(repo.worktree) ?? new LocalRunner(repo.worktree);
   const provider = scriptedProvider(options.script ?? bugScript());
   const cycles: { current?: RunExecutor } = {};
   const programming = openProgramming({
@@ -200,5 +213,55 @@ describe('programming run with the real agent loop and simulated provider', () =
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(received.some((line) => line.startsWith('local:s1|') && line.includes('concluído'))).toBe(true);
     expect(await runtime.handle(route, `/cancel ${run!.id.slice(4, 12)}`)).toMatch(/já encerrado/);
+  }, 60_000);
+
+  it('counts a change made through workspace_exec as an edit of the run', async () => {
+    const steps: ScriptStep[] = [
+      { tool: 'workspace_exec', args: { command: 'cat sum.cjs' } },
+      { tool: 'workspace_exec', args: { command: "printf 'module.exports = (a, b) => a + b;\\n' > sum.cjs" } },
+      { tool: 'workspace_check', args: { kind: 'test', command: 'node sum.test.cjs' } },
+      { tool: 'programming_complete', args: { summary: 'Soma corrigida pelo terminal; teste passando.' } },
+      { text: 'Concluí.' },
+    ];
+    let index = 0;
+    const context = setup({ script: () => steps[index++] ?? { text: 'Aguardando avaliação.' } });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    expect(store.getRun(id)).toMatchObject({ state: 'completed' });
+    expect(store.criteria(id).map((criterion) => [criterion.id, criterion.status])).toEqual([
+      ['changes', 'satisfied'],
+      ['checks', 'satisfied'],
+    ]);
+    const receipts = store.listReceipts(id);
+    expect(receipts.map((receipt) => receipt.kind)).toEqual(['workspace.exec', 'workspace.exec', 'workspace.check']);
+    // Only the command that changed the worktree is an edit, with the files it changed.
+    const edits = store.evidence<any>(id).map((item) => item.value).filter((item) => item.kind === 'edit');
+    expect(edits).toEqual([expect.objectContaining({ repositoryId: 'app', paths: ['sum.cjs'], operationId: receipts[1]!.operationId })]);
+  }, 60_000);
+
+  it('blocks the run naming the fix when the environment runner is older than the tools, without falling back to the shell', async () => {
+    const steps: ScriptStep[] = [
+      { tool: 'workspace_read_range', args: { path: 'sum.cjs' } },
+      { tool: 'workspace_exec', args: { command: 'cat sum.cjs' } },
+      { text: 'As ferramentas do ambiente não responderam.' },
+    ];
+    let index = 0;
+    let runner: OutdatedRunner | undefined;
+    const context = setup({ script: () => steps[index++] ?? { text: 'Parado.' }, runner: (worktree) => (runner = new OutdatedRunner(worktree)) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    const run = store.getRun(id)!;
+    expect(run.state).toBe('blocked');
+    expect(run.blocked).toMatchObject({ code: 'runner_outdated', message: expect.stringMatching(/versão anterior[\s\S]*Reinicie/) });
+    // After the first refusal no tool reaches the runner: no shell fallback, no retries.
+    expect(runner!.refused).toEqual(['readRange']);
+    expect(runner!.calls.map((call) => call.action)).not.toContain('shell');
+    const results = context.provider.requests.at(-1)!.messages.filter((message) => message.role === 'tool').map((message) => JSON.parse(String(message.content)));
+    expect(results.map((result) => result.error?.code)).toEqual(['runner_outdated', 'runner_outdated']);
+    expect(store.listReceipts(id)).toEqual([]);
   }, 60_000);
 });

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceStore, WorktreeManager, WorkspaceError, type Project } from '@oinko/workspaces';
-import { RunnerRequest, isBaseCommand } from '../contracts/requests.js';
+import { RUNNER_ACTIONS, RunnerRequest, isBaseCommand, runnerHandles } from '../contracts/requests.js';
 import type { Job } from '../contracts/index.js';
 import { EnvironmentStore } from '../storage/store.js';
 import { DockerSandbox } from '../sandbox/docker.js';
@@ -151,6 +151,13 @@ export class EnvironmentController {
       }
     });
     return job;
+  }
+  /** Commands this runner handles: its own plus those of the registered extensions. */
+  actions(): string[] {
+    return RUNNER_ACTIONS.filter(
+      (action) =>
+        runnerHandles(undefined, action) || this.extensions.some((item) => item.actions.has(action)),
+    );
   }
   async handle(input: unknown): Promise<unknown> {
     const { command, botId, correlation } = RunnerRequest.parse(input);

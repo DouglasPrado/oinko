@@ -18,6 +18,10 @@ export const hash = (value: unknown) => createHash('sha256').update(JSON.stringi
 /** Runner errors that mean nothing was written (safe, known failures). */
 const CONFLICT_CODES = new Set(['edit_conflict', 'external_change', 'idempotency_conflict', 'invalid_path', 'symlink_escape', 'not_found', 'binary_file', 'unsupported_encoding', 'invalid_range', 'invalid_cursor', 'invalid_regex']);
 
+const RUNNER_OUTDATED = 'runner_outdated';
+const blockedFailure = (context: RunContext) =>
+  new KnownFailure(context.signals.blocked!.code, `${context.signals.blocked!.message} O run será bloqueado ao fim deste ciclo; nenhuma ferramenta do ambiente funciona até lá. Encerre o ciclo com um resumo.`);
+
 function ok(value: unknown): AgentToolResult {
   return { content: JSON.stringify(value) };
 }
@@ -47,7 +51,13 @@ export function toolKit(runner: RunnerPort) {
     ...(attemptId && { attemptId }),
   });
   const send = <T = Json>(context: RunContext, command: RunnerCommandInput, operationId?: string, attemptId?: string, timeoutMs?: number) =>
-    runner.command<T>(command, { correlation: correlation(context, operationId, attemptId), ...(timeoutMs && { timeoutMs }) });
+    runner.command<T>(command, { correlation: correlation(context, operationId, attemptId), ...(timeoutMs && { timeoutMs }) }).catch((error: unknown) => {
+      // Nothing reached the runner. No tool of the run can fix it: block the
+      // run instead of letting the agent work around it through the shell.
+      if ((error as { code?: string }).code !== RUNNER_OUTDATED) throw error;
+      context.signals.blocked = { code: RUNNER_OUTDATED, message: (error as Error).message };
+      throw blockedFailure(context);
+    });
   /** Runner conflicts are known failures: nothing was written. */
   const classify = (error: unknown): never => {
     const code = (error as { code?: string }).code;
@@ -74,7 +84,9 @@ export function toolKit(runner: RunnerPort) {
       maxResultChars: 30_000,
       execute: async (args) => {
         try {
-          return ok(await run(parameters.parse(args), requireRunContext()));
+          const context = requireRunContext();
+          if (context.signals.blocked) throw blockedFailure(context);
+          return ok(await run(parameters.parse(args), context));
         } catch (error) {
           return failure(error);
         }

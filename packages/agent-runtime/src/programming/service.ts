@@ -731,6 +731,11 @@ export class ProgrammingRunService {
         this.journal.record('plan_revised', correlationOf(run, stepId), { revision: current.revision + 1, source: 'agent', compatible: true });
       }
       run = this.store.updateRun(run.id, run.revision, { cycleCount: cycle });
+      // Retrying against an environment that cannot run the tools would only loop.
+      if (context.signals.blocked) {
+        this.block(run, { ...context.signals.blocked, stepId });
+        return;
+      }
       if (outcome?.needsInput) {
         this.block(run, { code: 'needs_input', message: 'O trabalho precisa de uma informação para continuar.', needs: outcome.needsInput.slice(0, 2000), stepId });
         return;

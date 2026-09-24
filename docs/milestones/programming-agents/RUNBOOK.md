@@ -120,6 +120,7 @@ Cada tentativa roda numa raiz isolada, sem GitHub App e sem publicador; a CLI re
 | Respostas lentas | modelo rápido parado | eventos `model_fallback_triggered` mostram a troca após 15 s; ajuste *Fallback após*; se o principal também falhar, o ciclo termina com erro e o trabalho continua no próximo |
 | PR com resultado incerto | resposta perdida após push/criação | seção 8: reconciliar antes de repetir; o mesmo `operationId` nunca duplica |
 | Trabalho bloqueado "sem progresso" | três ciclos sem evidência nova | ler o último erro no detalhe; orientar e retomar com nota |
+| Trabalho bloqueado `runner_outdated` ("versão anterior… não conhece a operação") | o runner em execução foi iniciado antes do último build e não conhece os comandos novos (`/health` lista os que ele atende) | pausar os trabalhos ativos, encerrar o processo do runner (`ps` mostra `apps/environment-runner/dist/main.js`; containers e worktrees continuam), deixar a próxima operação subir o runner atual e retomar com nota. Depois de `pnpm build:packages`, reinicie também dashboard e workers |
 
 ## 13. Limites conhecidos
 

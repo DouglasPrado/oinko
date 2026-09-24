@@ -61,6 +61,17 @@ const EXTENSION_ACTIONS: ReadonlySet<string> = new Set(
 export function isBaseCommand(command: RunnerCommandValue): command is BaseCommandValue {
   return !EXTENSION_ACTIONS.has(command.action);
 }
+/** Every command of this build; a runner advertises the ones it handles in `/health`. */
+export const RUNNER_ACTIONS: readonly string[] = RunnerCommand.options.map(
+  (schema) => schema.shape.action.value as string,
+);
+/**
+ * Whether a runner answering `/health` with `actions` handles `action`.
+ * Builds before the list existed only had the base commands.
+ */
+export function runnerHandles(actions: readonly string[] | undefined, action: string): boolean {
+  return actions ? actions.includes(action) : !EXTENSION_ACTIONS.has(action);
+}
 /** Correlation of a runner call with the programming run that caused it. */
 export const RunnerCorrelation = z
   .object({

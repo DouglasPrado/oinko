@@ -8,6 +8,7 @@ import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Project, Task, Saved } from '@oinko/workspaces/contracts';
 import type { Environment, Job, Preview, Settings } from '../contracts/index.js';
+import { runnerHandles } from '../contracts/requests.js';
 import type { RunnerCommandInput, RunnerCorrelationValue } from '../contracts/requests.js';
 
 export type { RunnerCommandInput, RunnerCorrelationValue } from '../contracts/requests.js';
@@ -77,19 +78,25 @@ export function environmentRequest<T>(
     call.end(input);
   });
 }
-const starts = new Map<string, Promise<void>>();
-async function ensureEnvironmentRunner(root: string, runnerPath?: string) {
+/** What a runner says about itself; `actions` is absent in builds before the list existed. */
+interface RunnerHealth {
+  ready: boolean;
+  pid?: number;
+  actions?: string[];
+}
+const starts = new Map<string, Promise<RunnerHealth>>();
+async function ensureEnvironmentRunner(root: string, runnerPath?: string): Promise<RunnerHealth> {
   root = resolve(root);
   const existing = starts.get(root);
   if (existing) return existing;
   const startup = (async () => {
-    const health = await environmentRequest<{ ready: boolean }>(
+    const health = await environmentRequest<RunnerHealth>(
       root,
       '/health',
       undefined,
       1000,
     ).catch(() => undefined);
-    if (health?.ready) return;
+    if (health?.ready) return health;
     let startupFailure: string | undefined;
     if (!health) {
       const directory = join(root, '.harness/runtime');
@@ -121,13 +128,13 @@ async function ensureEnvironmentRunner(root: string, runnerPath?: string) {
       child.unref();
     }
     for (let i = 0; i < 240; i++) {
-      const status = await environmentRequest<{ ready: boolean }>(
+      const status = await environmentRequest<RunnerHealth>(
         root,
         '/health',
         undefined,
         1000,
       ).catch(() => undefined);
-      if (status?.ready) return;
+      if (status?.ready) return status;
       if (startupFailure && !status)
         throw new Error(
           `${startupFailure} Consulte .harness/runtime/runner-process.log e runner-error.log.`,
@@ -140,10 +147,24 @@ async function ensureEnvironmentRunner(root: string, runnerPath?: string) {
   })();
   starts.set(root, startup);
   try {
-    await startup;
+    return await startup;
   } finally {
     starts.delete(root);
   }
+}
+/**
+ * A runner keeps the code it started with: after an update, the process
+ * already listening does not know the new commands until it is restarted.
+ * Refused here, before the call, so nothing reaches it.
+ */
+function runnerOutdated(health: RunnerHealth, action: string) {
+  const pid = health.pid ?? null;
+  return Object.assign(
+    new Error(
+      `O gerenciador de ambientes em execução${pid ? ` (pid ${pid})` : ''} é de uma versão anterior e não conhece a operação "${action}". Reinicie o gerenciador para carregar a versão atual: encerre o processo e ele é iniciado de novo na próxima operação.`,
+    ),
+    { code: 'runner_outdated', details: { action, pid } },
+  );
 }
 export class EnvironmentClient {
   constructor(
@@ -155,7 +176,8 @@ export class EnvironmentClient {
     command: RunnerCommandInput,
     options: { correlation?: RunnerCorrelationValue; timeoutMs?: number } = {},
   ): Promise<T> {
-    await ensureEnvironmentRunner(this.root, this.options.runnerPath);
+    const health = await ensureEnvironmentRunner(this.root, this.options.runnerPath);
+    if (!runnerHandles(health.actions, command.action)) throw runnerOutdated(health, command.action);
     return environmentRequest<T>(
       this.root,
       '/command',

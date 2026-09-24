@@ -32,7 +32,8 @@ export async function startEnvironmentService(root: string) {
     };
     void (async () => {
       if (request.method === 'GET' && request.url === '/health')
-        return send(200, { ready, pid: process.pid });
+        // The command list lets clients tell a runner started from an older build.
+        return send(200, { ready, pid: process.pid, ...(ready && controller && { actions: controller.actions() }) });
       if (!ready || !controller) return send(503, { error: 'Gerenciador iniciando.' });
       if (request.method !== 'POST' || request.url !== '/command')
         return send(404, { error: 'Operação desconhecida.' });

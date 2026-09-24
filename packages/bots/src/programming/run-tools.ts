@@ -278,8 +278,11 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       return { ...result, command, cwd, origin, ...(artifact && { logArtifactId: artifact.id }), outputTail: (result.outputTail ?? '').slice(-3000) };
     }, { timeoutMs: 3_700_000 }),
 
-    tool('workspace_exec', 'Executa um comando no terminal da worktree do run (Git, inspeção). Prefira workspace_check para validações; resultados repetidos não contam como progresso.', exec, async (args, context) => {
+    tool('workspace_exec', 'Executa um comando no terminal da worktree do run (Git, inspeção, geradores). Para editar arquivos use workspace_replace/workspace_patch; para validações, workspace_check. O que o comando mudar na worktree conta como edição do run; resultados repetidos não contam como progresso.', exec, async (args, context) => {
       const where = location(context, args.repositoryId);
+      // The baseline predates the command, so what it changes is the run's, never the person's.
+      await ensureBaseline(context, where);
+      const before = await snapshot(context, where);
       const outcome = await context.operation(
         { kind: 'workspace.exec', class: 'mutate', params: { ...where, command: args.command, cycle: context.stepId }, intent: { command: args.command.slice(0, 500) } },
         async (operation) => {
@@ -290,6 +293,12 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       const result = outcome.result as { stdout: string; stderr: string; exitCode: number };
       const fingerprint = hash([args.command, result.exitCode, result.stdout.slice(-4000), result.stderr.slice(-4000)]);
       context.record(result.exitCode === 0 ? { kind: 'information', source: 'exec', fingerprint } : { kind: 'error', fingerprint, message: `${args.command.slice(0, 200)} → ${result.exitCode}: ${(result.stderr || result.stdout).slice(-300)}` });
+      const after = await snapshot(context, where);
+      if (after.revision !== before.revision) {
+        const paths = [...new Set([...Object.keys(before.files), ...Object.keys(after.files)])].filter((file) => before.files[file] !== after.files[file]).sort();
+        context.record({ kind: 'edit', repositoryId: where.repositoryId, paths, revision: after.revision, operationId: outcome.receipt.operationId });
+        context.emit('workspace_edit_finished', { repositoryId: where.repositoryId, kind: 'workspace.exec', state: 'succeeded', files: paths.length }, 'succeeded', { operationId: outcome.receipt.operationId });
+      }
       return { exitCode: result.exitCode, stdout: result.stdout.slice(-12_000), stderr: result.stderr.slice(-6_000) };
     }, { timeoutMs: 700_000 }),
   ];
@@ -306,6 +315,9 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     if (!context.revisions.has(where.repositoryId)) context.revisions.set(where.repositoryId, snapshot.revision);
   }
   const baselines = new Set<string>();
+  /** Current revision and the hash of each changed file, to see what a shell command changed. */
+  const snapshot = (context: RunContext, where: { taskId: string; repositoryId: string }) =>
+    send<{ revision: string; files: Record<string, string> }>(context, { action: 'gitSnapshot', ...where });
 
   return [...tools, ...runControlTools()];
 }

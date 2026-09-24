@@ -84,6 +84,8 @@ export interface CycleSignals {
   completion?: { summary: string };
   needsInput?: string;
   planUpdate?: string[];
+  /** An environment failure no retry in this run can fix: the run blocks with it at the end of the cycle. */
+  blocked?: { code: string; message: string };
 }
 
 /** Where a cycle's tools report what they observed and ask for safe points. */
