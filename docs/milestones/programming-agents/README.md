@@ -1,6 +1,6 @@
 # Plano de desenvolvimento autônomo reutilizável
 
-**Status do plano:** in_progress — implementado e validado por testes automatizados, Docker real e e2e da dashboard; 31 de 44 stories concluídas com evidência. Pendentes: provedor real (baseline e comparação com 3 repetições), GitHub App real, jornada Telegram real e aceite do operador. Ver [relatório de validação](validation-reports/validation-9c3d44fb133d.md) e [guia de operação](RUNBOOK.md).
+**Status do plano:** in_progress — implementado e validado por testes automatizados, Docker real e e2e da dashboard; 31 de 44 stories concluídas com evidência. Pendentes: provedor real (baseline e comparação com 3 repetições), GitHub App real, jornada Telegram real e aceite do operador. Ver [relatório de validação](validation-reports/validation-8dc1e2e0e9f6.md) e [guia de operação](RUNBOOK.md).
 **Data:** 23/09/2026. **Escopo:** plataforma Oinko, disponível a qualquer bot autorizado.
 
 Transformar os recursos existentes de sandbox, worktrees, MCP, contexto adaptativo e telemetria em um processo de desenvolvimento durável: compreender o projeto, editar, testar, verificar a prévia e entregar um draft PR. Toda etapa deixa evidência para melhorar o processo com avaliações controladas.
