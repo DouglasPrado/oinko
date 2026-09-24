@@ -1,6 +1,7 @@
 import type { ChatMessage } from './chat-message.js';
 import type { KnowledgeChunk, RetrievedKnowledge } from './knowledge.js';
 import type { ConversationSearchPage, ConversationSearchQuery } from './conversation-search.js';
+import type { ConversationCheckpoint, ArchivedToolResult } from './working-context.js';
 
 /** Pluggable interface for vector storage (knowledge/RAG) */
 export interface VectorStore {
@@ -28,6 +29,10 @@ export interface ConversationStore {
   listThread(threadId: string): ChatMessage[];
   listPinned(threadId: string): ChatMessage[];
   clearThread(threadId: string): void;
+  getCheckpoint?(threadId: string): ConversationCheckpoint | undefined;
+  saveCheckpoint?(threadId: string, checkpoint: ConversationCheckpoint): void;
+  getToolResult?(threadId: string, id: string): ArchivedToolResult | undefined;
+  saveToolResult?(threadId: string, result: ArchivedToolResult): void;
   /**
    * Optional. Searches past messages inside `threadIds` and nowhere else; an
    * empty list returns an empty page. Only user and assistant text is

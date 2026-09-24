@@ -10,6 +10,17 @@ const BAND: Record<string, string> = {
   memory: '#4A4E9C',
   skill: '#8A6A1F',
   mcp: '#7A5C8F',
+  history: '#2a8791',
+  'context:summary': '#9960a5',
+};
+
+const LABELS: Record<string, string> = {
+  'system:base': 'Instruções do bot',
+  'tools:schema': 'Definições das ferramentas',
+  'history:recent': 'Histórico recente',
+  'history:archived_details': 'Trechos recuperados do histórico',
+  'context:summary': 'Resumo da conversa',
+  'tools:discovery': 'Descoberta de ferramentas',
 };
 
 function bandOf(source: string): string {
@@ -64,7 +75,7 @@ export function ContextComposition({ injections, contextTokens }: Props) {
               className="inline-block size-2.5"
               style={{ background: bandOf(injection.source) }}
             />
-            <span>{injection.source}</span>
+            <span>{LABELS[injection.source] ?? injection.source}</span>
             <span className="tabular text-ink-muted">{formatTokens(injection.tokens)}</span>
           </li>
         ))}
@@ -81,7 +92,7 @@ export function ContextComposition({ injections, contextTokens }: Props) {
 
       {contextTokens !== null ? (
         <p className="tabular mt-2 text-[0.8125rem] text-ink-muted">
-          {formatTokens(contextTokens)} tokens de contexto montado
+          {formatTokens(contextTokens)} tokens estimados de contexto
         </p>
       ) : null}
     </section>

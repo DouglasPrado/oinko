@@ -221,4 +221,12 @@ export const TELEMETRY_MIGRATIONS: readonly TelemetryMigration[] = [
       ...V1_EVENTS,
     ],
   },
+  {
+    version: 2,
+    name: 'decision-token-usage',
+    up: [
+      'ALTER TABLE decisions ADD COLUMN input_tokens INTEGER',
+      'ALTER TABLE decisions ADD COLUMN output_tokens INTEGER',
+    ],
+  },
 ];

@@ -29,6 +29,7 @@ import { SqliteTelemetrySink } from './telemetry/sqlite-telemetry-sink.js';
 import { guardSink } from './telemetry/safe-sink.js';
 import { purgeTelemetry } from './telemetry/purge.js';
 import { traceDecisions } from './telemetry/decision-bridge.js';
+import { llmCallRecord } from './telemetry/llm-call-record.js';
 import { CostEnricher } from './telemetry/cost-enricher.js';
 import type { TelemetrySink } from './contracts/entities/telemetry.js';
 import { SQLiteVectorStore } from './knowledge/sqlite-vector-store.js';
@@ -51,11 +52,14 @@ import {
 import { formatRetrievedKnowledge } from './knowledge/knowledge-format.js';
 import { localDateInfo, systemTimeZone } from './utils/local-date.js';
 import { DEFAULT_BEHAVIOR_PROMPT } from './core/behavior-prompt.js';
-import {
-  createConversationSearchTool,
-  CONVERSATION_SEARCH_GUIDANCE,
-} from './tools/builtin/conversation-search.js';
+import { CONVERSATION_SEARCH_GUIDANCE } from './tools/builtin/conversation-search.js';
 import { randomUUID } from 'node:crypto';
+import {
+  registerConversationTools,
+  routingTaskContext,
+  toolsForTurn,
+  prepareAdaptiveContext,
+} from './core/adaptive-context.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -113,7 +117,20 @@ export class Agent {
       ...(config.fetch !== undefined && { fetch: config.fetch }),
     });
 
-    this.toolExecutor = new ToolExecutor({ decider: config.decider, logger: this.logger });
+    this.toolExecutor = new ToolExecutor({
+      decider: config.decider,
+      logger: this.logger,
+      ...(config.context?.enabled && {
+        archiveResult: (name, result, context) =>
+          this.conversations.saveToolResult(context.threadId!, {
+            id: context.toolCallId!,
+            name,
+            content: result.content,
+            isError: !!result.isError,
+            createdAt: Date.now(),
+          }),
+      }),
+    });
     this.mcpAdapter = new MCPAdapter(this.toolExecutor, () => this.telemetry);
 
     // Conversation store — defaults to SQLite when database is available (persists across restarts)
@@ -130,29 +147,7 @@ export class Agent {
       this.conversations = new ConversationManager();
     }
 
-    // Registered once, here, and never per turn: the executor is shared by
-    // threads running in parallel, so the thread to search must come from
-    // each call's context — a closure over "the current thread" would leak
-    // one person's history into another's turn.
-    const search = config.conversation?.search;
-    if (search?.enabled) {
-      if (!this.conversations.supportsSearch()) {
-        throw new Error(
-          'conversation.search.enabled requires a ConversationStore that implements searchMessages()',
-        );
-      }
-      this.toolExecutor.register(
-        createConversationSearchTool({
-          search: (query, threadIds) => this.conversations.search(query, threadIds),
-          ...(search.scope !== undefined && { scope: search.scope }),
-          maxResults: search.maxResults,
-          maxPages: search.maxPages,
-          snippetChars: search.snippetChars,
-          maxCallsPerTurn: search.maxCallsPerTurn,
-          timeZone: config.timezone ?? systemTimeZone(),
-        }),
-      );
-    }
+    registerConversationTools(this.conversations, this.toolExecutor, config);
 
     // Embedding service — optionally uses a separate provider (e.g. direct OpenAI)
     const embApiKey = config.embedding?.apiKey ?? config.apiKey;
@@ -309,8 +304,20 @@ export class Agent {
         : this.config.decider;
 
     const routeThisTurn = options?.model === undefined && this.config.routing !== undefined;
+    const contextPolicy = this.config.context?.enabled ? this.config.context : undefined;
+    const taskContext = contextPolicy
+      ? routingTaskContext(this.conversations, threadId, this.config.systemPrompt)
+      : undefined;
     const screening = decider
       ? await screenTurn(userContent, decider, {
+          ...(taskContext && { taskContext }),
+          ...(contextPolicy?.selectTools && {
+            tools: {
+              catalog: this.toolExecutor.listTools(),
+              maxTools: contextPolicy.maxTools,
+              minConfidence: contextPolicy.minToolConfidence,
+            },
+          }),
           ...(routeThisTurn &&
             this.config.routing !== undefined && {
               routing: {
@@ -404,7 +411,13 @@ export class Agent {
       skillToolRegistered = true;
     }
 
-    const availableTools = this.toolExecutor.listTools();
+    const {
+      executor: executionTools,
+      definitions: toolDefinitions,
+      available: availableTools,
+      discovery,
+    } = toolsForTurn(this.toolExecutor, contextPolicy, screening.toolNames);
+    if (discovery) injections.push(discovery);
     if (availableTools.length > 0) {
       const toolContent = buildToolUsagePrompt(availableTools);
       injections.push({
@@ -424,7 +437,7 @@ export class Agent {
       });
     }
 
-    if (this.config.conversation?.search?.enabled) {
+    if (this.config.conversation?.search?.enabled || contextPolicy) {
       injections.push({
         source: 'conversation-search',
         priority: 9,
@@ -473,14 +486,30 @@ export class Agent {
     }
     this.lastEmittedDate = today;
 
-    const history = this.conversations.getHistory(threadId);
+    const adaptive = await prepareAdaptiveContext({
+      manager: this.conversations,
+      threadId,
+      config: this.config,
+      policy: contextPolicy,
+      model,
+      injections,
+      toolSchema: JSON.stringify(toolDefinitions()),
+      client: this.client,
+      traceId,
+      signal: options?.signal,
+      telemetry,
+    });
+    const { toolSchemaTokens, inputBudget, summaryCalls, summarize, history } = adaptive;
     const contextResult = buildContext({
       systemPrompt: this.config.systemPrompt,
-      injections,
+      injections: adaptive.injections,
       history,
-      maxTokens: this.config.maxContextTokens,
-      reserveTokens: this.config.reserveTokens,
+      maxTokens: inputBudget
+        ? Math.max(1024, inputBudget - toolSchemaTokens)
+        : this.config.maxContextTokens,
+      reserveTokens: inputBudget ? 0 : this.config.reserveTokens,
       maxPinnedMessages: this.config.maxPinnedMessages,
+      preserveHistory: !!contextPolicy,
       // O modelo do turno, nao o pedido: o roteamento pode ter trocado por um
       // mais barato, e e ele quem vai receber (ou nao conseguir ler) a imagem.
       model,
@@ -512,6 +541,8 @@ export class Agent {
 
     // Emit start
     yield { type: 'agent_start', traceId: ctx.traceId, threadId, model };
+    for (const event of adaptive.events(contextResult.totalTokens, screening.toolSelectionFallback))
+      yield event;
 
     telemetry?.write({
       kind: 'execution_start',
@@ -528,21 +559,25 @@ export class Agent {
       // O system prompt e sempre texto; as partes multimodais vivem nas
       // mensagens de usuario, e serializa-las aqui so poluiria o registro.
       systemPrompt: systemPromptOf(contextResult.messages),
-      toolsSchema: JSON.stringify(this.toolExecutor.getToolDefinitions()),
-      toolDefCount: this.toolExecutor.getToolDefinitions().length,
+      toolsSchema: JSON.stringify(toolDefinitions()),
+      toolDefCount: toolDefinitions().length,
       userInput: typeof input === 'string' ? input : JSON.stringify(input),
       // Inclui o que o orcamento descartou: e o que responde por que um bloco
       // nao entrou no prompt.
-      injections: injections.map((injection) => ({
-        source: injection.source,
-        priority: injection.priority,
-        tokens: injection.tokens,
-        applied: appliedInjections.has(injection),
-        content: injection.content,
-      })),
-      contextTokens: contextResult.totalTokens,
+      injections: [
+        ...adaptive.injections.map((injection) => ({
+          source: injection.source,
+          priority: injection.priority,
+          tokens: injection.tokens,
+          applied: appliedInjections.has(injection),
+          content: injection.content,
+        })),
+        ...adaptive.composition(),
+      ],
+      contextTokens: contextResult.totalTokens + (contextPolicy ? toolSchemaTokens : 0),
       startedAt: ctx.startedAt,
     });
+    adaptive.recordSummaries();
 
     // Emit skill_activated events for matched skills — only those that made it
     // into the prompt: a skill the budget dropped was never active.
@@ -563,7 +598,12 @@ export class Agent {
 
     const loopGen = executeReactLoop(contextResult.messages, {
       client: this.client,
-      toolExecutor: this.toolExecutor,
+      toolExecutor: executionTools,
+      ...(contextPolicy && {
+        toolDefinitions,
+        oldToolResultChars: contextPolicy.toolResultChars,
+        summarize,
+      }),
       model,
       maxIterations: this.config.maxIterations,
       ...(decider !== undefined && { decider }),
@@ -582,7 +622,7 @@ export class Agent {
         : undefined,
       signal: options?.signal,
       // Compaction & Recovery
-      maxContextTokens: this.config.maxContextTokens,
+      maxContextTokens: inputBudget ?? this.config.maxContextTokens,
       compactionThreshold: this.config.compactionThreshold,
       fallbackModel: this.config.fallbackModel,
       maxOutputTokens: this.config.maxOutputTokens,
@@ -591,39 +631,14 @@ export class Agent {
       tokenBudget: this.config.tokenBudget,
       // Tool intelligence: conditional skill activation from file operations
       onLLMCall: (call) => {
-        telemetry?.write({
-          kind: 'llm_call',
-          id: `${ctx.traceId}:${call.seq}`,
-          traceId: ctx.traceId,
-          seq: call.seq,
-          model: call.model,
-          requestBody: JSON.stringify(call.requestMessages),
-          responseText: call.responseText,
-          ...(call.responseToolCalls !== undefined && {
-            responseToolCalls: call.responseToolCalls,
+        telemetry?.write(
+          llmCallRecord(call, {
+            traceId: ctx.traceId,
+            summaryCount: summaryCalls.length,
+            includeTools: !!contextPolicy,
+            providerKind: this.providerKind(),
           }),
-          finishReason: call.finishReason,
-          ...(call.usage !== undefined && { usage: call.usage }),
-          ...(call.usageDetail !== undefined && { usageDetail: call.usageDetail }),
-          // Tres estados, nao dois. Confirmado quando o valor veio no stream;
-          // pendente quando o provedor tem como informar depois e ha id de
-          // geracao para perguntar; indisponivel so quando nao ha a quem
-          // perguntar. Estimar nao e opcao em nenhum deles.
-          costStatus:
-            call.usageDetail?.costUsd !== undefined
-              ? 'confirmed'
-              : this.providerKind() === 'openrouter' && call.usageDetail?.generationId !== undefined
-                ? 'pending'
-                : 'unavailable',
-          ...(call.usageDetail?.costUsd !== undefined && { costSource: 'stream_usage' as const }),
-          ...(call.ttftMs !== undefined && { ttftMs: call.ttftMs }),
-          ...(call.durationMs !== undefined && { durationMs: call.durationMs }),
-          ...(call.queuedMs !== undefined && { queuedMs: call.queuedMs }),
-          ...(call.attempts !== undefined && { attempts: call.attempts }),
-          streamed: true,
-          startedAt: call.startedAt,
-          endedAt: call.endedAt,
-        });
+        );
       },
       onFilePathsTouched: this.skillManager
         ? (paths) => this.skillManager!.activateForPaths(paths)
@@ -710,6 +725,13 @@ export class Agent {
       return;
     }
 
+    for (const call of summaryCalls) {
+      if (call.usage) {
+        terminal.usage.inputTokens += call.usage.inputTokens;
+        terminal.usage.outputTokens += call.usage.outputTokens;
+        terminal.usage.totalTokens += call.usage.totalTokens;
+      }
+    }
     // --- Post-loop: persist conversation history ---
     const now = Date.now();
 

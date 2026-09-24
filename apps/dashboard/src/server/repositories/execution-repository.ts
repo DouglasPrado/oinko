@@ -46,7 +46,7 @@ function toExecution(row: Row): ExecutionSummary {
   };
 }
 
-const EXECUTION_COLUMNS = `trace_id, thread_id, app, model, status, end_reason,
+const EXECUTION_COLUMNS = `trace_id, thread_id, app, model, requested_model, status, end_reason,
   input_tokens, output_tokens, total_tokens, cost_usd, cost_status, context_tokens,
   started_at, duration_ms, ttft_ms, error_message`;
 
@@ -182,9 +182,12 @@ function mcpCalls(traceId: string, database = telemetryDb()): TimelineItem[] {
 }
 
 function decisions(traceId: string, database = telemetryDb()): TimelineItem[] {
+  const hasUsage = (database.prepare('PRAGMA table_info(decisions)').all() as Row[]).some(
+    (row) => row.name === 'input_tokens',
+  );
   const rows = database
     .prepare(
-      `SELECT id, point, answers_json, duration_ms, created_at
+      `SELECT id, point, questions_json, answers_json, duration_ms, created_at${hasUsage ? ', input_tokens, output_tokens' : ''}
        FROM decisions WHERE trace_id = ? ORDER BY created_at`,
     )
     .all(traceId) as unknown as Row[];
@@ -200,11 +203,32 @@ function decisions(traceId: string, database = telemetryDb()): TimelineItem[] {
       kind: 'decision' as const,
       id: str(row.id),
       point: str(row.point),
+      inputTokens: nullableNum(row.input_tokens),
+      outputTokens: nullableNum(row.output_tokens),
       answers,
+      answerLabels: decisionLabels(str(row.questions_json)),
       startedAt: num(row.created_at),
       durationMs: num(row.duration_ms),
     };
   });
+}
+
+function decisionLabels(serialized: string): Record<string, string> {
+  const labels: Record<string, string> = { tier: 'Modelo' };
+  try {
+    const questions: unknown = JSON.parse(serialized);
+    if (!questions || typeof questions !== 'object') return labels;
+    for (const [key, question] of Object.entries(questions)) {
+      if (!/^tool\d+$/.test(key) || !question || typeof question !== 'object') continue;
+      const instructions: unknown = (question as Record<string, unknown>).instructions;
+      if (typeof instructions !== 'string') continue;
+      const name = /^Is this tool likely needed[^?]*\? ([^:\s]+):/.exec(instructions)?.[1];
+      if (name) labels[key] = name;
+    }
+  } catch {
+    /* Old or malformed metadata still displays the original answer keys. */
+  }
+  return labels;
 }
 
 function injections(traceId: string, database = telemetryDb()): Injection[] {

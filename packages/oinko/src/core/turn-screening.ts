@@ -35,12 +35,20 @@ export interface TurnScreeningConfig {
   jailbreak?: JailbreakConfig;
   signal?: AbortSignal;
   logger?: Logger;
+  taskContext?: string;
+  tools?: {
+    catalog: readonly { name: string; description: string }[];
+    maxTools: number;
+    minConfidence: number;
+  };
 }
 
 export interface TurnScreeningResult {
   /** Present only when routing is enabled. */
   model?: string;
   jailbreakSuspected: boolean;
+  toolNames?: string[];
+  toolSelectionFallback?: boolean;
 }
 
 /**
@@ -62,6 +70,10 @@ export async function screenTurn(
   const fallback: TurnScreeningResult = {
     jailbreakSuspected: false,
     ...(routing !== undefined && { model: routing.capableModel }),
+    ...(config.tools && {
+      toolNames: config.tools.catalog.map((t) => t.name),
+      toolSelectionFallback: true,
+    }),
   };
 
   const questions: Record<string, Question> = {};
@@ -78,13 +90,51 @@ export async function screenTurn(
     };
   }
   if (jailbreakOn) questions.jailbreak = JAILBREAK_QUESTION;
+  config.tools?.catalog.forEach((tool, index) => {
+    questions[`tool${index}`] = {
+      kind: 'bool',
+      instructions: `Is this tool likely needed to fulfill the CURRENT request, including prerequisite steps? ${tool.name}: ${tool.description.slice(0, 320)}`,
+      criteria: {
+        true: 'Needed for the current task or to continue pending work.',
+        false:
+          'Unrelated, or request only asks for conversation/confirmation and needs no external action.',
+      },
+    };
+  });
 
   if (Object.keys(questions).length === 0) return fallback;
 
   try {
-    const answers = await decider.decide(userInput, questions, config.signal);
+    const state = config.taskContext
+      ? `CURRENT USER MESSAGE:\n${userInput}\n\nEARLIER TASK STATE (reference only):\n${config.taskContext}`
+      : userInput;
+    const answers = await decider.decide(state, questions, config.signal);
 
     const result: TurnScreeningResult = { jailbreakSuspected: false };
+    if (config.tools) {
+      const selection = config.tools;
+      const ranked = selection.catalog.map((tool, index) => ({
+        tool,
+        answer: answers[`tool${index}`],
+      }));
+      if (
+        ranked.some(
+          ({ answer }) => typeof answer?.value !== 'boolean' || !Number.isFinite(answer.confidence),
+        )
+      )
+        throw new Error('Incomplete tool selection');
+      result.toolNames = ranked
+        .filter(
+          ({ answer }) => answer!.value === true || answer!.confidence < selection.minConfidence,
+        )
+        .sort(
+          (a, b) =>
+            Number(b.answer!.value) - Number(a.answer!.value) ||
+            b.answer!.confidence - a.answer!.confidence,
+        )
+        .slice(0, selection.maxTools)
+        .map(({ tool }) => tool.name);
+    }
 
     if (routing) {
       const tier = answers.tier;

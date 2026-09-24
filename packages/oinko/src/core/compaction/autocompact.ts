@@ -1,11 +1,13 @@
 import type { LLMMessage } from '../../llm/message-types.js';
 import type { LLMClient } from '../../llm/llm-client.js';
-import { estimateContentTokens } from '../../utils/token-counter.js';
+import { estimateContentTokens, estimateTokens } from '../../utils/token-counter.js';
 
 interface AutocompactOptions {
   maxContextTokens: number;
   compactionThreshold: number; // 0.0-1.0, e.g. 0.8 = compact at 80% usage
   tailProtection: number; // Number of recent messages to always preserve
+  summarize?: (transcript: string, previous: string) => Promise<string>;
+  preserveCurrentTurn?: boolean;
 }
 
 interface AutocompactResult {
@@ -14,7 +16,13 @@ interface AutocompactResult {
 }
 
 function estimateMessagesTokens(messages: readonly LLMMessage[]): number {
-  return messages.reduce((sum, m) => sum + estimateContentTokens(m.content), 0);
+  return messages.reduce(
+    (sum, m) =>
+      sum +
+      estimateContentTokens(m.content) +
+      (m.tool_calls ? estimateTokens(JSON.stringify(m.tool_calls)) : 0),
+    0,
+  );
 }
 
 /**
@@ -40,7 +48,18 @@ export async function autocompact(
   // their `tool` results — OpenAI rejects any other order.
   const systemMessages = messages.filter((m) => m.role === 'system');
   const nonSystem = messages.filter((m) => m.role !== 'system');
-  const tailCount = Math.min(tailProtection, nonSystem.length);
+  let tailCount = Math.min(tailProtection, nonSystem.length);
+  if (options.preserveCurrentTurn) {
+    let start = nonSystem.length - tailCount;
+    const first = nonSystem[start];
+    if (first?.role === 'tool' && first.tool_call_id) {
+      const parent = nonSystem.findIndex((m) =>
+        m.tool_calls?.some((c) => c.id === first.tool_call_id),
+      );
+      if (parent >= 0) start = parent;
+    }
+    tailCount = nonSystem.length - start;
+  }
   const earlyNonSystem = nonSystem.slice(0, nonSystem.length - tailCount);
   const tailMessages = nonSystem.slice(-tailCount);
 
@@ -58,8 +77,12 @@ export async function autocompact(
       .filter((m) => m.role === 'tool' && isPinned(m) && m.tool_call_id)
       .map((m) => m.tool_call_id!),
   );
+  const currentUser = options.preserveCurrentTurn
+    ? [...nonSystem].reverse().find((m) => m.role === 'user')
+    : undefined;
   const keep = (m: LLMMessage): boolean =>
     isPinned(m) ||
+    m === currentUser ||
     (m.role === 'assistant' && !!m.tool_calls?.some((tc) => pinnedToolCallIds.has(tc.id)));
   const earlyPinned = earlyNonSystem.filter(keep);
   const toCompact = earlyNonSystem.filter((m) => !keep(m));
@@ -70,23 +93,25 @@ export async function autocompact(
   const conversationText = toCompact
     .map((m) => {
       const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-      return `${m.role}: ${content.slice(0, 2000)}`; // Limit per message for the summary prompt
+      return `${m.role}${m.tool_call_id ? ` reference=${m.tool_call_id}` : ''}: ${content.slice(0, 2000)}${m.tool_calls ? `\nCALLS: ${JSON.stringify(m.tool_calls)}` : ''}`;
     })
     .join('\n');
 
   try {
-    const response = await client.chat({
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are a conversation summarizer. Create a concise summary of the following conversation, preserving key facts, decisions, tool results, and context needed for continuation. Be factual and specific. Output only the summary.',
-        },
-        { role: 'user', content: conversationText },
-      ],
-      temperature: 0,
-      maxTokens: 1000,
-    });
+    const response = options.summarize
+      ? { content: await options.summarize(conversationText, '') }
+      : await client.chat({
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a conversation summarizer. Create a concise summary of the following conversation, preserving key facts, decisions, tool results, and context needed for continuation. Be factual and specific. Output only the summary.',
+            },
+            { role: 'user', content: conversationText },
+          ],
+          temperature: 0,
+          maxTokens: 1000,
+        });
 
     const summaryMessage: LLMMessage = {
       role: 'user',

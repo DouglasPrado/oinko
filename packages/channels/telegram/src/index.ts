@@ -1,6 +1,7 @@
 import { Bot, type Context } from 'grammy';
 import { TranscriptionError, type AgentRuntime, type ChannelProvider } from '@oinko/agent-runtime';
 import { buildAgentInput, MEDIA_ERROR_MESSAGES } from './media.js';
+import { startTyping } from './typing.js';
 
 // Count UTF-16 units conservatively and never split an emoji surrogate pair.
 export function splitMessage(text: string): string[] {
@@ -50,12 +51,17 @@ export function createTelegramBot(
   bot.on(
     ['message:text', 'message:photo', 'message:voice', 'message:audio', 'message:document'],
     async (ctx) => {
+      const stopTyping = startTyping(ctx, signal);
+      const respond = async (text: string) => {
+        stopTyping();
+        await reply(ctx, text);
+      };
       try {
         const built = await buildAgentInput(ctx, config.token, signal);
         if (signal.aborted) return;
         if (built.kind === 'empty') return;
         if (built.kind === 'unsupported') {
-          await reply(ctx, MEDIA_ERROR_MESSAGES[built.reason]);
+          await respond(MEDIA_ERROR_MESSAGES[built.reason]);
           return;
         }
         let input = built.kind === 'audio' ? built : built.input;
@@ -72,20 +78,20 @@ export function createTelegramBot(
           signal,
         );
         if (!signal.aborted)
-          await reply(
-            ctx,
+          await respond(
             typeof input === 'string' && ['/start', '/help'].includes(input)
               ? `${answer}\nNo Telegram, você também pode enviar fotos, imagens como arquivo e áudios.`
               : answer,
           );
       } catch (error) {
         if (!signal.aborted)
-          await reply(
-            ctx,
+          await respond(
             error instanceof TranscriptionError
               ? error.message
               : 'Não consegui concluir a resposta. Tente novamente.',
           );
+      } finally {
+        stopTyping();
       }
     },
   );

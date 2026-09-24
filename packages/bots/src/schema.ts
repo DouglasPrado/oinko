@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContextPolicySchema } from '@oinko/core/context-policy';
 
 export const BotId = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const HttpUrl = z.url().refine((value) => {
@@ -25,6 +26,14 @@ export const BotDefinitionSchema = z
     model: z.string().trim().min(1).max(200),
     systemPrompt: z.string().trim().min(1).max(100_000),
     baseUrl: HttpUrl.optional(),
+    context: ContextPolicySchema.optional(),
+    intelligence: z
+      .strictObject({
+        enabled: z.boolean(),
+        fastModel: z.string().trim().min(1).max(200).optional(),
+        minConfidence: z.number().min(0).max(1).default(0.85),
+      })
+      .optional(),
     cli: z.boolean().default(true),
     programming: z.boolean().default(false),
     /** Lets the bot search earlier messages of the same conversation. */
@@ -73,6 +82,7 @@ export const BotSecretsSchema = z.object({
   apiKey: z.string().max(10_000).optional(),
   telegramToken: z.string().max(1000).optional(),
   transcriptionKey: z.string().max(10_000).optional(),
+  typesafeKey: z.string().max(10_000).optional(),
   mcpTokens: z.record(BotId, z.string().max(10_000)).optional(),
 });
 export type BotSecrets = z.infer<typeof BotSecretsSchema>;
@@ -81,6 +91,7 @@ export type BotProfile = BotDefinition & {
   hasApiKey: boolean;
   hasTelegramToken: boolean;
   hasTranscriptionKey: boolean;
+  hasTypesafeKey: boolean;
   mcpCredentials: string[];
 };
 export class BotError extends Error {}

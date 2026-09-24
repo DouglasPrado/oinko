@@ -9,6 +9,10 @@ import type { SQLiteDatabase } from './sqlite-database.js';
 import { createLogger } from '../utils/logger.js';
 import type { Logger } from '../utils/logger.js';
 import { searchableText } from '../utils/conversation-text.js';
+import type {
+  ConversationCheckpoint,
+  ArchivedToolResult,
+} from '../contracts/entities/working-context.js';
 
 /**
  * SQLite implementation of ConversationStore.
@@ -73,7 +77,56 @@ export class SQLiteConversationStore implements ConversationStore {
 
   clearThread(threadId: string): void {
     // The delete trigger clears the search index along with the rows.
-    this.database.db.prepare('DELETE FROM conversations WHERE thread_id = ?').run(threadId);
+    this.database.transaction(() => {
+      this.database.db.prepare('DELETE FROM conversations WHERE thread_id = ?').run(threadId);
+      this.database.db
+        .prepare('DELETE FROM conversation_checkpoints WHERE thread_id = ?')
+        .run(threadId);
+      this.database.db
+        .prepare('DELETE FROM conversation_tool_results WHERE thread_id = ?')
+        .run(threadId);
+    });
+  }
+
+  getCheckpoint(threadId: string): ConversationCheckpoint | undefined {
+    return this.database.db
+      .prepare(
+        'SELECT through_count AS through, summary, updated_at AS updatedAt FROM conversation_checkpoints WHERE thread_id = ?',
+      )
+      .get(threadId) as unknown as ConversationCheckpoint | undefined;
+  }
+
+  saveCheckpoint(threadId: string, checkpoint: ConversationCheckpoint): void {
+    this.database.db
+      .prepare(
+        'INSERT INTO conversation_checkpoints (thread_id, through_count, summary, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(thread_id) DO UPDATE SET through_count=excluded.through_count, summary=excluded.summary, updated_at=excluded.updated_at',
+      )
+      .run(threadId, checkpoint.through, checkpoint.summary, checkpoint.updatedAt);
+  }
+
+  getToolResult(threadId: string, id: string): ArchivedToolResult | undefined {
+    const row = this.database.db
+      .prepare(
+        'SELECT id, name, content, is_error AS isError, created_at AS createdAt FROM conversation_tool_results WHERE thread_id = ? AND id = ?',
+      )
+      .get(threadId, id) as unknown as
+      (Omit<ArchivedToolResult, 'isError'> & { isError: number }) | undefined;
+    return row ? { ...row, isError: row.isError === 1 } : undefined;
+  }
+
+  saveToolResult(threadId: string, result: ArchivedToolResult): void {
+    this.database.db
+      .prepare(
+        'INSERT OR IGNORE INTO conversation_tool_results (thread_id, id, name, content, is_error, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        threadId,
+        result.id,
+        result.name,
+        result.content,
+        result.isError ? 1 : 0,
+        result.createdAt,
+      );
   }
 
   searchMessages(

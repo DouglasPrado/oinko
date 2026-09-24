@@ -3,7 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { TelemetryDatabase } from '../../../src/telemetry/telemetry-database.js';
-import type { TelemetryMigration } from '../../../src/telemetry/migrations.js';
+import {
+  TELEMETRY_MIGRATIONS,
+  type TelemetryMigration,
+} from '../../../src/telemetry/migrations.js';
 
 let dir: string | undefined;
 const open: TelemetryDatabase[] = [];
@@ -39,6 +42,24 @@ function tableNames(db: TelemetryDatabase): string[] {
 }
 
 describe('TelemetryDatabase', () => {
+  it('upgrades existing decisions without losing their content or inventing zero token usage', () => {
+    const db = track(
+      new TelemetryDatabase(':memory:', { migrations: TELEMETRY_MIGRATIONS.slice(0, 1) }),
+    );
+    db.initialize();
+    db.db.exec(
+      "INSERT INTO decisions (id, point, questions_json, answers_json, duration_ms, created_at) VALUES ('old', 'routing', '{}', '{}', 4, 0)",
+    );
+    db.migrate(TELEMETRY_MIGRATIONS);
+    expect(
+      db.db.prepare('SELECT id, point, input_tokens, output_tokens FROM decisions').get(),
+    ).toMatchObject({
+      id: 'old',
+      point: 'routing',
+      input_tokens: null,
+      output_tokens: null,
+    });
+  });
   it('creates the full v1 schema in memory', () => {
     const db = track(new TelemetryDatabase(':memory:'));
     db.initialize();
@@ -66,7 +87,7 @@ describe('TelemetryDatabase', () => {
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all() as unknown as { version: number; name: string }[];
 
-    expect(rows).toHaveLength(1);
+    expect(rows).toHaveLength(2);
     expect(rows[0]?.version).toBe(1);
     expect(rows[0]?.name).toBeTruthy();
   });
@@ -84,7 +105,7 @@ describe('TelemetryDatabase', () => {
 
     const count = second.db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get() as
       { n: number } | undefined;
-    expect(count?.n).toBe(1);
+    expect(count?.n).toBe(2);
   });
 
   it('opens file databases in WAL with incremental auto_vacuum', async () => {

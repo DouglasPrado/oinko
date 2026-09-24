@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { z } from 'zod';
+import { ContextPolicySchema } from './context-policy.js';
 import type { VectorStore, ConversationStore } from '../contracts/entities/stores.js';
 import type { ConversationSearchScope } from '../contracts/entities/conversation-search.js';
 import type { Decider } from '../contracts/entities/decider.js';
@@ -242,6 +243,7 @@ export const AgentConfigSchema = z.object({
 
   // Context budget
   maxContextTokens: z.number().int().positive().default(128_000),
+  context: ContextPolicySchema.optional(),
   maxPinnedMessages: z.number().int().positive().default(20),
   reserveTokens: z.number().int().min(0).default(4_096),
 

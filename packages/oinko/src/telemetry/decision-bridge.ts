@@ -53,6 +53,7 @@ function toTelemetry(record: DecisionRecord, context: DecisionTraceContext) {
     questions: record.questions,
     answers: record.answers,
     durationMs: record.durationMs,
+    ...(record.usage && { usage: record.usage }),
     ...(record.error !== undefined && { error: record.error }),
     createdAt: record.timestamp,
   };

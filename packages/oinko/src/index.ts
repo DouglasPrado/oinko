@@ -7,6 +7,12 @@ export * from './contracts/index.js';
 
 // Config
 export { AgentConfigSchema } from './config/config.js';
+export { ContextPolicySchema } from './config/context-policy.js';
+export type { ContextPolicy } from './config/context-policy.js';
+export type {
+  ConversationCheckpoint,
+  ArchivedToolResult,
+} from './contracts/entities/working-context.js';
 export type {
   AgentConfig,
   AgentConfigInput,

@@ -26,9 +26,13 @@ Blueprint Tecnico (docs/blueprint/)     ← FONTE PRIMARIA
 
 ## Mapeamento Blueprint → Backend
 
+Contexto adaptativo: `docs/blueprint/26-adaptive-context.md` → `packages/oinko/src/core/{adaptive-context,working-context,context-summary-writer}.ts`, seleção em `tools/tool-selection.ts`, consulta em `tools/builtin/tool-result.ts`, armazenamento em `ConversationStore`/SQLite. Configuração compartilhada por `packages/bots`, dashboard e MCP Oinko. Regressões: `working-context.test.ts`, `tool-selection.test.ts`, `09-adaptive-context.test.ts`, `decision-usage.test.ts`, `context-policy.spec.ts`. Avaliação real repetível: `packages/oinko/scripts/context-evaluation/`.
+
 Telemetria por bot: `docs/dashboard/PLAN.md` → `apps/dashboard/src/server/repositories/telemetry-sources.ts` e `features/telemetry`. Regressões de isolamento e navegação: `tests/unit/telemetry-sources.test.ts` e `tests/e2e/telemetry-bots.spec.ts` na dashboard.
 
 Bots configuráveis: `docs/dashboard/PLAN.md` → `packages/bots` e `apps/dashboard/src/server/bots`. Histórico e isolamento: `packages/agent-runtime/tests`; CLI e ciclo de serviço: `packages/channels/cli/tests`; texto, imagem e áudio Telegram: `packages/channels/telegram/tests`. Cada bot usa `.harness/bots/<id>` e o executor compartilhado.
+
+Espera no Telegram: `docs/dashboard/PLAN.md` → `packages/channels/telegram/src/typing.ts`; testes do adaptador verificam renovação, encerramento, cancelamento e tolerância a falhas da indicação.
 
 MCP local nos bots: `docs/dashboard/PLAN.md` e `docs/blueprint/25-oinko-mcp.md` → schema e runner de `packages/bots`; regressão em `packages/bots/tests/bots.test.ts` conecta o servidor Oinko real pelo worker e preserva conexões HTTP existentes.
 
@@ -103,3 +107,7 @@ Navegação da dashboard: `docs/dashboard/PLAN.md` → `apps/dashboard/src/compo
 | `shared/glossary.md` | Todos | Termos unicos do dominio |
 | `shared/event-mapping.md` | Backend 12 ↔ Frontend 05/06/08 | Eventos → estado e fluxos do frontend |
 | `shared/error-ux-mapping.md` | Backend 09 ↔ Frontend 11/12 | Erros → resposta visual |
+
+Administração de bots pelo MCP: `docs/blueprint/25-oinko-mcp.md` → `packages/mcps/oinko/src/bots.ts`; regressões de patch, revisão, credenciais e processo ativo em `packages/mcps/oinko/tests/bots.test.ts`.
+
+Jev nos bots: `docs/dashboard/PLAN.md` → schema/store/runner de `packages/bots`; `tests/intelligence.test.ts` verifica roteamento OpenRouter, credenciais separadas, fallback e registro na telemetria.

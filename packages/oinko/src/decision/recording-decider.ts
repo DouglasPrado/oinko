@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { Answers, Decider, Question } from '../contracts/entities/decider.js';
+import { DECISION_USAGE, type DecisionUsage } from '../contracts/entities/decider.js';
 
 /** Where in the harness a decision was taken. */
 export type DecisionPoint =
@@ -12,6 +13,7 @@ export type DecisionPoint =
   | 'skill_activation'
   | 'tool_error'
   | 'model_routing'
+  | 'tool_selection'
   | 'unknown';
 
 /**
@@ -50,6 +52,10 @@ const INDEXED_KEY_POINTS: { prefix: RegExp; point: DecisionPoint }[] = [
 export function inferDecisionPoint(questions: Record<string, Question>): DecisionPoint {
   const keys = Object.keys(questions);
   if (keys.length === 0) return 'unknown';
+  if (keys.some((key) => /^tool\d+$/.test(key)))
+    return keys.includes('tier') || keys.includes('jailbreak')
+      ? 'turn_screening'
+      : 'tool_selection';
 
   const single = keys.length === 1 ? SINGLE_KEY_POINTS[keys[0]!] : undefined;
   if (single) return single;
@@ -80,6 +86,7 @@ export interface DecisionRecord {
     { value: string | number | boolean; confidence: number; probabilities?: Record<string, number> }
   >;
   durationMs: number;
+  usage?: DecisionUsage;
   error?: string;
 }
 
@@ -166,6 +173,7 @@ export class RecordingDecider implements Decider {
           ]),
         ),
         durationMs: Date.now() - startedAt,
+        ...(answers[DECISION_USAGE] && { usage: answers[DECISION_USAGE] }),
       });
       return answers;
     } catch (error) {

@@ -58,6 +58,7 @@ export interface ToolExecutorOptions extends ToolHooks {
   /** When set, a failed retryable tool has its error classified before retrying. */
   decider?: Decider;
   logger?: Logger;
+  archiveResult?: (name: string, result: AgentToolResult, context: ToolExecuteContext) => void;
 }
 
 export class ToolExecutor {
@@ -65,11 +66,33 @@ export class ToolExecutor {
   private readonly hooks: ToolHooks;
   private readonly decider?: Decider;
   private readonly logger?: Logger;
+  private readonly archiveResult?: ToolExecutorOptions['archiveResult'];
 
-  constructor(options: ToolExecutorOptions = {}) {
+  constructor(
+    options: ToolExecutorOptions = {},
+    private readonly parent?: ToolExecutor,
+  ) {
     this.hooks = options;
     this.decider = options.decider;
     this.logger = options.logger;
+    this.archiveResult = options.archiveResult;
+  }
+
+  /** An execution-local overlay; newly connected tools remain visible through the parent. */
+  scope(): ToolExecutor {
+    return new ToolExecutor(
+      {
+        ...this.hooks,
+        decider: this.decider,
+        logger: this.logger,
+        archiveResult: this.archiveResult,
+      },
+      this,
+    );
+  }
+
+  private getTool(name: string): AgentTool | undefined {
+    return this.tools.get(name) ?? this.parent?.getTool(name);
   }
 
   register(tool: AgentTool): void {
@@ -81,7 +104,12 @@ export class ToolExecutor {
   }
 
   listTools(): AgentTool[] {
-    return [...this.tools.values()];
+    return [
+      ...new Map([
+        ...(this.parent?.listTools() ?? []).map((t) => [t.name, t] as const),
+        ...this.tools,
+      ]).values(),
+    ];
   }
 
   getToolDefinitions(): ToolDefinition[] {
@@ -106,7 +134,7 @@ export class ToolExecutor {
         ? { signal: signalOrOptions }
         : (signalOrOptions ?? {});
 
-    const tool = this.tools.get(name);
+    const tool = this.getTool(name);
     if (!tool) {
       return { content: `Tool "${name}" not found`, isError: true };
     }
@@ -174,12 +202,28 @@ export class ToolExecutor {
       };
     }
 
+    // Save the original output before any prompt truncation. Retrieval itself
+    // is not archived again, avoiding recursive copies of the same artifact.
+    if (
+      this.archiveResult &&
+      opts.threadId &&
+      opts.toolCallId &&
+      name !== 'ToolResult' &&
+      name !== 'ToolSearch'
+    ) {
+      this.archiveResult(name, result, opts);
+    }
+
     // 7. Result truncation
     const maxChars = tool.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
     if (!result.isError && result.content.length > maxChars) {
       result = {
         ...result,
-        content: truncateMiddle(result.content, maxChars),
+        content:
+          truncateMiddle(result.content, maxChars) +
+          (this.archiveResult && opts.threadId && opts.toolCallId
+            ? `\n[Full output archived. Use ToolResult with reference ${JSON.stringify(opts.toolCallId)} to retrieve missing details.]`
+            : ''),
         metadata: { ...result.metadata, truncated: true, originalLength: result.content.length },
       };
     }
@@ -241,7 +285,7 @@ export class ToolExecutor {
     let currentConcurrent = false;
 
     for (const call of calls) {
-      const tool = this.tools.get(call.name);
+      const tool = this.getTool(call.name);
       const isSafe = tool
         ? typeof tool.isConcurrencySafe === 'function'
           ? tool.isConcurrencySafe(call.args)

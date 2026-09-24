@@ -31,6 +31,7 @@
     "cli": "node dist/cli.js"
   },
   "dependencies": {
+    "@oinko/core": "workspace:*",
     "@oinko/environments": "workspace:*",
     "@oinko/agent-runtime": "workspace:*",
     "@oinko/channel-cli": "workspace:*",

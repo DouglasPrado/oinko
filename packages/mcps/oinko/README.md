@@ -1,6 +1,6 @@
 # MCP Oinko
 
-Servidor MCP local chamado **oinko** para preparar projetos a partir do GitHub e manipular sandboxes, worktrees, builds e prévias. Usa o mesmo gerenciador e os mesmos dados da dashboard. Não é necessário criar outro bot nem manter a dashboard aberta.
+Servidor MCP local chamado **oinko** para preparar projetos a partir do GitHub e manipular bots, sandboxes, worktrees, builds e prévias. Usa o mesmo gerenciador e os mesmos dados da dashboard. Não é necessário criar outro bot nem manter a dashboard aberta.
 
 O servidor anuncia o símbolo do Oinko em PNG de 128×128, com fundo transparente, no campo `serverInfo.icons` do handshake. A imagem de `assets/icon.png` vai embutida como data URI, sem depender de um site externo. Clientes que exibem ícones MCP podem usá-la; a dashboard usa a mesma imagem na conexão `oinko`.
 
@@ -38,7 +38,7 @@ Use a mesma raiz de dados da dashboard. `--root` tem precedência sobre `OINKO_R
 
 O pacote é privado do workspace: está disponível localmente, não publicado no npm. Não use `npx @oinko/mcp-oinko` esperando baixar esta entrega. Nenhuma configuração de aplicativo é alterada pelo servidor ou pelo gerador de JSON.
 
-Na primeira atualização para esta versão, reinicie dashboard, gerenciador e clientes Oinko já abertos. A conexão Unix agora usa um endereço estável em `/tmp`, para que clientes MCP que não herdam `TMPDIR` encontrem o mesmo gerenciador. A raiz de dados, worktrees, volumes e bancos permanecem os mesmos.
+Na primeira atualização para esta versão, reinicie dashboard, gerenciador e clientes Oinko já abertos. As conexões Unix do gerenciador e dos bots agora usam endereços estáveis em `/tmp`, para que clientes MCP que não herdam `TMPDIR` encontrem o mesmo gerenciador. A raiz de dados, worktrees, volumes e bancos permanecem os mesmos.
 
 ## Pedidos que o usuário pode fazer
 
@@ -48,12 +48,16 @@ Na primeira atualização para esta versão, reinicie dashboard, gerenciador e c
 
 > Veja por que a prévia falhou, mostre os logs relevantes e corrija a configuração.
 
+> Atualize o modelo e as instruções do bot Dev, preservando seus canais e MCPs.
+
 O cliente também pode oferecer o prompt `disponibilizar-sandbox`, com argumentos `github` e `ref` opcional. O resource `oinko://guide` descreve o fluxo completo.
 
 ## Ferramentas
 
 | Ferramenta                    | Uso                                                                                                        |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `oinko_bots`                  | Consulta bots, configuração pública, revisão e estado das conexões; filtro opcional por botId.             |
+| `oinko_update_bot`            | Atualiza um bot existente por patch e revisão, sem reiniciar nem devolver credenciais.                     |
 | `oinko_status`                | Projetos, ambientes, tarefas, jobs, containers de programação e URLs; aceita filtro por projeto.           |
 | `oinko_prepare_project`       | GitHub → projeto/ambiente/tarefa. Aceita `owner/repo` ou URL raiz HTTPS e reutiliza cadastros compatíveis. |
 | `oinko_configure_project`     | Definição completa de projeto, repositórios, ambientes e bots autorizados, com revisão.                    |
@@ -69,6 +73,16 @@ O cliente também pode oferecer o prompt `disponibilizar-sandbox`, com argumento
 | `oinko_exec`                  | Terminal/Git/testes dentro do sandbox, timeout de 1 a 600 segundos.                                        |
 | `oinko_read_file`             | Ler até 200 KB de um caminho relativo à worktree.                                                          |
 | `oinko_write_file`            | Criar/substituir arquivo relativo à worktree.                                                              |
+
+### Atualizar um bot
+
+1. Consulte `oinko_bots` com `{"botId":"dev"}` e use a revisão retornada.
+2. Chame `oinko_update_bot` com `botId`, `revision` e `changes`. Exemplo: `{"model":"minimax/minimax-m3","baseUrl":"https://openrouter.ai/api/v1"}`. Omitir campos preserva seus valores. Telegram e telemetria recebem merge por campo; arrays enviados substituem o conteúdo completo. `null` remove uma configuração opcional.
+3. Confira `activation`: `restart_required` pede Reiniciar na dashboard ou `pnpm bot restart dev`; `next_start` aplica na próxima partida; `applied` confirma a revisão em execução; `unknown` não confirma o processo. Salvar não interrompe uma conversa nem reinicia o próprio bot durante a chamada MCP.
+
+O patch também aceita `intelligence`, uma configuração completa do Jev: `{"enabled":true,"fastModel":"qwen/qwen3.8-27b:free","minConfidence":0.85}`. Ambos os modelos usam o provedor configurado no bot. O modelo principal atende os turnos exigentes e permanece como fallback quando o Jev falha ou não tem confiança suficiente. Confira a disponibilidade dos modelos no catálogo do provedor antes de configurá-los.
+
+`credentials` é opcional e somente de escrita. Chaves omitidas ou vazias são preservadas; a chave do Jev é `typesafeKey`, independente de `apiKey` do LLM. Nunca devolvemos os valores salvos. Prefira cadastrar credenciais pelos campos disponíveis da dashboard; argumentos MCP podem aparecer no histórico do cliente. A revisão obrigatória impede sobrescrever uma edição recente; nesse caso, consulte novamente antes de tentar salvar.
 
 ### Sequência mínima
 

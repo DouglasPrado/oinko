@@ -1,5 +1,6 @@
 import { trimEndChars } from '../utils/trim-end-chars.js';
 import type { Answers, Decider, Decision, Question } from '../contracts/entities/decider.js';
+import { DECISION_USAGE } from '../contracts/entities/decider.js';
 import { retry } from '../utils/retry.js';
 
 const DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1';
@@ -164,13 +165,31 @@ export class JevDecider implements Decider {
 
     // The mapped shape is guaranteed by toDecision, but only the question type
     // knows which variant each entry is — hence the assertion at the boundary.
-    return mapped as Answers<Q>;
+    const result = mapped as Answers<Q>;
+    const input = payload.usage?.input_tokens,
+      output = payload.usage?.output_tokens;
+    if (
+      typeof input === 'number' &&
+      input >= 0 &&
+      Number.isFinite(input) &&
+      typeof output === 'number' &&
+      output >= 0 &&
+      Number.isFinite(output)
+    ) {
+      Object.defineProperty(result, DECISION_USAGE, {
+        value: { inputTokens: input, outputTokens: output, totalTokens: input + output },
+      });
+    }
+    return result;
   }
 
   private async post(
     body: string,
     signal?: AbortSignal,
-  ): Promise<{ answers?: Record<string, unknown> }> {
+  ): Promise<{
+    answers?: Record<string, unknown>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  }> {
     const timeoutSignal = AbortSignal.timeout(this.timeout);
     const requestSignal =
       signal !== undefined ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;

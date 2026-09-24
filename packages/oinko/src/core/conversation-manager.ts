@@ -7,12 +7,18 @@ import type {
 } from '../contracts/entities/conversation-search.js';
 import { foldText, searchableText } from '../utils/conversation-text.js';
 import { excerptAround } from '../utils/excerpt.js';
+import type {
+  ConversationCheckpoint,
+  ArchivedToolResult,
+} from '../contracts/entities/working-context.js';
 
 /**
  * In-memory fallback ConversationStore.
  */
 class InMemoryConversationStore implements ConversationStore {
   private readonly threads = new Map<string, ChatMessage[]>();
+  private readonly checkpoints = new Map<string, ConversationCheckpoint>();
+  private readonly results = new Map<string, Map<string, ArchivedToolResult>>();
 
   appendMessage(message: ChatMessage, threadId: string): void {
     if (!this.threads.has(threadId)) this.threads.set(threadId, []);
@@ -29,6 +35,23 @@ class InMemoryConversationStore implements ConversationStore {
 
   clearThread(threadId: string): void {
     this.threads.delete(threadId);
+    this.checkpoints.delete(threadId);
+    this.results.delete(threadId);
+  }
+
+  getCheckpoint(threadId: string) {
+    return this.checkpoints.get(threadId);
+  }
+  saveCheckpoint(threadId: string, value: ConversationCheckpoint) {
+    this.checkpoints.set(threadId, value);
+  }
+  getToolResult(threadId: string, id: string) {
+    return this.results.get(threadId)?.get(id);
+  }
+  saveToolResult(threadId: string, result: ArchivedToolResult) {
+    if (!this.results.has(threadId)) this.results.set(threadId, new Map());
+    if (!this.results.get(threadId)!.has(result.id))
+      this.results.get(threadId)!.set(result.id, result);
   }
 
   /** Linear scan — fine for the in-process fallback, which holds one process's threads. */
@@ -155,6 +178,31 @@ export class ConversationManager {
 
   getHistory(threadId: string): ChatMessage[] {
     return this.store.listThread(threadId);
+  }
+
+  supportsWorkingContext(): boolean {
+    return !!(
+      this.store.getCheckpoint &&
+      this.store.saveCheckpoint &&
+      this.store.getToolResult &&
+      this.store.saveToolResult
+    );
+  }
+  getCheckpoint(threadId: string) {
+    return this.store.getCheckpoint?.(threadId);
+  }
+  saveCheckpoint(threadId: string, checkpoint: ConversationCheckpoint) {
+    if (!this.store.saveCheckpoint)
+      throw new Error('ConversationStore cannot persist context checkpoints');
+    this.store.saveCheckpoint(threadId, checkpoint);
+  }
+  getToolResult(threadId: string, id: string) {
+    return this.store.getToolResult?.(threadId, id);
+  }
+  saveToolResult(threadId: string, result: ArchivedToolResult) {
+    if (!this.store.saveToolResult)
+      throw new Error('ConversationStore cannot archive tool results');
+    this.store.saveToolResult(threadId, result);
   }
 
   getPinnedMessages(threadId: string): ChatMessage[] {

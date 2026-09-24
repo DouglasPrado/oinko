@@ -79,6 +79,22 @@ const agent = Agent.create({
 | `maxPinnedMessages` | `number` | `20` | Maximum number of pinned (non-evictable) messages |
 | `compactionThreshold` | `number` | `0.8` | Context usage ratio that triggers compaction (0.0 - 1.0) |
 
+## Working context and tool selection
+
+`context: { enabled: true }` enables a persistent rolling summary, recent turns, and retrieval of archived tool outputs. With a Jev `decider`, `selectTools: true` selects the initial tool definitions and allows discovery during execution. Without a decider, all authorized tools remain exposed.
+
+Defaults: estimated input budget 20,000 tokens, fast budget 8,000, recent window 6,000, summary target 1,200, and old tool excerpts 2,000 characters. Original conversations are preserved. These are targets rather than hard provider limits: current turns and pinned content may exceed them, with a warning. Summaries use the main model unless `summaryModel` is set. Summary usage is included in telemetry; Jev token usage is recorded separately.
+
+```typescript
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  dbPath: '.harness/data.db',
+  context: { enabled: true, maxInputTokens: 20_000, fastInputTokens: 8_000 },
+});
+```
+
+The dashboard and `oinko_update_bot` expose the same policy per bot. Save and restart to apply. Custom conversation stores must implement checkpoint and tool-result persistence.
+
 ## Cost Policy
 
 Enforce token and tool-call limits to prevent runaway spending.

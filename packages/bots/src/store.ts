@@ -99,6 +99,7 @@ export class BotStore {
       hasApiKey: Boolean(secrets.apiKey),
       hasTelegramToken: Boolean(secrets.telegramToken),
       hasTranscriptionKey: Boolean(secrets.transcriptionKey),
+      hasTypesafeKey: Boolean(secrets.typesafeKey),
       mcpCredentials: Object.keys(secrets.mcpTokens ?? {}).filter((key) =>
         Boolean(secrets.mcpTokens?.[key]),
       ),
@@ -118,7 +119,7 @@ export class BotStore {
       if ((current?.revision ?? 0) !== expectedRevision)
         throw new BotError('Este bot foi alterado. Recarregue antes de salvar.');
       const secrets: BotSecrets = { ...current?.secrets };
-      for (const field of ['apiKey', 'telegramToken', 'transcriptionKey'] as const)
+      for (const field of ['apiKey', 'telegramToken', 'transcriptionKey', 'typesafeKey'] as const)
         if (changes[field]?.trim()) secrets[field] = changes[field].trim();
       secrets.mcpTokens = { ...secrets.mcpTokens };
       for (const [id, token] of Object.entries(changes.mcpTokens ?? {}))

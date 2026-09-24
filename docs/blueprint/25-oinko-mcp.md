@@ -26,6 +26,16 @@ Disponibilizar um servidor MCP local chamado `oinko`, em `packages/mcps/oinko`, 
 
 ## Verificação e disponibilidade
 
+### Atualização dos bots
+
+O MCP também administra o cadastro existente de bots da mesma raiz, reutilizando `BotStore` e `BotManager`. `oinko_bots` consulta todos os bots ou um `botId`, incluindo definição pública, revisão e estado das conexões. `oinko_update_bot` atualiza um bot existente por patch e revisão obrigatória; não cria um bot por engano nem permite trocar seu ID. Campos omitidos são preservados, Telegram/telemetria recebem merge por campo e arrays enviados substituem seus valores completos. `null` remove uma configuração opcional, voltando ao padrão.
+
+`intelligence` configura Jev e modelo alternativo conforme `docs/dashboard/PLAN.md`; o objeto é substituído por completo e `null` remove essa configuração. O patch de credenciais aceita `typesafeKey`, separada da chave LLM.
+
+Credenciais opcionais são somente de escrita, cifradas pelo cadastro e nunca devolvidas nas respostas. Prefira a dashboard para digitá-las: argumentos MCP podem fazer parte do histórico do cliente. Atualizar configuração não reinicia processos nem interrompe uma chamada MCP do próprio bot. O resultado distingue `restart_required`, `next_start`, `applied` e `unknown`; use o botão Reiniciar da dashboard ou o comando de bot para aplicar a revisão em execução. O MCP não afirma que uma alteração salva já está ativa.
+
+Regressões: modelo/provedor/instruções sem perda de canais, MCPs, credenciais ou caminhos; patches aninhados sem defaults involuntários; revisão vencida, ID inexistente e payload inválido sem mutação; credenciais ausentes das respostas; atualização pelo protocolo stdio com um bot ativo e indicação de reinício pendente.
+
 Testes antes da implementação: protocolo MCP com cliente real, validação dos argumentos, erros, preparação repetida e colisões, revisões, inspeção dentro do sandbox e acompanhamento de jobs. Um teste separado atravessa stdio → runner → Git/Docker → HTTP em raiz temporária e limpa somente seus próprios recursos. Os checks agregados do monorepo continuam obrigatórios.
 
 Disponibilidade inicial: execução local após `pnpm install` e `pnpm build:packages`, com exemplo de configuração MCP apontando para o executável compilado e a raiz de dados. Requer Node 22.5+ e Docker em execução para operações de sandbox. Repositórios privados seguem as capacidades atuais do runner; não há encaminhamento automático de credenciais pessoais. Nixpacks, serviço remoto autenticado e publicação npm não fazem parte desta entrega.

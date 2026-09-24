@@ -44,11 +44,26 @@ export class SQLiteDatabase {
       this.migrateV1(db);
       this.migrateV2(db);
       this.migrateV3(db);
+      this.migrateV4(db);
       this._db = db;
     } catch (err) {
       db.close();
       throw err;
     }
+  }
+
+  private migrateV4(db: DatabaseSync): void {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS conversation_checkpoints (
+        thread_id TEXT PRIMARY KEY, through_count INTEGER NOT NULL,
+        summary TEXT NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS conversation_tool_results (
+        thread_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL,
+        content TEXT NOT NULL, is_error INTEGER NOT NULL, created_at INTEGER NOT NULL,
+        PRIMARY KEY (thread_id, id)
+      );
+    `);
   }
 
   /** Roda `fn` dentro de uma transacao, revertendo tudo se ela lancar. */
