@@ -102,3 +102,16 @@ test('configures two new bots with different programming policies through the sa
   expect(await policy(ids['Revisor Piloto']!)).toMatchObject({ enabled: true, policy: { autonomy: 'analysis' } });
   expect(JSON.stringify(list)).not.toContain('fake-key-for-programming-test');
 });
+
+test('goes from a live aggregate to the runs (and traces) behind it', async ({ page }) => {
+  const { delivered } = seed();
+  await page.goto('/bots/alpha/avaliacoes');
+  const groups = page.getByRole('list', { name: 'Grupos de trabalhos reais' });
+  await page.getByLabel('Agrupar por').selectOption('project');
+  const vitrine = groups.getByRole('listitem').filter({ hasText: 'vitrine' });
+  await expect(vitrine).toContainText('1/1 concluídos');
+  await expect(vitrine).toContainText('amostra insuficiente');
+  await vitrine.getByRole('link', { name: `#${delivered.slice(4, 12)}` }).click();
+  await expect(page).toHaveURL(new RegExp(`/bots/alpha/trabalhos/${delivered}$`));
+  await expect(page.getByText('Entregue em draft PR').first()).toBeVisible();
+});

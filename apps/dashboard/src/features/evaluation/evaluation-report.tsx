@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, TriangleAlert } from 'lucide-react';
 import type { Aggregate, Comparison, EvaluationBatch, EvaluationCandidate, Opportunity } from '@oinko/agent-runtime/programming';
@@ -90,6 +91,11 @@ export function EvaluationReport({ botId }: { botId: string }) {
     onError: (error) => toast.error('Operação recusada', error.message),
   });
 
+  const [groupBy, setGroupBy] = useState<'policy' | 'project' | 'model'>('policy');
+  const live = useQuery({
+    queryKey: ['evaluations-live', botId, groupBy],
+    queryFn: () => programmingRequest<{ rows: { key: string; runs: number; completed: number; completionRate: number | null; insufficientSample: boolean; tokens: number; costCoverage: string; runIds: string[] }[]; note: string }>(`/api/evaluations/live?botId=${encodeURIComponent(botId)}&groupBy=${groupBy}`),
+  });
   if (report.isPending) return <Skeleton className="h-40 w-full" />;
   if (report.error)
     return (
@@ -202,6 +208,38 @@ export function EvaluationReport({ botId }: { botId: string }) {
           ))}
           {!batches.length && <li className="px-4 py-3 text-xs text-ink-muted">Nenhum lote. Rode `pnpm --filter @oinko/bots evaluate --bot {botId} --dataset …`.</li>}
         </ul>
+      </Section>
+      <Section title="Trabalhos reais">
+        <div className="space-y-2 px-4 py-3 text-[13px]">
+          <label className="flex items-center gap-2 text-xs text-ink-muted">
+            Agrupar por
+            <select aria-label="Agrupar por" className={inputStyle} value={groupBy} onChange={(event) => setGroupBy(event.target.value as typeof groupBy)}>
+              <option value="policy">versão da política</option>
+              <option value="project">projeto</option>
+              <option value="model">modelo</option>
+            </select>
+          </label>
+          {live.data?.note && <p className="text-xs text-ink-muted">{live.data.note}</p>}
+          <ul className="divide-y divide-rule" aria-label="Grupos de trabalhos reais">
+            {live.data?.rows.map((row) => (
+              <li key={row.key} className="space-y-1 py-2">
+                <p>
+                  <span className="font-mono">{row.key}</span> · {row.completed}/{row.runs} concluídos ({percent(row.completionRate)}) · {row.tokens.toLocaleString('pt-BR')} tokens · custo{' '}
+                  {row.costCoverage === 'complete' ? 'confirmado' : row.costCoverage === 'partial' ? 'parcial' : 'desconhecido'}
+                  {row.insufficientSample && <span className="text-warning-ink"> · amostra insuficiente</span>}
+                </p>
+                <p className="flex flex-wrap gap-2 text-xs">
+                  {row.runIds.slice(0, 12).map((runId) => (
+                    <Link key={runId} className="font-mono text-info-ink hover:underline" href={`/bots/${encodeURIComponent(botId)}/trabalhos/${encodeURIComponent(runId)}`}>
+                      #{runId.slice(4, 12)}
+                    </Link>
+                  ))}
+                </p>
+              </li>
+            ))}
+            {live.data && !live.data.rows.length && <li className="py-2 text-xs text-ink-muted">Nenhum trabalho encerrado ainda.</li>}
+          </ul>
+        </div>
       </Section>
       {opportunities.length > 0 && (
         <Section title="Oportunidades">
