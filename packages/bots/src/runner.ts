@@ -12,6 +12,7 @@ import {
   PROGRAMMING_CHAT_INSTRUCTIONS,
   PROGRAMMING_RUN_INSTRUCTIONS,
   programmingChatTools,
+  type Evidence,
   type RunExecutor,
 } from '@oinko/agent-runtime/programming';
 import { EnvironmentClient } from '@oinko/environments/client';
@@ -24,6 +25,7 @@ import { programmingTools, PROGRAMMING_INSTRUCTIONS } from './programming-tools.
 import { openProgramming } from './programming/runtime.js';
 import { isOinkoMcp, scopeOinkoMcp } from './programming/equivalence.js';
 import { programmingRunTools } from './programming/run-tools.js';
+import { deliveryTools } from './programming/delivery-tools.js';
 
 export interface RunBotOptions {
   /** Test seam: in-process model provider instead of the network (never set by the CLI/dashboard). */
@@ -153,7 +155,17 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
           runner &&
           policy && {
             programming: {
-              tools: programmingRunTools({ runner, service: programming.service }),
+              tools: [
+                ...programmingRunTools({ runner, service: programming.service }),
+                ...deliveryTools({
+                  runner,
+                  access: programming.access,
+                  service: programming.service,
+                  evidence: (runId) => programming.store.evidence<Evidence>(runId).map((item) => item.value),
+                  journal: programming.journal,
+                  capabilities: policy.capabilities,
+                }),
+              ],
               systemPrompt: `${bot.systemPrompt}\n${PROGRAMMING_RUN_INSTRUCTIONS}`,
               overrides: {
                 model: policy.models.main ?? bot.model,

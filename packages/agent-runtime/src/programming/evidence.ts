@@ -26,8 +26,35 @@ export type Evidence =
       fingerprint: string;
       artifactId?: string;
     }
-  | { kind: 'functional'; criterionId?: string; result: 'passed' | 'failed'; revision: string; fingerprint: string; artifactId?: string }
-  | { kind: 'publication'; repositoryId: string; sha: string; prNumber?: number; ci?: string; fingerprint: string }
+  | {
+      kind: 'functional';
+      criterionId?: string;
+      description?: string;
+      result: 'passed' | 'failed';
+      /** Primary revision the preview was built from. */
+      revision: string;
+      /** Every repository revision (and `env:<id>` configuration) the preview was built from. */
+      revisions?: Record<string, string>;
+      previewId?: string;
+      url?: string;
+      viewport?: string;
+      fingerprint: string;
+      artifactId?: string;
+    }
+  | {
+      kind: 'publication';
+      repositoryId: string;
+      sha: string;
+      /** Tree revision that was published; a later edit makes the draft outdated. */
+      revision?: string;
+      prNumber?: number;
+      prUrl?: string;
+      /** CI state of exactly `sha` (queued/running/passed/failed/cancelled/unknown). */
+      ci?: string;
+      /** True only when CI of `sha` passed with every required check. */
+      validated?: boolean;
+      fingerprint: string;
+    }
   | { kind: 'report'; artifactId?: string; fingerprint: string }
   | { kind: 'error'; fingerprint: string; message: string };
 
@@ -267,7 +294,12 @@ export function evaluateCriteria(
             item.kind === 'functional' && (!item.criterionId || item.criterionId === criterion.id),
         );
         const repositories = [...revisions.values()];
-        const latest = checks.filter((item) => repositories.includes(item.revision) || !repositories.length).at(-1);
+        // A preview only speaks for the exact code (and configuration) it was built from.
+        const currentFor = (item: Extract<Evidence, { kind: 'functional' }>) =>
+          item.revisions
+            ? Object.entries(item.revisions).every(([key, value]) => key.startsWith('env:') || current(key) === value)
+            : repositories.includes(item.revision) || !repositories.length;
+        const latest = checks.filter(currentFor).at(-1);
         status = latest ? (latest.result === 'passed' ? 'satisfied' : 'failed') : 'pending';
         if (latest) {
           refs = [latest.artifactId ?? latest.fingerprint];
@@ -276,9 +308,18 @@ export function evaluateCriteria(
         break;
       }
       case 'publication': {
-        const published = evidence.filter((item): item is Extract<Evidence, { kind: 'publication' }> => item.kind === 'publication' && item.prNumber !== undefined);
-        status = published.length ? 'satisfied' : 'pending';
+        // Every repository the run edited needs a draft of its current revision.
+        const edited = [...new Set(edits.map((item) => item.repositoryId))];
+        const published = evidence.filter(
+          (item): item is Extract<Evidence, { kind: 'publication' }> =>
+            item.kind === 'publication' &&
+            item.prNumber !== undefined &&
+            (item.revision === undefined || current(item.repositoryId) === item.revision),
+        );
+        const covered = (repositoryId: string) => published.some((item) => item.repositoryId === repositoryId);
+        status = published.length && edited.every(covered) ? 'satisfied' : 'pending';
         refs = published.map((item) => item.fingerprint);
+        revision = published.at(-1)?.revision;
         break;
       }
       case 'analysis': {
@@ -294,6 +335,8 @@ export function evaluateCriteria(
       invalidated.push({ id: criterion.id, reason: 'Código ou evidência mudou depois da aprovação.', revision: revision ?? '' });
       if (status === 'pending') status = 'invalidated';
     }
+    // Stays visibly invalidated until new evidence decides it again.
+    if (previous === 'invalidated' && status === 'pending') status = 'invalidated';
     return { ...criterion, status, evidenceRefs: refs, ...(revision !== undefined && { revision }) };
   });
   return { criteria: next, invalidated, satisfied: next.filter((item) => item.status === 'satisfied').length };

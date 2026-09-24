@@ -102,6 +102,55 @@ export class RunnerReconciler implements Reconciler {
         if (task.state === 'failed') return { resolution: 'not_applied', evidence: { task: taskId, state: 'failed' } };
         return { resolution: 'unknown', evidence: { task: taskId, state: task.state } };
       }
+      case 'workspace.startPreview': {
+        if (!receipt.jobId) return { resolution: 'not_applied', evidence: { job: 'never_started' } };
+        const deadline = Date.now() + (this.options.waitMs ?? 30_000);
+        for (;;) {
+          const state = await this.runner.command<{ jobs: { id: string; state: string }[] }>({ action: 'state' }, { correlation });
+          const job = state.jobs.find((item) => item.id === receipt.jobId);
+          if (!job) return { resolution: 'unknown', evidence: { job: 'not_found' } };
+          if (job.state === 'succeeded') return { resolution: 'applied', evidence: { job: job.id } };
+          if (job.state === 'failed') return { resolution: 'not_applied', evidence: { job: job.id, state: 'failed' } };
+          if (Date.now() > deadline) return { resolution: 'unknown', evidence: { job: job.id, state: job.state } };
+          await delay(this.options.pollMs ?? 1000);
+        }
+      }
+      case 'publication.publish': {
+        const repositoryId = String(receipt.intent.repositoryId ?? '');
+        if (!run.taskId || !repositoryId) return { resolution: 'unknown', evidence: { reason: 'no_location' } };
+        // The runner consults the remote branch and PRs before answering.
+        const view = await this.runner.command<{
+          ok: boolean;
+          error?: { code: string };
+          remote?: { sha: string | null };
+          pullRequest?: { number: number; url: string } | null;
+          receipts?: { operationId: string; state: string; phase: string }[];
+        }>({ action: 'reconcilePublication', taskId: run.taskId, repositoryId }, { correlation });
+        if (!view.ok) return { resolution: 'unknown', evidence: { code: view.error?.code ?? 'unavailable' } };
+        const remote = view.receipts?.find((item) => item.operationId === receipt.operationId);
+        // The runner records its receipt before any Git or GitHub effect.
+        if (!remote) return { resolution: 'not_applied', evidence: { runnerReceipt: 'absent' } };
+        if (remote.state === 'failed') return { resolution: 'not_applied', evidence: { runnerReceipt: 'failed', phase: remote.phase } };
+        if (remote.state !== 'succeeded' || !view.remote?.sha)
+          return { resolution: 'unknown', evidence: { runnerReceipt: remote.state, phase: remote.phase } };
+        const revision = typeof receipt.intent.revision === 'string' ? receipt.intent.revision : undefined;
+        return {
+          resolution: 'applied',
+          evidence: { sha: view.remote.sha, pullRequest: view.pullRequest?.number ?? null },
+          observed: [
+            {
+              kind: 'publication' as const,
+              repositoryId,
+              sha: view.remote.sha,
+              ...(revision && { revision }),
+              ...(view.pullRequest && { prNumber: view.pullRequest.number, prUrl: view.pullRequest.url }),
+              ci: 'unknown',
+              validated: false,
+              fingerprint: `${repositoryId}:${view.remote.sha}:${view.pullRequest?.number ?? 'none'}`,
+            },
+          ],
+        };
+      }
       default:
         // Shell commands and unknown kinds: their effects cannot be proven.
         return { resolution: 'unknown', evidence: { kind: receipt.kind } };

@@ -168,14 +168,17 @@ export function checkOperation(
           reason: 'Merge, deploy e operações destrutivas exigem autorização explícita desta operação.',
         };
   }
+  // The browser never changes the project: analysis runs may use it too.
+  if (operation.class === 'browser')
+    return snapshot.allowBrowser && bot.programming.capabilities.browser && project.programming?.browser.enabled
+      ? { allowed: true, reason: 'Browser autorizado.' }
+      : { allowed: false, code: 'permission_denied', reason: 'Browser não autorizado para este run.' };
   if (!snapshot.allowEdits)
     return {
       allowed: false,
       code: 'analysis_only',
       reason: 'Este run é somente de análise e não altera o projeto.',
     };
-  if (operation.class === 'browser' && !(snapshot.allowBrowser && bot.programming.capabilities.browser && project.programming?.browser.enabled))
-    return { allowed: false, code: 'permission_denied', reason: 'Browser não autorizado para este run.' };
   if (operation.class === 'publish') {
     const stillPublisher =
       !!project.programming?.publisherBotIds.includes(run.botId) &&

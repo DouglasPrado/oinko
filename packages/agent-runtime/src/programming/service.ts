@@ -9,6 +9,7 @@ import {
   type Criterion,
   type OperationReceipt,
   type PlanRevision,
+  type Publication,
   type ProgrammingRun,
   type RunMode,
   type RunState,
@@ -682,6 +683,7 @@ export class ProgrammingRunService {
       run = this.store.requireRun(run.id);
       // Criteria are re-evaluated against all evidence for the current revision.
       const all = this.store.evidence<Evidence>(run.id).map((item) => item.value);
+      this.adoptFunctionalCriteria(run.id, all);
       const evaluation = evaluateCriteria(this.store.criteria(run.id), all, revisions, {
         completionProposed: !!outcome?.completion,
       });
@@ -933,6 +935,71 @@ export class ProgrammingRunService {
     const updated = this.store.updateRun(run.id, run.revision, { taskId });
     this.journal.record('decision_recorded', correlationOf(updated), { point: 'task_selected', choice: taskId });
     return updated;
+  }
+
+  /**
+   * A functional check the agent ran becomes a delivery criterion: once a
+   * flow was exercised, completion needs it passing on the current code.
+   */
+  private adoptFunctionalCriteria(runId: string, evidence: readonly Evidence[]): void {
+    const known = new Set(this.store.criteria(runId).map((criterion) => criterion.id));
+    for (const item of evidence)
+      if (item.kind === 'functional' && item.criterionId && !known.has(item.criterionId)) {
+        known.add(item.criterionId);
+        this.store.upsertCriterion(runId, {
+          id: item.criterionId,
+          kind: 'functional',
+          description: (item.description ?? `Fluxo funcional ${item.criterionId}`).slice(0, 500),
+          status: 'pending',
+          evidenceRefs: [],
+        });
+      }
+  }
+
+  /**
+   * Records the draft PR of a task repository: one reusable publication per
+   * bot/project/task/repository, originated by the first run and updated by
+   * later ones. Never marks a PR ready, approved or merged.
+   */
+  recordPublication(
+    runId: string,
+    input: {
+      repositoryId: string;
+      /** Required on the first record of a task repository. */
+      branch?: string;
+      remoteSha?: string;
+      prNumber?: number;
+      prUrl?: string;
+      prState?: Publication['prState'];
+      reconciliationState?: Publication['reconciliationState'];
+      checkRefs?: string[];
+    },
+  ): Publication {
+    const run = this.store.requireRun(runId);
+    if (!run.taskId) throw new ProgrammingError('invalid_request', 'Run sem tarefa não publica.');
+    const identity = { botId: run.botId, projectId: run.projectId, taskId: run.taskId, repositoryId: input.repositoryId };
+    const existing = this.store.publication(identity);
+    const branch = input.branch ?? existing?.branch;
+    if (!branch) throw new ProgrammingError('invalid_request', 'Informe o ramo da primeira publicação.');
+    const now = this.now();
+    const contributing = new Set(existing?.contributingRunIds ?? []);
+    if (existing && existing.originatingRunId !== run.id) contributing.add(run.id);
+    return this.store.upsertPublication({
+      id: existing?.id ?? newId('pub'),
+      ...identity,
+      branch,
+      originatingRunId: existing?.originatingRunId ?? run.id,
+      contributingRunIds: [...contributing],
+      ...((input.remoteSha ?? existing?.remoteSha) && { remoteSha: input.remoteSha ?? existing?.remoteSha }),
+      ...((input.prNumber ?? existing?.prNumber) && { prNumber: input.prNumber ?? existing?.prNumber }),
+      ...((input.prUrl ?? existing?.prUrl) && { prUrl: input.prUrl ?? existing?.prUrl }),
+      draft: true,
+      prState: input.prState ?? existing?.prState ?? 'unknown',
+      checkRefs: input.checkRefs ?? existing?.checkRefs ?? [],
+      reconciliationState: input.reconciliationState ?? existing?.reconciliationState ?? 'pending',
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    });
   }
 
   /** States considered in queue order for a bot; exposed for status views. */

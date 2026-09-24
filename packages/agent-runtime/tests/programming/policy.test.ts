@@ -137,6 +137,24 @@ describe('programming policy', () => {
     expect(checkOperation(access, change, { class: 'destructive', name: 'deploy', target: 'pr/1' }, grant).allowed).toBe(false);
   });
 
+  it('lets analysis runs browse only when bot capability and project allow it, revoking immediately', () => {
+    const access = matrix();
+    access.bots.set('alpha', bot('alpha', { capabilities: { browser: true, publication: false } }));
+    const analysis = resolveEffectivePolicy(access.bot('alpha')!, access.project('two')!, 'analysis');
+    const run = { botId: 'alpha', projectId: 'two', policySnapshot: analysis };
+    expect(checkOperation(access, run, { class: 'browser', name: 'browser.navigate' }).allowed).toBe(true);
+    expect(checkOperation(access, run, { class: 'mutate', name: 'workspace.replace' }).code).toBe('analysis_only');
+    const withoutBrowser = project('two', ['alpha', 'beta'], ['alpha']);
+    withoutBrowser.programming!.browser.enabled = false;
+    access.projects.set('two', withoutBrowser);
+    expect(checkOperation(access, run, { class: 'browser', name: 'browser.navigate' }).code).toBe('permission_denied');
+    // A bot without the capability never browses, whatever the project says.
+    access.bots.set('beta', bot('beta', { autonomy: 'edit', capabilities: { browser: false, publication: false } }));
+    const beta = { botId: 'beta', projectId: 'two', policySnapshot: resolveEffectivePolicy(access.bot('beta')!, project('two', ['alpha', 'beta']), 'change') };
+    access.projects.set('two', project('two', ['alpha', 'beta']));
+    expect(checkOperation(access, beta, { class: 'browser', name: 'browser.navigate' }).code).toBe('permission_denied');
+  });
+
   it('scopes run visibility by identity, project access and conversation', () => {
     const access = matrix();
     const run = { botId: 'alpha', projectId: 'two', conversationId: 'telegram:10' };
