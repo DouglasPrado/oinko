@@ -47,6 +47,7 @@ import {
   type BotSecrets,
 } from '@oinko/bots/schema';
 import type { BotStatus } from '@oinko/bots';
+import { ContextSettings } from './context-settings';
 
 type ListedBot = BotProfile & { status: BotStatus };
 const key = ['bots'];
@@ -283,6 +284,13 @@ function BotEditor({
             </div>
           </div>
         </section>
+        <ContextSettings
+          definition={definition}
+          onChange={(changes) => setDefinition((value) => ({ ...value, ...changes }))}
+          secrets={secrets}
+          onSecrets={(changes) => setSecrets((value) => ({ ...value, ...changes }))}
+          hasTypesafeKey={profile?.hasTypesafeKey ?? false}
+        />
         <section className="space-y-4 rounded-xl border border-rule bg-surface p-5">
           <h3 className="font-medium">Programação</h3>
           <label className="flex items-center gap-3 text-sm">
