@@ -113,6 +113,8 @@ passive.store.acquireLease(running.id, 'seed-worker', 3_600_000);
 const claimed = passive.store.transitionRun(running.id, passive.store.getRun(running.id).revision, 'running', { phase: 'working', startedAt: Date.now() }).run;
 passive.service.control(operator, claimed.id, 'pause', {}, 'seed');
 const queued = passive.service.start(operator, { botId: 'beta', projectId: 'loja', text: 'Analisar a cobertura de testes', mode: 'analysis' }).run;
+// Operated only by the mobile E2E.
+const mobile = passive.service.start(operator, { botId: 'beta', projectId: 'loja', text: 'Ajustar o layout do checkout no celular' }).run;
 // Provider usage of the delivered run: one confirmed cost and one still pending.
 const deliveredRun = passive.store.getRun(delivered.id);
 passive.usage.report(deliveredRun, { callId: 'call-seed-1', role: 'main', model: 'model-alpha', inputTokens: 5200, outputTokens: 400, totalTokens: 5600, costUsd: 0.0123, costStatus: 'confirmed', startedAt: Date.now() - 5000, endedAt: Date.now() - 3000 });
@@ -151,6 +153,6 @@ await passive.close();
 bots.close();
 writeFileSync(
   join(root, 'programming-seed.json'),
-  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, candidate: candidate.id, uncertain: uncertain.id, states: [completed.state, delivered.state, blocked.state] }),
+  JSON.stringify({ completed: completed.id, delivered: delivered.id, blocked: blocked.id, running: running.id, queued: queued.id, candidate: candidate.id, uncertain: uncertain.id, mobile: mobile.id, states: [completed.state, delivered.state, blocked.state] }),
 );
 console.log(`seeded programming runs: ${completed.state}, ${delivered.state}, ${blocked.state}, running, queued`);

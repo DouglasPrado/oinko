@@ -147,6 +147,7 @@ export function RunDetailView({ botId, runId }: { botId: string; runId: string }
           { label: 'Bots', href: '/bots' },
           { label: run.botId, href: `/bots/${encodeURIComponent(run.botId)}` },
           { label: 'Trabalhos', href: `/bots/${encodeURIComponent(run.botId)}/trabalhos` },
+          { label: run.projectId, href: `/projetos/${encodeURIComponent(run.projectId)}` },
           { label: `#${shortRunId(run.id)}` },
         ]}
         title={<span title={run.request}>{run.request}</span>}

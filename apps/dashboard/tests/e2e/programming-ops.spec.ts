@@ -4,6 +4,7 @@ import { test, expect } from './auth';
 
 interface Seed {
   completed: string;
+  mobile: string;
   queued: string;
   delivered: string;
   uncertain: string;
@@ -151,4 +152,23 @@ test('shows where the effective policy comes from and that running work keeps it
   const effective = page.getByLabel('Política efetiva por projeto');
   await expect(effective.getByText(/origem: bot rev\. \d+ \+ projeto rev\. \d+/).first()).toBeVisible();
   await expect(effective.getByText(/trabalhos em andamento mantêm a sua/)).toBeVisible();
+});
+
+test('operates controls and opens evidence on a phone without losing the run context', async ({ page }) => {
+  const { mobile, delivered } = seed();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/bots/beta/trabalhos/${mobile}`);
+  const trail = page.getByRole('navigation', { name: 'breadcrumb' });
+  await expect(trail.getByRole('link', { name: 'beta', exact: true })).toBeVisible();
+  await expect(trail.getByRole('link', { name: 'loja', exact: true })).toHaveAttribute('href', '/projetos/loja');
+  await page.getByRole('button', { name: 'Pausar', exact: true }).click();
+  await expect(page.getByText('Pausa registrada; o run para no próximo ponto seguro.')).toBeVisible();
+  await expect(page.getByText('Na fila · pausa solicitada').first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  await page.goto(`/bots/alpha/trabalhos/${delivered}`);
+  const shot = page.getByRole('list', { name: 'Evidências' }).getByRole('link', { name: 'captura de tela' });
+  await expect(shot).toBeVisible();
+  const response = await page.request.get((await shot.getAttribute('href'))!);
+  expect(response.headers()['content-type']).toContain('image/png');
+  await expect(page.getByRole('navigation', { name: 'breadcrumb' }).getByRole('link', { name: 'vitrine', exact: true })).toBeVisible();
 });

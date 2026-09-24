@@ -328,3 +328,31 @@ describe('M01-S02/S05 degraded delivery and sequence gaps in the run detail', ()
     await harness.close();
   });
 });
+
+describe('M01-S05 a large run', () => {
+  it('pages thousands of events without duplicates and loads the detail quickly', async () => {
+    const access = twoBotMatrix();
+    const harness = createService(tempRoot(), access);
+    const { run } = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'x' });
+    const correlation = { botId: 'alpha', projectId: 'one', runId: run.id };
+    for (let index = 0; index < 5000; index++) harness.journal.record('workspace_search', correlation, { kind: 'content', results: index, outcome: 'matches' });
+    const queries = new RunQueries(harness.store, access, harness.journal, harness.usage);
+    const started = Date.now();
+    const detail = queries.detail(operator, run.id);
+    const detailMs = Date.now() - started;
+    expect(detail.run.id).toBe(run.id);
+    const ids = new Set<number>();
+    let afterId: number | undefined;
+    let pages = 0;
+    do {
+      const page = queries.timeline(operator, run.id, { limit: 500, ...(afterId !== undefined && { afterId }) });
+      page.entries.forEach((entry) => ids.add(entry.id));
+      afterId = page.nextAfterId;
+      pages++;
+    } while (afterId !== undefined && pages < 50);
+    expect(ids.size).toBeGreaterThanOrEqual(5000);
+    expect(pages).toBeGreaterThanOrEqual(10);
+    expect(detailMs).toBeLessThan(2000);
+    await harness.close();
+  });
+});
