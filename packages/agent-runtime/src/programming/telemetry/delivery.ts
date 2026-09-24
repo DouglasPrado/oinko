@@ -124,19 +124,24 @@ export class TelemetryDeliverer {
         await group.repository.write(group.rows.map((row) => parseEnvelope(JSON.parse(row.envelope_json))));
         this.database.transaction(() => group.rows.forEach((row) => mark.run(now(), row.id)));
         delivered += group.rows.length;
+        // The destination belongs to one bot: its runs show the outage.
+        const botId = group.rows[0]?.bot_id ?? undefined;
         if (this.degraded.delete(name))
           this.journal.emit({
             type: 'telemetry_recovered',
             status: 'succeeded',
+            ...(botId && { botId }),
             payload: { target: name, delivered: group.rows.length },
           });
       } catch (error) {
         this.database.transaction(() => group.rows.forEach((row) => fail.run(row.id)));
         if (!this.degraded.has(name)) {
           this.degraded.add(name);
+          const botId = group.rows[0]?.bot_id ?? undefined;
           this.journal.emit({
             type: 'telemetry_delivery_degraded',
             status: 'failed',
+            ...(botId && { botId }),
             error: {
               code: 'delivery_failed',
               message: error instanceof Error ? error.message : 'Falha de entrega.',

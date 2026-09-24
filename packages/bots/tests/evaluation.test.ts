@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ProgrammingPolicySchema, readJournal, type EvaluationDataset } from '@oinko/agent-runtime/programming';
+import { ProgrammingPolicySchema, TELEMETRY_CATALOG, readJournal, type EvaluationDataset } from '@oinko/agent-runtime/programming';
 import { BotStore } from '../src/store.js';
 import { openProgramming } from '../src/programming/runtime.js';
 import { assertIsolatedRoot, materializeFixture, runEvaluation } from '../src/programming/evaluation/harness.js';
@@ -73,6 +73,31 @@ describe('M00-S03 frozen scenarios and simulated baseline', () => {
     expect(events(runtime, 'evaluation_started')[0]).toMatchObject({ datasetVersion: version, environment: 'simulated' });
     // No attempt left anything in the installation root.
     expect(runtime.store.listRuns({}).items).toEqual([]);
+  }, 120_000);
+
+  it('audits every attempt of the dataset: catalogued events, full correlation, no planted secret', async () => {
+    const { work, bots, runtime } = installation();
+    const { version } = runtime.evaluation.createDataset(operator, DATASET);
+    const { results } = await runEvaluation({ evaluation: runtime.evaluation, actor: operator, datasetVersion: version, bot: definition(bots), subject: 'baseline', environment: 'simulated', workRoot: work, keep: true });
+    const roots = readdirSync(work).map((name) => join(work, name));
+    expect(roots).toHaveLength(results.length);
+    for (const root of roots) {
+      const attempt = openProgramming({ root, producer: 'audit' });
+      try {
+        const events = readJournal(attempt.database).map((event) => event.envelope);
+        expect(events.length).toBeGreaterThan(10);
+        expect(events.filter((event) => !(event.type in TELEMETRY_CATALOG)).map((event) => event.type), root).toEqual([]);
+        for (const event of events.filter((item) => item.runId)) expect(event.botId, `${root}: ${event.type}`).toBe('alpha');
+      } finally {
+        await attempt.close();
+      }
+      const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? (entry.name === 'fixture' || entry.name === '.git' ? [] : walk(join(dir, entry.name))) : [join(dir, entry.name)]));
+      for (const path of walk(join(root, '.harness'))) {
+        const text = readFileSync(path).toString('latin1');
+        expect(text.includes('sk-evaluation-simulated-000000'), path).toBe(false);
+        expect(text.includes('sk-prod-0123456789abcdef'), path).toBe(false);
+      }
+    }
   }, 120_000);
 
   it('reproduces inputs exactly and never counts a skipped case as passed', async () => {

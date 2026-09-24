@@ -22,6 +22,7 @@ export class DeliveryRunner extends LocalRunner {
   /** Environment definition served by `state`; changing it changes the configuration fingerprint. */
   environment: Record<string, unknown> = { id: 'web', name: 'Web', cpus: 2 };
   failPreview = false;
+  failBrowser = false;
   private built = '';
   private clicked = false;
   private seq = 0;
@@ -74,6 +75,7 @@ export class DeliveryRunner extends LocalRunner {
         return { text: 'build ok' } as T;
       case 'browserSession':
         this.calls.push({ action: command.action, correlation: options.correlation });
+        if (this.failBrowser) return { error: { code: 'browser_unavailable', reason: 'sandbox_unavailable', message: 'Sandbox do Chromium indisponível.', retryable: true } } as T;
         return { sessionId: `bs-${createHash('sha256').update(`${command.runId}:${command.kind}:${++this.seq}`).digest('hex').slice(0, 24)}`, kind: command.kind, viewport: command.mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 }, image: 'mcr.microsoft.com/playwright:v1.63.0-noble', chromiumVersion: '153.0.8010.12', sandbox: 'enabled' } as T;
       case 'browserNavigate': {
         this.calls.push({ action: command.action, correlation: options.correlation });

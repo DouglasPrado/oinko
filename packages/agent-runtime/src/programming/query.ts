@@ -231,10 +231,19 @@ export class RunQueries {
       telemetry: {
         pendingDelivery: pending.n,
         gaps: this.gaps(run.id),
-        degraded: readJournal(this.store.database, { runId: run.id, type: 'telemetry_delivery_degraded' }).length > readJournal(this.store.database, { runId: run.id, type: 'telemetry_recovered' }).length,
+        degraded: this.deliveryDegraded(run.botId),
       },
       context: this.context(run.id),
     };
+  }
+
+  /** Whether the bot's telemetry destination is in an outage (last degradation not yet recovered). */
+  private deliveryDegraded(botId: string): boolean {
+    const last = [...readJournal(this.store.database, { type: 'telemetry_delivery_degraded' }), ...readJournal(this.store.database, { type: 'telemetry_recovered' })]
+      .filter((event) => event.envelope.botId === botId)
+      .sort((a, b) => a.id - b.id)
+      .at(-1);
+    return last?.envelope.type === 'telemetry_delivery_degraded';
   }
 
   private context(runId: string): RunDetail['context'] {

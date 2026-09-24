@@ -173,3 +173,37 @@ describe('fast → main fallback', () => {
     expect(result.calls.map((call) => call.model)).toEqual(['fast', 'main', 'main']);
   });
 });
+
+describe('fast → main fallback never widens permissions', () => {
+  it('sends the main model exactly the tools the fast one had and keeps a denial denied', async () => {
+    const tools = new ToolExecutor();
+    const execute = vi.fn(async () => 'apagado');
+    tools.register({ name: 'read_file', description: 'lê', parameters: z.object({}), execute: async () => 'conteúdo', isConcurrencySafe: true });
+    tools.register({
+      name: 'delete_all',
+      description: 'apaga tudo',
+      parameters: z.object({}),
+      execute,
+      // A semantic guard that refuses the operation regardless of which model asks.
+      validate: async () => 'Operação destrutiva exige autorização explícita.',
+    });
+    const result = await run(
+      async function* (_params, call) {
+        if (call === 0) throw new OverloadedError('503');
+        if (call === 1) {
+          yield { type: 'tool_call', id: 'call-1', name: 'delete_all', arguments: '{}' };
+          yield done();
+          return;
+        }
+        yield { type: 'content', data: 'não foi possível apagar' };
+        yield done();
+      },
+      { tools },
+    );
+    const names = (params: StreamChatParams) => (params.tools ?? []).map((tool) => tool.function.name).sort();
+    expect(result.calls.map((call) => call.model)).toEqual(['fast', 'main', 'main']);
+    expect(names(result.calls[1]!)).toEqual(names(result.calls[0]!));
+    expect(execute).not.toHaveBeenCalled();
+    expect(JSON.stringify(result.calls[2]!.messages)).toContain('autorização explícita');
+  });
+});

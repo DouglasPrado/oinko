@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { test, expect } from './auth';
 
 interface Seed {
+  completed: string;
   queued: string;
   delivered: string;
   uncertain: string;
@@ -63,12 +64,21 @@ test('configures commands, browser and GitHub per project and tells installed fr
   await page.getByRole('button', { name: 'Configurar', exact: true }).first().click();
   const settings = page.getByRole('region', { name: 'Programação do projeto' });
   await settings.getByLabel('Comandos por pacote').fill('app:.:test = node check.cjs\napp:.:lint = pnpm lint');
+  await settings.getByLabel('Origens adicionais permitidas').fill('https://docs.exemplo.com');
+  await settings.getByLabel('Origens adicionais permitidas').press('Tab');
+  await settings.getByLabel('Credenciais de teste (nomes)').fill('login_teste');
+  await settings.getByLabel('Credenciais de teste (nomes)').press('Tab');
+  await settings.getByLabel('GitHub de app').fill('acme/vitrine@develop');
+  await settings.getByLabel('GitHub de app').press('Tab');
   await page.getByRole('button', { name: 'Salvar projeto' }).click();
   await expect(page.getByRole('button', { name: 'Salvar projeto' })).toBeHidden({ timeout: 15_000 });
   await page.reload();
   await page.getByRole('button', { name: 'Configurar', exact: true }).first().click();
   const reloaded = page.getByRole('region', { name: 'Programação do projeto' });
   await expect(reloaded.getByLabel('Comandos por pacote')).toHaveValue('app:.:test = node check.cjs\napp:.:lint = pnpm lint');
+  await expect(reloaded.getByLabel('Origens adicionais permitidas')).toHaveValue('https://docs.exemplo.com');
+  await expect(reloaded.getByLabel('Credenciais de teste (nomes)')).toHaveValue('login_teste');
+  await expect(reloaded.getByLabel('GitHub de app')).toHaveValue('acme/vitrine@develop');
   // Without a GitHub App configured in this installation the check says so, never "ready".
   await reloaded.getByRole('button', { name: 'Verificar acesso' }).click();
   const access = reloaded.getByLabel('Acesso do GitHub');
@@ -114,4 +124,31 @@ test('goes from a live aggregate to the runs (and traces) behind it', async ({ p
   await vitrine.getByRole('link', { name: `#${delivered.slice(4, 12)}` }).click();
   await expect(page).toHaveURL(new RegExp(`/bots/alpha/trabalhos/${delivered}$`));
   await expect(page.getByText('Entregue em draft PR').first()).toBeVisible();
+});
+
+test('shows plan, diff, confirmed cost apart from pending, the model calls and the configuration version', async ({ page }) => {
+  const { delivered, completed } = seed();
+  await page.goto(`/bots/alpha/trabalhos/${delivered}`);
+  await expect(page.getByText('Mostrar o selo de frete grátis na vitrine').first()).toBeVisible();
+  // Confirmed cost is shown with its coverage; the pending call is counted, never priced as zero.
+  await expect(page.getByText(/0[.,]0123/).first()).toBeVisible();
+  await expect(page.getByText(/cobertura 50% · 1 pendente\(s\)/)).toBeVisible();
+  await expect(page.getByText(/5\.905|5,905/).first()).toBeVisible();
+  await expect(page.getByText(/política [0-9a-f]{12}/)).toBeVisible();
+  const trace = page.getByRole('link', { name: 'trace-se', exact: true });
+  await expect(trace).toHaveAttribute('href', /\/bots\/alpha\/telemetria\/threads\/.+\/trace-seed-vitrine$/);
+  await trace.click();
+  await expect(page).toHaveURL(/\/telemetria\/threads\/.+\/trace-seed-vitrine$/);
+  await page.goto(`/bots/alpha/trabalhos/${completed}`);
+  const evidence = page.getByRole('list', { name: 'Evidências' });
+  const diff = await (await page.request.get((await evidence.getByRole('link', { name: 'diff', exact: true }).getAttribute('href'))!)).text();
+  expect(diff).toContain('+  return a + b;');
+});
+
+test('shows where the effective policy comes from and that running work keeps its own', async ({ page }) => {
+  await page.goto('/bots/alpha');
+  await page.getByRole('button', { name: 'Configurar', exact: true }).first().click();
+  const effective = page.getByLabel('Política efetiva por projeto');
+  await expect(effective.getByText(/origem: bot rev\. \d+ \+ projeto rev\. \d+/).first()).toBeVisible();
+  await expect(effective.getByText(/trabalhos em andamento mantêm a sua/)).toBeVisible();
 });

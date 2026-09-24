@@ -84,7 +84,7 @@ const delivered = await execute('Mostrar o selo de frete grátis na vitrine', [
     service.recordPublication(input.run.id, { repositoryId: 'app', branch: 'task/carrinho', remoteSha: 'a'.repeat(40), prNumber: 12, prUrl: 'https://github.com/acme/vitrine/pull/12', prState: 'open', reconciliationState: 'synced', checkRefs: [`${'a'.repeat(40)}:running`] });
     input.context.record({ kind: 'publication', repositoryId: 'app', sha: 'a'.repeat(40), revision: 'tree:7', prNumber: 12, prUrl: 'https://github.com/acme/vitrine/pull/12', ci: 'running', validated: false, fingerprint: 'pr-12' });
     input.context.signals.completion = { summary: 'Selo publicado em draft; CI ainda em andamento.' };
-    return { summary: 'Selo implementado e validado na prévia.', traceIds: [] };
+    return { summary: 'Selo implementado e validado na prévia.', traceIds: ['trace-seed-vitrine'] };
   },
 ], 'vitrine');
 const noProgress = () => {
@@ -113,6 +113,10 @@ passive.store.acquireLease(running.id, 'seed-worker', 3_600_000);
 const claimed = passive.store.transitionRun(running.id, passive.store.getRun(running.id).revision, 'running', { phase: 'working', startedAt: Date.now() }).run;
 passive.service.control(operator, claimed.id, 'pause', {}, 'seed');
 const queued = passive.service.start(operator, { botId: 'beta', projectId: 'loja', text: 'Analisar a cobertura de testes', mode: 'analysis' }).run;
+// Provider usage of the delivered run: one confirmed cost and one still pending.
+const deliveredRun = passive.store.getRun(delivered.id);
+passive.usage.report(deliveredRun, { callId: 'call-seed-1', role: 'main', model: 'model-alpha', inputTokens: 5200, outputTokens: 400, totalTokens: 5600, costUsd: 0.0123, costStatus: 'confirmed', startedAt: Date.now() - 5000, endedAt: Date.now() - 3000 });
+passive.usage.report(deliveredRun, { callId: 'call-seed-2', role: 'jev', model: 'jev', inputTokens: 300, outputTokens: 5, totalTokens: 305, costStatus: 'pending', startedAt: Date.now() - 2900, endedAt: Date.now() - 2800 });
 // Evaluation history for beta: a baseline and a prompt candidate that saves tokens.
 const { evaluation } = passive;
 const evalCase = {

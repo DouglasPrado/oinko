@@ -108,11 +108,37 @@ for (const [name, dir] of [
   console.log(`▶ gate de IDs de piloto … ${found ? 'falhou' : 'ok'}`);
 }
 
+// 3b. Every relative link of the plan documents points to an existing file.
+{
+  const { readdirSync, statSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const docs = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (entry.endsWith('.md')) docs.push(path);
+    }
+  };
+  walk(join(repo, 'docs/milestones/programming-agents'));
+  docs.push(join(repo, 'docs/blueprint/27-programming-runs.md'), join(repo, 'docs/shared/MAPPING.md'), join(repo, 'docs/shared/glossary.md'));
+  const broken = [];
+  for (const doc of docs)
+    for (const match of readFileSync(doc, 'utf8').matchAll(/\]\(([^)\s]+)\)/g)) {
+      const target = match[1].split('#')[0];
+      if (!target || /^[a-z]+:/i.test(target)) continue;
+      if (!existsSync(resolve(dirname(doc), decodeURI(target)))) broken.push(`${relative(repo, doc)} → ${match[1]}`);
+    }
+  results.push({ suite: 'gate: links internos dos documentos do plano', environment: 'automated', command: `verificação de ${docs.length} documentos`, result: broken.length ? 'failed' : 'passed', passed: broken.length ? 0 : 1, failed: broken.length ? 1 : 0, skipped: [], durationMs: 0, ...(broken.length && { findings: broken.join('\n') }) });
+  console.log(`▶ gate de links … ${broken.length ? `falhou (${broken.length})` : 'ok'}`);
+}
+
 // 4. Docker suites.
 const docker = !values['skip-docker'] && spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8' }).status === 0;
 if (docker) {
   vitest('Docker: environments (runner, falhas, browser)', 'packages/environments', ['tests/docker.test.ts', 'tests/runner.e2e.test.ts', 'tests/failures.e2e.test.ts', 'tests/browser.e2e.test.ts', 'tests/workspace.e2e.test.ts', 'tests/publication-docker.e2e.test.ts'], { env: { OINKO_DOCKER_TEST: '1' }, environment: 'docker' });
-  vitest('Docker: worker + runner + harness', 'packages/bots', ['tests/programming.e2e.test.ts', 'tests/evaluation.e2e.test.ts'], { env: { OINKO_DOCKER_TEST: '1' }, environment: 'docker' });
+  vitest('Docker: worker + runner + harness', 'packages/bots', ['tests/programming.e2e.test.ts', 'tests/evaluation.e2e.test.ts', 'tests/programming.test.ts'], { env: { OINKO_DOCKER_TEST: '1' }, environment: 'docker' });
+  vitest('Docker: MCP Oinko (GitHub e worktree servida)', 'packages/mcps/oinko', ['tests/runtime.test.ts'], { env: { OINKO_DOCKER_TEST: '1' }, environment: 'docker' });
 } else pending('Docker', 'docker', values['skip-docker'] ? 'pulado por --skip-docker' : 'Docker indisponível');
 
 // 5. Dashboard E2E.

@@ -7,6 +7,7 @@ import {
   ProgrammingError,
   RunNotifier,
   RunQueries,
+  TelemetryDeliverer,
   channelActor,
   programmingChatTools,
   readJournal,
@@ -293,6 +294,37 @@ describe('M03-S02 new request versus clarification in chat', () => {
     expect(harness.store.listRuns({ botId: 'alpha' }).items).toHaveLength(1);
     const confirmed = await call({ projectId: 'one', request: 'Novo: refatorar o frete', confirmNew: true }, 'c3');
     expect(confirmed.runId).not.toBe(first.runId);
+    await harness.close();
+  });
+});
+
+describe('M01-S02/S05 degraded delivery and sequence gaps in the run detail', () => {
+  it('shows an outage until recovery and reports missing events per producer', async () => {
+    const access = twoBotMatrix();
+    const harness = createService(tempRoot(), access);
+    const { run } = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'x' });
+    const queries = new RunQueries(harness.store, access, harness.journal, harness.usage);
+    const correlation = { botId: 'alpha', projectId: 'one', runId: run.id };
+    expect(queries.detail(operator, run.id).telemetry).toMatchObject({ degraded: false, gaps: [] });
+    // Outages are per destination (the bot's telemetry repository), not per run.
+    let failing = true;
+    const deliverer = new TelemetryDeliverer(harness.database, harness.journal, (botId) =>
+      botId === 'alpha' ? { name: 'alpha', write: () => (failing ? Promise.reject(new Error('disco cheio')) : Promise.resolve()) } : undefined,
+    );
+    await deliverer.flush();
+    expect(queries.detail(operator, run.id).telemetry.degraded).toBe(true);
+    expect(queries.detail(operator, run.id).telemetry.pendingDelivery).toBeGreaterThan(0);
+    failing = false;
+    await deliverer.flush();
+    // Only the audit event of this very query can still be waiting.
+    const recovered = queries.detail(operator, run.id).telemetry;
+    expect(recovered.degraded).toBe(false);
+    expect(recovered.pendingDelivery).toBeLessThanOrEqual(1);
+    // Another producer's events 1 and 3 arrived; 2 is missing and must be shown, never hidden.
+    const envelope = (seq: number) => ({ schemaVersion: 1, eventId: `ext-${seq}`, type: 'check_finished', producer: 'runner:ext', seq, occurredAt: Date.now(), status: 'info', capture: 'full', ...correlation, payload: {} });
+    harness.journal.ingest(envelope(1));
+    harness.journal.ingest(envelope(3));
+    expect(queries.detail(operator, run.id).telemetry.gaps).toEqual([{ producer: 'runner:ext', missing: 1 }]);
     await harness.close();
   });
 });

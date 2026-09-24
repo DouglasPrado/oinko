@@ -446,3 +446,32 @@ describe('M02-S01 the run tools only act on the run worktree', () => {
     expect(context.programming.store.getRun(id)?.state).toBe('completed');
   }, 60_000);
 });
+
+describe('M05 browser failures and cancellation', () => {
+  it('binds a browser failure to the step that tried it', async () => {
+    const context = setup({ steps: [() => ({ tool: 'browser_open', args: { kind: 'test' } }), () => ({ text: 'Sem navegador.' })], publish: false });
+    context.runner.failBrowser = true;
+    const id = await runOnce(context, 'Analise a prévia.', 'analysis');
+    const failed = readJournal(context.programming.database, { runId: id, type: 'browser_session_failed' })[0]?.envelope;
+    const cycle = context.programming.store.listSteps(id).find((step) => step.kind === 'cycle');
+    expect(failed).toMatchObject({ stepId: cycle!.id, status: 'failed', payload: { code: 'browser_unavailable' } });
+  }, 60_000);
+
+  it('closes the run browser sessions when the run is cancelled', async () => {
+    const context = setup({
+      steps: [() => ({ tool: 'browser_open', args: { kind: 'test' } }), () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'sleep 5' } }), () => ({ text: 'fim' })],
+      publish: false,
+    });
+    const { service, store, database } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'x' }).run.id;
+    service.kick();
+    const deadline = Date.now() + 10_000;
+    while (!store.listReceipts(id, ['running']).some((receipt) => receipt.kind === 'workspace.check') && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+    service.control(operator, id, 'cancel');
+    await service.idle();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(store.getRun(id)?.state).toBe('cancelled');
+    expect(context.runner.calls.some((call) => call.action === 'browserClose')).toBe(true);
+    expect(readJournal(database, { runId: id, type: 'browser_session_closed' }).map((event) => event.envelope.payload?.reason)).toContain('run_cancelled');
+  }, 60_000);
+});

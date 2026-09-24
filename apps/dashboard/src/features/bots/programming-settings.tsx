@@ -15,7 +15,14 @@ interface EffectiveView {
     projectId: string;
     version?: string;
     error?: string;
-    policy?: { allowEdits: boolean; allowPublication: boolean; allowBrowser: boolean; autoResume: boolean; models: { main: string; fast?: string } };
+    policy?: {
+      allowEdits: boolean;
+      allowPublication: boolean;
+      allowBrowser: boolean;
+      autoResume: boolean;
+      models: { main: string; fast?: string };
+      sources?: { botRevision: number; projectRevision: number };
+    };
   }[];
 }
 
@@ -202,6 +209,9 @@ export function ProgrammingSettings({
           {botId && effective.data && (
             <div className="rounded-lg border border-rule" aria-label="Política efetiva por projeto">
               <p className="border-b border-rule px-4 py-2 text-[13px] font-medium">Política efetiva por projeto (versão salva)</p>
+              <p className="border-b border-rule px-4 py-2 text-xs text-ink-muted">
+                Novos trabalhos usam esta versão; trabalhos em andamento mantêm a sua. O worker do bot aplica mudanças após reiniciar.
+              </p>
               <ul className="divide-y divide-rule text-xs">
                 {effective.data.projects.map((project) => (
                   <li key={project.projectId} className="px-4 py-2">
@@ -213,6 +223,12 @@ export function ProgrammingSettings({
                         edita: {project.policy!.allowEdits ? 'sim' : 'não'} · draft PR: {project.policy!.allowPublication ? 'sim' : 'não'} · browser:{' '}
                         {project.policy!.allowBrowser ? 'sim' : 'não'} · modelo {project.policy!.models.main}
                         {project.policy!.models.fast ? ` / ${project.policy!.models.fast}` : ''}
+                        {project.policy!.sources && (
+                          <span className="block">
+                            origem: bot rev. {project.policy!.sources.botRevision} + projeto rev. {project.policy!.sources.projectRevision} · versão{' '}
+                            <span className="font-mono">{project.version?.slice(7, 19)}</span>
+                          </span>
+                        )}
                       </span>
                     )}
                   </li>

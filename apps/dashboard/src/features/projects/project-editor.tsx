@@ -224,6 +224,8 @@ export function ProjectEditor({
           </SwitchList>
         </section>
         <ProjectProgrammingSettings
+          // Remount when the form follows a newer saved version: its fields start from it.
+          key={base}
           definition={definition}
           bots={bots.data ?? []}
           onChange={(programming) =>

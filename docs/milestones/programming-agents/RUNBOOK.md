@@ -126,6 +126,6 @@ Cada tentativa roda numa raiz isolada, sem GitHub App e sem publicador; a CLI re
 - Capturas de tela mascaram campos preenchidos com credencial, mas não redigem pixels de conteúdo exibido pela aplicação.
 - Sessões de navegador compartilham o processo principal do Chromium (renderers isolados pela sandbox).
 - Proxy do navegador em Linux (gateway da rede `bridge`) ainda não validado; testado em Docker Desktop no macOS.
-- Mudança na configuração do ambiente depois de uma verificação funcional só é detectada na próxima prévia/verificação.
+- Mudanças feitas fora do trabalho (na worktree ou na configuração do ambiente) são detectadas pela sonda de revisões ao fim de cada ciclo; entre dois ciclos, uma mudança ainda não observada não invalida nada.
 - O harness não provisiona ambiente de prévia real: casos visuais em Docker/provedor real ficam *não executados*.
 - Evidências das tentativas de avaliação ficam na raiz isolada e são apagadas ao fim, salvo `--keep`.
