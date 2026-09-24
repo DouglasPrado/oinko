@@ -1,6 +1,6 @@
 {
   "name": "@oinko/core",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Oinko: reusable TypeScript agent core with models, tools, memory, knowledge and MCP",
   "type": "module",
   "main": "dist/index.js",

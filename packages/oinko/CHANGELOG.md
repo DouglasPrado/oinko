@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.2.0](https://github.com/DouglasPrado/oinko/compare/core-v2.1.2...core-v2.2.0) (2026-09-24)
+
+
+### Features
+
+* add adaptive context and per-turn tool selection ([632a1cc](https://github.com/DouglasPrado/oinko/commit/632a1cc221ad96e2990fdc97e94e8355a037d50f))
+* bots programadores e dashboard por projeto ([79b6821](https://github.com/DouglasPrado/oinko/commit/79b68211ca2faf0eb19ffebec58165b356ba9a2a))
+* **core:** busca em conversas passadas (ConversationSearch) ([852d901](https://github.com/DouglasPrado/oinko/commit/852d901054959ec80539a6a8d2bd4e4c4856a4c4))
+* **core:** orientacao de pesquisa nas tools e data no fuso do usuario ([c619557](https://github.com/DouglasPrado/oinko/commit/c619557b4c1ef7890306b4921628b48c8f4293e3))
+* **core:** prompt base de comportamento opcional (behaviorPrompt) ([5d281ff](https://github.com/DouglasPrado/oinko/commit/5d281ff1b8b90b97b98abfc0a42cb0853e222d1c))
+* **core:** trata memoria e knowledge como dados, nao instrucoes ([c794e49](https://github.com/DouglasPrado/oinko/commit/c794e493f6b3fbe41899b6f421d30eda3fcaabb3))
+* **memory:** extracao calibrada e piso de LGPD na memoria ([46ed13d](https://github.com/DouglasPrado/oinko/commit/46ed13d6c4c641d3213ca7a124767570d547f3bc))
+* **memory:** regras de aplicacao da memoria para qualquer agente ([a78047f](https://github.com/DouglasPrado/oinko/commit/a78047f7a40800d070d1721e70035c3a59d808e2))
+* organiza monorepo e adiciona agente Oink LP ([4c093fc](https://github.com/DouglasPrado/oinko/commit/4c093fc1a8331711e96bfd1134aaa5fcca561dd0))
+
+
+### Bug Fixes
+
+* **ci:** valida sqlite no node e corrige verificacoes de seguranca ([310e423](https://github.com/DouglasPrado/oinko/commit/310e42355181ae30a1ff2acddb0806b53a74f246))
+* **core:** createdAt monotonico por thread e ajustes de CI ([c38f6b9](https://github.com/DouglasPrado/oinko/commit/c38f6b98cc47f67feaab660836d4153b37bc193a))
+* **core:** preserva skill, memoria e resumo entre iteracoes e turnos ([9d762eb](https://github.com/DouglasPrado/oinko/commit/9d762eb49a5d3f9bca9737608cf6b7ca673d7198))
+* **security:** limita leituras e elimina regex de custo excessivo ([5746f4a](https://github.com/DouglasPrado/oinko/commit/5746f4ad8e3d5304e9c38aa1819ae7453d81d3a6))
+
+
+### Refactors
+
+* **bots:** conclui migracao e remove aplicacao oink-lp ([8be6d2e](https://github.com/DouglasPrado/oinko/commit/8be6d2ebce37b8de643c76a6aff4f1655f4025a5))
+
 ## [2.1.2](https://github.com/DouglasPrado/gba.dev/compare/ai-harness-v2.1.1...ai-harness-v2.1.2) (2026-08-31)
 
 
