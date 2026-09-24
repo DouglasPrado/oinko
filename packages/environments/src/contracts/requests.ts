@@ -1,8 +1,14 @@
 import { z } from 'zod';
 import { Id, ProjectSchema, TaskSchema } from '@oinko/workspaces/contracts';
 import { EnvironmentSchema, RelativePath, SettingsSchema, Variables } from './index.js';
+import { WORKSPACE_COMMANDS } from './workspace-requests.js';
+import { BROWSER_COMMANDS } from './browser-requests.js';
+import { PUBLICATION_COMMANDS } from './publication-requests.js';
 
-const RunnerCommand = z.discriminatedUnion('action', [
+export const RunnerCommand = z.discriminatedUnion('action', [
+  ...WORKSPACE_COMMANDS,
+  ...BROWSER_COMMANDS,
+  ...PUBLICATION_COMMANDS,
   z.object({ action: z.literal('state') }),
   z.object({
     action: z.literal('saveProject'),
@@ -44,10 +50,32 @@ const RunnerCommand = z.discriminatedUnion('action', [
   }),
 ]);
 export type RunnerCommandInput = z.input<typeof RunnerCommand>;
+export type RunnerCommandValue = z.output<typeof RunnerCommand>;
+const EXTENSION_SCHEMAS = [...WORKSPACE_COMMANDS, ...BROWSER_COMMANDS, ...PUBLICATION_COMMANDS];
+type ExtensionCommandValue = z.output<(typeof EXTENSION_SCHEMAS)[number]>;
+/** Commands the controller itself handles (projects, tasks, sandbox, previews, legacy files). */
+export type BaseCommandValue = Exclude<RunnerCommandValue, ExtensionCommandValue>;
+const EXTENSION_ACTIONS: ReadonlySet<string> = new Set(
+  EXTENSION_SCHEMAS.map((schema) => schema.shape.action.value as string),
+);
+export function isBaseCommand(command: RunnerCommandValue): command is BaseCommandValue {
+  return !EXTENSION_ACTIONS.has(command.action);
+}
+/** Correlation of a runner call with the programming run that caused it. */
+export const RunnerCorrelation = z
+  .object({
+    runId: z.string().max(100),
+    stepId: z.string().max(100),
+    operationId: z.string().max(200),
+    attemptId: z.string().max(100),
+  })
+  .partial();
+export type RunnerCorrelationValue = z.infer<typeof RunnerCorrelation>;
 export const RunnerRequest = z.object({
   command: RunnerCommand,
   botId: z
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,64}$/)
     .optional(),
+  correlation: RunnerCorrelation.optional(),
 });

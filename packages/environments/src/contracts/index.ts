@@ -132,6 +132,16 @@ export interface Job {
   finishedAt?: string;
   error?: string;
   result?: unknown;
+  /** Bot that asked for the job, when not the administrator. */
+  botId?: string;
+  /** Programming operation this job belongs to, for reconciliation. */
+  operationId?: string;
+  taskId?: string;
+  repositoryId?: string;
+  /** The runner restarted while it ran: the outcome is unknown, not a known failure. */
+  interrupted?: boolean;
+  /** Stopped on request; files and commits were preserved. */
+  cancelled?: boolean;
 }
 export interface CommandResult {
   stdout: string;

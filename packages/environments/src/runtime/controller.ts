@@ -2,12 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WorkspaceStore, WorktreeManager, WorkspaceError, type Project } from '@oinko/workspaces';
-import { RunnerRequest } from '../contracts/requests.js';
+import { RunnerRequest, isBaseCommand } from '../contracts/requests.js';
 import type { Job } from '../contracts/index.js';
 import { EnvironmentStore } from '../storage/store.js';
 import { DockerSandbox } from '../sandbox/docker.js';
 import { PreviewManager } from './previews.js';
 import { runCommand } from './command.js';
+import type { RunnerContext, RunnerExtension } from './extensions.js';
+import type { RunnerCorrelationValue } from '../contracts/requests.js';
+import { WorkspaceExtension } from '../workspace/extension.js';
+import { BrowserExtension } from '../browser/extension.js';
+import { PublicationExtension } from '../publication/extension.js';
 
 export class EnvironmentController {
   readonly workspaces: WorkspaceStore;
@@ -15,12 +20,39 @@ export class EnvironmentController {
   readonly sandbox: DockerSandbox;
   readonly previews: PreviewManager;
   private readonly queue = new Map<string, Promise<void>>();
+  readonly extensions: RunnerExtension[];
   constructor(readonly root: string) {
     this.workspaces = new WorkspaceStore(root);
     this.environments = new EnvironmentStore(root);
     this.sandbox = new DockerSandbox(root, (id) => this.environments.environment(id));
     this.previews = new PreviewManager(root, this.environments, this.sandbox);
     mkdirSync(join(root, '.harness/runtime/jobs'), { recursive: true, mode: 0o700 });
+    this.extensions = [new WorkspaceExtension(), new BrowserExtension(), new PublicationExtension()];
+  }
+  /** Shared runner facilities handed to extensions; authority stays here. */
+  context(botId?: string, correlation?: RunnerCorrelationValue): RunnerContext {
+    return {
+      root: this.root,
+      workspaces: this.workspaces,
+      environments: this.environments,
+      sandbox: this.sandbox,
+      previews: this.previews,
+      ...(botId !== undefined && { botId }),
+      ...(correlation !== undefined && { correlation }),
+      serial: (key, action) => this.serial(key, action),
+      enqueue: (type, projectId, action, extra) => this.enqueue(type, projectId, action, extra),
+      redact: (text) => this.redact(text),
+      task: (taskId, repositoryId) => {
+        const task = this.workspaces.task(taskId);
+        const project = this.workspaces.authorize(task.projectId, botId);
+        if (task.state !== 'ready') throw new WorkspaceError('A tarefa ainda não está pronta.');
+        if (repositoryId !== undefined) this.repository(project, repositoryId);
+        return { project, task };
+      },
+      admin: () => {
+        if (botId) throw new WorkspaceError('Esta operação pertence ao administrador.');
+      },
+    };
   }
   async recover() {
     for (const job of this.environments.jobs())
@@ -28,6 +60,8 @@ export class EnvironmentController {
         this.environments.saveJob({
           ...job,
           state: 'failed',
+          // Unknown outcome, not a known failure: the process may have finished its effect.
+          interrupted: true,
           error: 'Gerenciador reiniciado durante a operação. Verifique o estado e tente novamente.',
           finishedAt: new Date().toISOString(),
         });
@@ -42,6 +76,7 @@ export class EnvironmentController {
           task.revision,
         );
     await this.previews.reconcile();
+    for (const extension of this.extensions) await extension.recover?.(this.context());
   }
   redact(text: string) {
     return this.environments.redact(text);
@@ -64,9 +99,11 @@ export class EnvironmentController {
   private enqueue(
     type: string,
     projectId: string,
-    action: (log: (text: string) => void) => Promise<unknown>,
+    action: (log: (text: string) => void, job: Job) => Promise<unknown>,
+    extra: Partial<Job> = {},
   ) {
     const job: Job = {
+      ...extra,
       id: `job-${randomUUID().slice(0, 12)}`,
       type,
       projectId,
@@ -82,7 +119,7 @@ export class EnvironmentController {
     void this.serial(projectId, async () => {
       this.environments.saveJob({ ...job, state: 'running' });
       try {
-        const result = await action(log);
+        const result = await action(log, job);
         this.environments.saveJob({
           ...job,
           state: 'succeeded',
@@ -103,7 +140,11 @@ export class EnvironmentController {
     return job;
   }
   async handle(input: unknown): Promise<unknown> {
-    const { command, botId } = RunnerRequest.parse(input);
+    const { command, botId, correlation } = RunnerRequest.parse(input);
+    const extension = this.extensions.find((item) => item.actions.has(command.action));
+    if (extension) return extension.handle(command, this.context(botId, correlation));
+    if (!isBaseCommand(command))
+      throw new WorkspaceError('Esta operação não está disponível neste gerenciador.');
     const admin = () => {
       if (botId) throw new WorkspaceError('A configuração de ambientes pertence ao administrador.');
     };
@@ -292,6 +333,7 @@ export class EnvironmentController {
     await Promise.all([...this.queue.values()]);
   }
   close() {
+    for (const extension of this.extensions) void extension.close?.();
     this.workspaces.close();
     this.environments.close();
   }
