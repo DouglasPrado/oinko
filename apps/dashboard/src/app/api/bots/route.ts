@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { BotDefinitionSchema, BotSecretsSchema } from '@oinko/bots/schema';
 import { botManager } from '@/server/bots/manager';
 import { botResponse, botAccess, readBody } from '@/server/bots/access';
+import { recordBotConfiguration } from '@oinko/bots/programming';
+import { programming } from '@/server/programming/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -27,7 +29,14 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Origem não autorizada.' }, { status: 403 });
   try {
     const input = Save.parse(await readBody(request));
-    const profile = botManager().store.save(input.definition, input.secrets, input.revision);
+    const store = botManager().store;
+    const before = store.has(input.definition.id) ? store.runtime(input.definition.id).definition : undefined;
+    const profile = store.save(input.definition, input.secrets, input.revision);
+    try {
+      recordBotConfiguration(programming().journal, before, BotDefinitionSchema.parse(profile), 'operator', profile.revision);
+    } catch {
+      // Auditing must not undo a saved configuration; the journal reports its own failures.
+    }
     return Response.json(profile);
   } catch (error) {
     return botResponse(error);

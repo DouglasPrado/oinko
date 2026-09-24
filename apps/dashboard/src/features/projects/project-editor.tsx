@@ -13,6 +13,7 @@ import {
   slug,
   type RunnerCommandInput,
 } from './shared';
+import { ProjectProgrammingSettings } from './programming-settings';
 
 export function ProjectEditor({
   project,
@@ -209,6 +210,19 @@ export function ProjectEditor({
             ))}
           </SwitchList>
         </section>
+        <ProjectProgrammingSettings
+          definition={definition}
+          bots={bots.data ?? []}
+          onChange={(programming) =>
+            change('programming', {
+              ...programming,
+              // A publisher must stay authorized in the project.
+              publisherBotIds: programming.publisherBotIds.filter((id) =>
+                definition.allowedBotIds.includes(id),
+              ),
+            })
+          }
+        />
         {error && (
           <p role="alert" className="text-sm text-error-ink">
             {error}

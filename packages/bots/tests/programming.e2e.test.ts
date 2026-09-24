@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- journal payloads are untyped JSON */
 import { execFileSync, fork, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

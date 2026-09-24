@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { Bot, FolderGit2, Plug } from 'lucide-react';
+import { Bot, FolderGit2, ListChecks, Plug } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 const links = [
   { href: '/bots', label: 'Bots', icon: Bot },
+  { href: '/trabalhos', label: 'Trabalhos', icon: ListChecks },
   { href: '/projetos', label: 'Projetos', icon: FolderGit2 },
   { href: '/integracoes', label: 'Integrações', icon: Plug },
 ];
@@ -12,7 +13,9 @@ export function currentSection(pathname: string) {
   const sectionPath =
     pathname === '/' || pathname === '/telemetria' || pathname.startsWith('/threads/')
       ? '/bots'
-      : pathname;
+      : /^\/bots\/[^/]+\/trabalhos/.test(pathname)
+        ? '/trabalhos'
+        : pathname;
   return links.find(({ href }) => sectionPath === href || sectionPath.startsWith(`${href}/`));
 }
 

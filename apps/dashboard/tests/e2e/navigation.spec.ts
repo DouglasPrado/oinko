@@ -5,13 +5,14 @@ test('keeps the sidebar and current section across all dashboard pages', async (
   const navigation = page.getByRole('navigation', { name: 'Principal' });
   for (const [label, path] of [
     ['Projetos', '/projetos'],
+    ['Trabalhos', '/trabalhos'],
     ['Integrações', '/integracoes'],
     ['Bots', '/bots'],
   ]) {
     await navigation.getByRole('link', { name: label, exact: true }).click();
     await expect(page).toHaveURL(path!);
     await expect(navigation).toBeVisible();
-    await expect(navigation.getByRole('link')).toHaveCount(3);
+    await expect(navigation.getByRole('link')).toHaveCount(4);
     await expect(navigation.getByRole('link', { name: label, exact: true })).toHaveAttribute(
       'aria-current',
       'page',

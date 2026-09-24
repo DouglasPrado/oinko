@@ -59,6 +59,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@oinko/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
       '@oinko/bots':
         specifier: workspace:*
         version: link:../../packages/bots

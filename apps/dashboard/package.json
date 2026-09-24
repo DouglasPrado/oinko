@@ -19,6 +19,7 @@
     "dev:network": "node scripts/network.mjs dev"
   },
   "dependencies": {
+    "@oinko/agent-runtime": "workspace:*",
     "@oinko/bots": "workspace:*",
     "@oinko/environments": "workspace:*",
     "@oinko/mcp-higgsfield": "workspace:*",

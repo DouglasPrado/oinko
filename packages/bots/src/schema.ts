@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ContextPolicySchema } from '@oinko/core/context-policy';
-import { ProgrammingPolicySchema } from '@oinko/agent-runtime/programming';
+import { ProgrammingPolicySchema } from '@oinko/agent-runtime/programming-policy';
 
 export const BotId = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const HttpUrl = z.url().refine((value) => {

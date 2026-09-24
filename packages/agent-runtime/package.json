@@ -21,6 +21,10 @@
     "./programming": {
       "types": "./dist/programming/index.d.ts",
       "import": "./dist/programming/index.js"
+    },
+    "./programming-policy": {
+      "types": "./dist/programming/policy-schema.d.ts",
+      "import": "./dist/programming/policy-schema.js"
     }
   },
   "files": [

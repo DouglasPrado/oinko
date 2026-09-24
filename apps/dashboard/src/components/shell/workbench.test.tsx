@@ -20,11 +20,13 @@ it.each([
   ['/integracoes', 'Integrações'],
   ['/bots/dev/telemetria', 'Bots'],
   ['/bots/dev/telemetria/threads/example/response', 'Bots'],
+  ['/trabalhos', 'Trabalhos'],
+  ['/bots/dev/trabalhos/run-1', 'Trabalhos'],
 ])('keeps the same navigation and marks the current section at %s', (path, label) => {
   pathname = path;
   render(<Workbench>Conteúdo da página</Workbench>);
   const navigation = screen.getByRole('navigation', { name: 'Principal' });
-  expect(within(navigation).getAllByRole('link')).toHaveLength(3);
+  expect(within(navigation).getAllByRole('link')).toHaveLength(4);
   expect(within(navigation).getByRole('link', { name: label })).toHaveAttribute(
     'aria-current',
     'page',

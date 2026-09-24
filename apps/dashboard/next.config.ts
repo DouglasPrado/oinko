@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   distDir: process.env.OINKO_NEXT_DIST_DIR ?? '.next',
   reactStrictMode: true,
   serverExternalPackages: [
+    '@oinko/core',
     '@oinko/bots',
     '@oinko/agent-runtime',
     '@oinko/workspaces',

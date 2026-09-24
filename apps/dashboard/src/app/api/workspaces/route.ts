@@ -1,6 +1,9 @@
 import { botAccess, readBody } from '@/server/bots/access';
 import { environmentClient } from '@/server/environments/client';
 import type { RunnerCommandInput } from '@oinko/environments/client';
+import { ProjectSchema } from '@oinko/workspaces/contracts';
+import { recordProjectConfiguration } from '@oinko/bots/programming';
+import { programming } from '@/server/programming/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,9 +31,20 @@ export async function POST(request: Request) {
   if (!botAccess(request.headers, true))
     return Response.json({ error: 'Origem não autorizada.' }, { status: 403 });
   try {
-    return Response.json(
-      await environmentClient().command((await readBody(request)) as RunnerCommandInput),
-    );
+    const command = (await readBody(request)) as RunnerCommandInput;
+    const client = environmentClient();
+    const before =
+      command.action === 'saveProject'
+        ? (await client.state()).projects.find((project) => project.id === command.definition.id)
+        : undefined;
+    const result = await client.command(command);
+    if (command.action === 'saveProject')
+      try {
+        recordProjectConfiguration(programming().journal, before, ProjectSchema.parse(result), 'operator');
+      } catch {
+        // Auditing never undoes the saved project.
+      }
+    return Response.json(result);
   } catch (error) {
     return failure(error);
   }

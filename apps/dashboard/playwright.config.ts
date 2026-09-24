@@ -20,7 +20,7 @@ export default defineConfig({
   webServer: {
     // build && start, nunca dev: a compilacao sob demanda do dev torna a
     // primeira navegacao instavel e e a origem classica de flake.
-    command: `pnpm -w build:packages && node scripts/seed-telemetry.mjs && pnpm build && pnpm exec next start -H 127.0.0.1 -p ${PORT}`,
+    command: `pnpm -w build:packages && node scripts/seed-telemetry.mjs && node scripts/seed-programming.mjs && pnpm build && pnpm exec next start -H 127.0.0.1 -p ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 180_000,

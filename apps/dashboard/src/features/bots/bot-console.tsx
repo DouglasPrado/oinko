@@ -24,6 +24,7 @@ import { ChannelIcon } from '@/components/shared/channel-icons';
 import { OinkoIcon } from '@/components/shared/oinko-icon';
 import { cn } from '@/lib/utils/cn';
 import { ContextSettings } from './context-settings';
+import { ProgrammingSettings } from './programming-settings';
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -275,12 +276,17 @@ function BotEditor({
           onSecrets={(changes) => setSecrets((value) => ({ ...value, ...changes }))}
           hasTypesafeKey={profile?.hasTypesafeKey ?? false}
         />
-        <FormSection title="Programação" className="px-5">
+        <FormSection title="Programação" className="space-y-4 px-5 pb-5">
           <SwitchField
             label="Trabalhar com código em ambientes Docker"
             description="Habilita arquivos, terminal, Git e prévias. Em Projetos, escolha quais repositórios este bot pode acessar. Reinicie o bot para aplicar."
             checked={definition.programming}
             onChange={(event) => change('programming', event.target.checked)}
+          />
+          <ProgrammingSettings
+            definition={definition}
+            onChange={(changes) => setDefinition((value) => ({ ...value, ...changes }))}
+            {...(profile && { botId: profile.id })}
           />
         </FormSection>
         <FormSection
@@ -965,6 +971,14 @@ function BotOverview({ bot, pending }: { bot: ListedBot; pending: boolean }) {
                 {bot.telemetry.enabled
                   ? `Ativa · ${bot.telemetry.retentionDays} dias`
                   : 'Desativada'}
+              </Detail>
+              <Detail label="Trabalhos">
+                <Link
+                  href={`/bots/${encodeURIComponent(bot.id)}/trabalhos`}
+                  className="text-info-ink underline-offset-4 hover:underline"
+                >
+                  {bot.programmingPolicy?.enabled ? 'Habilitados · ver fila' : 'Desabilitados · histórico'}
+                </Link>
               </Detail>
             </dl>
           </section>
