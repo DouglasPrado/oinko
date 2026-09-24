@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildMemoryInstructions,
   buildExtractionPrompt,
+  buildForkedExtractionPrompt,
   TYPES_SECTION,
   WHAT_NOT_TO_SAVE_SECTION,
   WHEN_TO_ACCESS_SECTION,
@@ -172,5 +173,56 @@ describe('memory-prompts', () => {
       expect(text).toContain('description:');
       expect(text).toContain('type:');
     });
+  });
+});
+
+describe('buildForkedExtractionPrompt — what earns a place in memory', () => {
+  const prompt = (sensitiveData?: 'omit' | 'allow') =>
+    buildForkedExtractionPrompt(6, '', sensitiveData ? { sensitiveData } : undefined);
+
+  it('keeps only what the user stated, not the assistant or a tool', () => {
+    const text = prompt();
+    expect(text).toContain('## What counts');
+    expect(text).toMatch(/did the user say it/i);
+    expect(text).toMatch(/your own advice|your suggestions/i);
+    expect(text).toMatch(/tool results/i);
+  });
+
+  it('calibrates a single mention and keeps a preference at the scope it was given', () => {
+    const text = prompt();
+    expect(text).toMatch(/mentioned once/i);
+    expect(text).toMatch(/scope/i);
+  });
+
+  it('applies a horizon test and records changes with their history', () => {
+    const text = prompt();
+    expect(text).toMatch(/a month from now/i);
+    expect(text).toContain('(previously');
+    expect(text).toMatch(/derived only from it/i);
+  });
+
+  it('never saves identifiers, credentials or instructions that weaken honesty', () => {
+    const text = prompt();
+    expect(text).toContain('## Never save');
+    expect(text).toContain('CPF');
+    expect(text).toMatch(/card or account numbers/i);
+    expect(text).toMatch(/flatter/i);
+    expect(text).toMatch(/ignore .*instructions/i);
+    expect(text).toMatch(/untrusted-tool-output/);
+  });
+
+  it('no longer tells the subagent to save everything verbatim', () => {
+    expect(prompt()).not.toContain('save the FULL content');
+  });
+
+  it('keeps LGPD sensitive categories out by default', () => {
+    expect(prompt()).toMatch(/health/i);
+    expect(prompt('omit')).toMatch(/religious/i);
+  });
+
+  it('lets the operator allow sensitive categories while identifiers stay out', () => {
+    const text = prompt('allow');
+    expect(text).not.toMatch(/religious/i);
+    expect(text).toContain('CPF');
   });
 });

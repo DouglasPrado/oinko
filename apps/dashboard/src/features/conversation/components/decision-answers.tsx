@@ -21,7 +21,13 @@ function percent(confidence: unknown): string | null {
  * traz dezesseis casas decimais, e nenhuma delas muda a leitura de quem esta
  * investigando por que o agente decidiu assim.
  */
-export function DecisionAnswers({ answers }: { answers: Record<string, unknown> }) {
+export function DecisionAnswers({
+  answers,
+  labels = {},
+}: {
+  answers: Record<string, unknown>;
+  labels?: Record<string, string>;
+}) {
   const entries = Object.entries(answers);
   if (entries.length === 0) return null;
 
@@ -33,7 +39,7 @@ export function DecisionAnswers({ answers }: { answers: Record<string, unknown> 
 
         return (
           <div key={key} className="flex items-baseline gap-1.5">
-            <dt className="text-ink-muted">{key}</dt>
+            <dt className="text-ink-muted">{labels[key] ?? key}</dt>
             <dd className="font-medium">{label(answer.value)}</dd>
             {confidence ? (
               <dd className="tabular text-judge" title="confianca declarada pelo decisor">

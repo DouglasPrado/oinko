@@ -1,8 +1,18 @@
 import type { ConversationStore } from '../contracts/entities/stores.js';
 import type { ChatMessage } from '../contracts/entities/chat-message.js';
+import type {
+  ConversationSearchPage,
+  ConversationSearchQuery,
+  ConversationSearchRole,
+} from '../contracts/entities/conversation-search.js';
 import type { SQLiteDatabase } from './sqlite-database.js';
 import { createLogger } from '../utils/logger.js';
 import type { Logger } from '../utils/logger.js';
+import { searchableText } from '../utils/conversation-text.js';
+import type {
+  ConversationCheckpoint,
+  ArchivedToolResult,
+} from '../contracts/entities/working-context.js';
 
 /**
  * SQLite implementation of ConversationStore.
@@ -17,22 +27,36 @@ export class SQLiteConversationStore implements ConversationStore {
   }
 
   appendMessage(message: ChatMessage, threadId: string): void {
-    this.database.db
-      .prepare(
-        `
+    this.database.transaction(() => {
+      const result = this.database.db
+        .prepare(
+          `
       INSERT INTO conversations (thread_id, role, content, tool_calls, tool_call_id, pinned, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-      )
-      .run(
-        threadId,
-        message.role,
-        typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
-        message.toolCalls ? JSON.stringify(message.toolCalls) : null,
-        message.toolCallId ?? null,
-        message.pinned ? 1 : 0,
-        message.createdAt,
-      );
+        )
+        .run(
+          threadId,
+          message.role,
+          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+          message.toolCalls ? JSON.stringify(message.toolCalls) : null,
+          message.toolCallId ?? null,
+          message.pinned ? 1 : 0,
+          message.createdAt,
+        );
+
+      const body = searchableText(message.role, message.content);
+      if (body.trim() === '') return;
+      // The history is the source of truth: a message the index could not
+      // take is still kept — it just will not turn up in a search.
+      try {
+        this.database.db
+          .prepare('INSERT INTO conversations_fts(rowid, body) VALUES (?, ?)')
+          .run(result.lastInsertRowid, body);
+      } catch (error) {
+        this.logger.warn('Message kept but not indexed for search', { error: String(error) });
+      }
+    });
   }
 
   listThread(threadId: string): ChatMessage[] {
@@ -52,8 +76,136 @@ export class SQLiteConversationStore implements ConversationStore {
   }
 
   clearThread(threadId: string): void {
-    this.database.db.prepare('DELETE FROM conversations WHERE thread_id = ?').run(threadId);
+    // The delete trigger clears the search index along with the rows.
+    this.database.transaction(() => {
+      this.database.db.prepare('DELETE FROM conversations WHERE thread_id = ?').run(threadId);
+      this.database.db
+        .prepare('DELETE FROM conversation_checkpoints WHERE thread_id = ?')
+        .run(threadId);
+      this.database.db
+        .prepare('DELETE FROM conversation_tool_results WHERE thread_id = ?')
+        .run(threadId);
+    });
   }
+
+  getCheckpoint(threadId: string): ConversationCheckpoint | undefined {
+    return this.database.db
+      .prepare(
+        'SELECT through_count AS through, summary, updated_at AS updatedAt FROM conversation_checkpoints WHERE thread_id = ?',
+      )
+      .get(threadId) as unknown as ConversationCheckpoint | undefined;
+  }
+
+  saveCheckpoint(threadId: string, checkpoint: ConversationCheckpoint): void {
+    this.database.db
+      .prepare(
+        'INSERT INTO conversation_checkpoints (thread_id, through_count, summary, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(thread_id) DO UPDATE SET through_count=excluded.through_count, summary=excluded.summary, updated_at=excluded.updated_at',
+      )
+      .run(threadId, checkpoint.through, checkpoint.summary, checkpoint.updatedAt);
+  }
+
+  getToolResult(threadId: string, id: string): ArchivedToolResult | undefined {
+    const row = this.database.db
+      .prepare(
+        'SELECT id, name, content, is_error AS isError, created_at AS createdAt FROM conversation_tool_results WHERE thread_id = ? AND id = ?',
+      )
+      .get(threadId, id) as unknown as
+      (Omit<ArchivedToolResult, 'isError'> & { isError: number }) | undefined;
+    return row ? { ...row, isError: row.isError === 1 } : undefined;
+  }
+
+  saveToolResult(threadId: string, result: ArchivedToolResult): void {
+    this.database.db
+      .prepare(
+        'INSERT OR IGNORE INTO conversation_tool_results (thread_id, id, name, content, is_error, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        threadId,
+        result.id,
+        result.name,
+        result.content,
+        result.isError ? 1 : 0,
+        result.createdAt,
+      );
+  }
+
+  searchMessages(
+    query: ConversationSearchQuery,
+    threadIds: readonly string[],
+  ): ConversationSearchPage {
+    if (threadIds.length === 0 || query.roles.length === 0) return { hits: [], hasMore: false };
+
+    const where: string[] = [
+      `c.thread_id IN (${threadIds.map(() => '?').join(', ')})`,
+      `c.role IN (${query.roles.map(() => '?').join(', ')})`,
+    ];
+    const params: (string | number)[] = [...threadIds, ...query.roles];
+    if (query.after !== undefined) {
+      where.push('c.created_at >= ?');
+      params.push(query.after);
+    }
+    if (query.before !== undefined) {
+      where.push('c.created_at < ?');
+      params.push(query.before);
+    }
+
+    const match = toMatchExpression(query.terms, query.match);
+    // Terms were given but none is a word: nothing can match. Falling through
+    // to the time-ordered listing would answer a question nobody asked.
+    if (query.terms.length > 0 && match === undefined) return { hits: [], hasMore: false };
+    // snippet() counts tokens, not characters: roughly seven characters each.
+    const snippetTokens = Math.max(4, Math.min(64, Math.round(query.snippetChars / 7)));
+    const sql = match
+      ? `SELECT c.thread_id, c.role, c.created_at,
+                snippet(conversations_fts, 0, '«', '»', '…', ${snippetTokens}) AS excerpt
+           FROM conversations_fts JOIN conversations c ON c.id = conversations_fts.rowid
+          WHERE conversations_fts MATCH ? AND ${where.join(' AND ')}
+          ORDER BY bm25(conversations_fts), c.created_at DESC
+          LIMIT ? OFFSET ?`
+      : `SELECT c.thread_id, c.role, c.created_at, conversations_fts.body AS excerpt
+           FROM conversations c JOIN conversations_fts ON conversations_fts.rowid = c.id
+          WHERE ${where.join(' AND ')}
+          ORDER BY c.created_at DESC
+          LIMIT ? OFFSET ?`;
+
+    // One extra row answers "is there more?" without a count query.
+    const rows = this.database.db
+      .prepare(sql)
+      .all(...(match ? [match] : []), ...params, query.limit + 1, query.offset) as unknown as {
+      thread_id: string;
+      role: string;
+      created_at: number;
+      excerpt: string;
+    }[];
+
+    return {
+      hits: rows.slice(0, query.limit).map((row) => ({
+        threadId: row.thread_id,
+        role: row.role as ConversationSearchRole,
+        createdAt: row.created_at,
+        snippet: capExcerpt(row.excerpt, query.snippetChars),
+      })),
+      hasMore: rows.length > query.limit,
+    };
+  }
+}
+
+/**
+ * The FTS5 expression for plain words. Each term is quoted — so `"`, `*`,
+ * `NEAR(` or `col:` typed by anyone are text, not syntax — and terms of four
+ * or more characters also match as prefixes ("deploy" finds "deploys").
+ */
+function toMatchExpression(terms: readonly string[], match: 'all' | 'any'): string | undefined {
+  const quoted = terms
+    .map((t) => t.trim())
+    .filter((t) => /[\p{L}\p{N}]/u.test(t))
+    .map((t) => `"${t.replace(/"/g, '""')}"${[...t].length >= 4 ? '*' : ''}`);
+  if (quoted.length === 0) return undefined;
+  return quoted.join(match === 'all' ? ' AND ' : ' OR ');
+}
+
+function capExcerpt(text: string, maxChars: number): string {
+  return text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`;
 }
 
 const VALID_ROLES = new Set<string>(['user', 'assistant', 'system', 'tool']);

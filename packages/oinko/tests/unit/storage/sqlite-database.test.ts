@@ -124,3 +124,67 @@ describe('SQLiteDatabase', () => {
     expect(() => db.db.prepare('SELECT 1')).toThrow();
   });
 });
+
+describe('SQLiteDatabase — conversation search index (migrateV3)', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('creates the index and its triggers, idempotently', () => {
+    const db = new SQLiteDatabase(':memory:');
+    db.initialize();
+    const names = (db.db.prepare('SELECT name FROM sqlite_master').all() as { name: string }[]).map(
+      (r) => r.name,
+    );
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'conversations_fts',
+        'conversations_fts_after_delete',
+        'conversations_fts_after_update',
+      ]),
+    );
+    db.close();
+  });
+
+  it('backfills text written before the index existed — text only, no tool output', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fts-backfill-'));
+    dirs.push(dir);
+    const path = join(dir, 'data.db');
+
+    // A database from before the index: tables of V1/V2, rows written directly.
+    const first = new SQLiteDatabase(path);
+    first.initialize();
+    first.db.exec(`
+      DROP TRIGGER conversations_fts_after_delete;
+      DROP TRIGGER conversations_fts_after_update;
+      DROP TABLE conversations_fts;
+    `);
+    const insert = first.db.prepare(
+      'INSERT INTO conversations (thread_id, role, content, pinned, created_at) VALUES (?, ?, ?, 0, ?)',
+    );
+    insert.run('t1', 'user', 'plano de migração do banco', 1);
+    insert.run(
+      't1',
+      'user',
+      JSON.stringify([
+        { type: 'text', text: 'veja o diagrama' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,QUJDRA==' } },
+      ]),
+      2,
+    );
+    insert.run('t1', 'tool', 'resultado buscado migração', 3);
+    first.close();
+
+    const second = new SQLiteDatabase(path);
+    second.initialize();
+    const bodies = (
+      second.db.prepare('SELECT rowid, body FROM conversations_fts ORDER BY rowid').all() as {
+        body: string;
+      }[]
+    ).map((r) => r.body);
+    second.close();
+
+    expect(bodies).toEqual(['plano de migração do banco', 'veja o diagrama']);
+  });
+});

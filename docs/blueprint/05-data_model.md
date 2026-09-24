@@ -110,6 +110,21 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 | idx_conversations_thread | thread_id, created_at | BTREE composto | Query principal: carregar histórico de uma thread em ordem cronológica |
 | idx_conversations_pinned | thread_id, pinned | BTREE composto | Busca rápida de mensagens pinadas por thread |
 
+---
+
+### conversations_fts
+
+**Descrição:** Índice full-text (FTS5) das mensagens de `conversations`, usado pela busca em conversas passadas (`ConversationSearch`). Criado por `migrateV3`, que também faz o backfill das mensagens anteriores.
+
+**Campos:**
+
+| Campo | Tipo | Constraint | Descrição |
+|-------|------|-----------|-----------|
+| rowid | INTEGER | = `conversations.id` | Liga o trecho indexado à mensagem |
+| body | TEXT | tokenizer `unicode61 remove_diacritics 2` | Só o texto de mensagens `user` e `assistant` (até 32k caracteres). Resultados de tools, mensagens de sistema e imagens nunca entram |
+
+**Sincronização:** o índice guarda cópia própria do texto (não usa *external content*, porque `conversations.content` pode ser JSON multimodal com base64). A inserção acontece na mesma transação do `appendMessage`; uma falha ao indexar não perde a mensagem. Os triggers `conversations_fts_after_delete` e `conversations_fts_after_update` removem do índice o que sai de `conversations`, e `secure-delete` apaga os tokens na hora — `clearThread` também limpa o que a busca encontra.
+
 <!-- APPEND:tables -->
 
 ---
@@ -127,7 +142,7 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 > Como as mudanças no schema serão gerenciadas ao longo do tempo?
 
 - **Ferramenta:** Migrações embutidas no `SQLiteDatabase.initialize()` — versionadas por número sequencial em código TypeScript
-- **Convenção de nomes:** Métodos internos `migrateV1()`, `migrateV2()`, etc. executados sequencialmente na inicialização
+- **Convenção de nomes:** Métodos internos `migrateV1()`, `migrateV2()`, `migrateV3()` (índice `conversations_fts`), executados sequencialmente na inicialização. Cada um detecta pelo schema se já foi aplicado
 - **Estratégia de rollback:** SQLite não suporta `ALTER TABLE DROP COLUMN` < 3.35. Rollback via backup do arquivo `.db` antes da migração. Para migrações destrutivas, criar nova tabela + copiar dados + drop old + rename
 - **Migrações destrutivas:** Deprecar coluna por 1 versão (mantendo nullable) antes de remover na versão seguinte. Toda migração é idempotente (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`)
 
@@ -144,6 +159,7 @@ Enquanto o [Modelo de Domínio](./04-domain-model.md) descreve entidades e regra
 | Busca de memórias por scope e confidence mínimo | memories | Média (extração e decay) | < 5ms |
 | Carregar todos os embeddings para busca vetorial | vectors | Alta (toda busca de knowledge) | < 100ms (50K vetores) |
 | Listar threads existentes | conversations | Baixa | < 5ms |
+| Buscar mensagens antigas por palavras, dentro das threads permitidas | conversations_fts, conversations | Baixa (quando o modelo chama ConversationSearch) | < 20ms |
 | Limpeza de memórias com confidence < threshold | memories | Baixa (periódica, a cada N turnos) | < 50ms |
 
 <!-- APPEND:critical-queries -->

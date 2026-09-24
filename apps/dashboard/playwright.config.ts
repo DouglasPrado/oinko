@@ -15,7 +15,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  use: { baseURL: BASE_URL, trace: 'on-first-retry', actionTimeout: 20_000 },
+  use: { baseURL: BASE_URL, trace: 'retain-on-failure', actionTimeout: 20_000 },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     // build && start, nunca dev: a compilacao sob demanda do dev torna a
@@ -24,6 +24,10 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 180_000,
-    env: { TELEMETRY_DB_PATH: join(testRoot, 'telemetry.db'), OINKO_ROOT: testRoot },
+    env: {
+      TELEMETRY_DB_PATH: join(testRoot, 'telemetry.db'),
+      OINKO_ROOT: testRoot,
+      OINKO_NEXT_DIST_DIR: '.next-e2e',
+    },
   },
 });

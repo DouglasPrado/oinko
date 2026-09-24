@@ -88,3 +88,26 @@ it('keeps the configured SDK database available without registered bots', async 
   expect(selectTelemetry()).toMatchObject({ id: '', name: 'Outras conversas' });
   expect(selectTelemetry()!.database).toBeDefined();
 });
+
+it('preserves requested and effective models when reading routed executions', async () => {
+  seed(configuredPath, 'routing', 10);
+  const db = new DatabaseSync(configuredPath);
+  try {
+    db.prepare(
+      "UPDATE executions SET requested_model = ?, model = ? WHERE trace_id = 'same-trace'",
+    ).run('minimax/minimax-m3', 'nvidia/nemotron-3-ultra-550b-a55b:free');
+    const { listExecutions, getExecutionDetail } =
+      await import('@/server/repositories/execution-repository');
+    for (const execution of [
+      listExecutions('same-thread', db)[0],
+      getExecutionDetail('same-trace', db)?.execution,
+    ]) {
+      expect(execution).toMatchObject({
+        requestedModel: 'minimax/minimax-m3',
+        model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+      });
+    }
+  } finally {
+    db.close();
+  }
+});

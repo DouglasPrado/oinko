@@ -41,6 +41,7 @@ examples/teams-bot/src/knowledge/
 
 # Next.js (apps/dashboard)
 .next/
+.next-e2e/
 next-env.d.ts
 apps/*/playwright-report/
 apps/*/test-results/

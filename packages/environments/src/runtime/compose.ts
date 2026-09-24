@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { parse } from 'yaml';
@@ -204,7 +205,12 @@ export async function prepareCompose(options: {
       safePath(source, service.workdir);
       workingDir = `/app/${service.workdir}`;
     }
-    const container = `${name}-${service.id}`;
+    const fullName = `${name}-${service.id}`;
+    // Docker accepts longer names, but each DNS label is limited to 63 bytes.
+    const container =
+      fullName.length <= 63
+        ? fullName
+        : `${fullName.slice(0, 50)}-${createHash('sha256').update(fullName).digest('hex').slice(0, 12)}`;
     services[service.id] = {
       image,
       container_name: container,

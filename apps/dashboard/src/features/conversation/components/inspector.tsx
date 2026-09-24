@@ -101,7 +101,14 @@ function ItemDetail({ item }: { item: TimelineItem }) {
         <Row label="Duracao" value={formatDuration(item.durationMs)} />
       </dl>
       <div className="mt-3">
-        <DecisionAnswers answers={item.answers} />
+        <DecisionAnswers answers={item.answers} labels={item.answerLabels} />
+        {item.inputTokens != null && (
+          <p className="mt-3 text-xs text-ink-muted">
+            Jev: {item.inputTokens.toLocaleString('pt-BR')} tokens de entrada e{' '}
+            {(item.outputTokens ?? 0).toLocaleString('pt-BR')} de saída. Contabilizados
+            separadamente das chamadas do modelo; custo não informado pelo provedor.
+          </p>
+        )}
       </div>
     </>
   );

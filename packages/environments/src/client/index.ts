@@ -23,7 +23,9 @@ export interface RunnerState {
 }
 export function environmentSocket(root: string) {
   return join(
-    tmpdir(),
+    // MCP hosts may strip TMPDIR. Unix clients must agree on one socket for
+    // the same root instead of starting competing runners for the same data.
+    process.platform === 'win32' ? tmpdir() : '/tmp',
     `oinko-env-${createHash('sha256').update(resolve(root)).digest('hex').slice(0, 20)}.sock`,
   );
 }

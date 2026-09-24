@@ -349,6 +349,37 @@ describe('MCPAdapter', () => {
     it('should return empty array when no connections', () => {
       expect(adapter.getConnections()).toEqual([]);
     });
+
+    it('carries the instructions the server sent in its handshake', async () => {
+      const withInstructions = mockClient as typeof mockClient & { getInstructions?: () => string };
+      withInstructions.getInstructions = vi.fn(
+        () => 'Call search before fetch.\u200b\n\n\nIDs are UUIDs.',
+      );
+      try {
+        await adapter.connect({ name: 'docs', transport: 'stdio', command: 'node' });
+        const [conn] = adapter.getConnections();
+        // Invisible characters stripped, blank runs collapsed — same hygiene as tool descriptions.
+        expect(conn!.instructions).toBe('Call search before fetch.\nIDs are UUIDs.');
+      } finally {
+        delete withInstructions.getInstructions;
+      }
+    });
+
+    it('caps server instructions so one server cannot flood the prompt', async () => {
+      const withInstructions = mockClient as typeof mockClient & { getInstructions?: () => string };
+      withInstructions.getInstructions = vi.fn(() => 'x'.repeat(20_000));
+      try {
+        await adapter.connect({ name: 'big', transport: 'stdio', command: 'node' });
+        expect(adapter.getConnections()[0]!.instructions!.length).toBeLessThanOrEqual(4_000);
+      } finally {
+        delete withInstructions.getInstructions;
+      }
+    });
+
+    it('leaves instructions undefined when the server sends none', async () => {
+      await adapter.connect({ name: 'plain', transport: 'stdio', command: 'node' });
+      expect(adapter.getConnections()[0]!.instructions).toBeUndefined();
+    });
   });
 
   describe('getPrompts()', () => {

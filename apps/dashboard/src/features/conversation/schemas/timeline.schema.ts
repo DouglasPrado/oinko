@@ -85,8 +85,11 @@ const TimelineItemSchema = z.discriminatedUnion('kind', [
   z.object({
     ...BaseItem,
     kind: z.literal('decision'),
+    inputTokens: z.number().nullable().optional(),
+    outputTokens: z.number().nullable().optional(),
     point: z.string(),
     answers: z.record(z.string(), z.unknown()),
+    answerLabels: z.record(z.string(), z.string()).optional(),
   }),
 ]);
 

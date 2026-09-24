@@ -7,6 +7,7 @@ import {
   truncateEntrypointContent,
 } from '../../../src/memory/file-memory-system.js';
 import type { LLMClient } from '../../../src/llm/llm-client.js';
+import { SensitiveDataError } from '../../../src/memory/errors.js';
 import type { Logger } from '../../../src/utils/logger.js';
 
 function createMockClient(selectedMemories: string[] = []): LLMClient {
@@ -104,6 +105,44 @@ describe('FileMemorySystem', () => {
       const index = await readFile(join(tempDir, 'MEMORY.md'), 'utf-8');
       const matches = index.match(/test\.md/g);
       expect(matches?.length).toBe(1);
+    });
+  });
+
+  describe('saveMemory — never-store data (LGPD)', () => {
+    it('fails explicitly instead of persisting a CPF', async () => {
+      await expect(
+        system.saveMemory({
+          name: 'Docs',
+          description: 'Identity',
+          type: 'user',
+          content: 'CPF 529.982.247-25',
+        }),
+      ).rejects.toBeInstanceOf(SensitiveDataError);
+      await expect(readFile(join(tempDir, 'docs.md'), 'utf-8')).rejects.toThrow();
+    });
+
+    it('names the kinds found, never the value', async () => {
+      const error = await system
+        .saveMemory({
+          name: 'Pay',
+          description: 'x',
+          type: 'user',
+          content: 'card 4111111111111111',
+        })
+        .catch((e: unknown) => e as SensitiveDataError);
+      expect(error.kinds).toEqual(['card']);
+      expect(error.message).not.toContain('4111111111111111');
+    });
+
+    it('writes files readable by the owner only', async () => {
+      const filename = await system.saveMemory({
+        name: 'Tone',
+        description: 'Tone',
+        type: 'feedback',
+        content: 'Short answers.',
+      });
+      const { stat } = await import('node:fs/promises');
+      expect((await stat(join(tempDir, filename))).mode & 0o777).toBe(0o600);
     });
   });
 

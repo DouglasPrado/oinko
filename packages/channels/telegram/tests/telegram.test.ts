@@ -13,9 +13,135 @@ function fixture() {
   return { agent, runtime: new AgentRuntime('oinko', agent) };
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+async function waitingBot(actionFails = false) {
+  const { runtime, agent } = fixture();
+  let finish!: (answer: string) => void;
+  let fail!: (error: Error) => void;
+  agent.chat.mockImplementation(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        finish = resolve;
+        fail = reject;
+      }),
+  );
+  const controller = new AbortController();
+  const bot = createTelegramBot(
+    { token: '123:fake', allowedUserIds: ['42'] },
+    runtime,
+    controller.signal,
+  );
+  const requests: { method: string; payload: unknown }[] = [];
+  bot.api.config.use(async (_previous, method, payload) => {
+    if (method === 'getMe')
+      return { ok: true, result: { id: 123, is_bot: true, first_name: 'Dev' } } as never;
+    requests.push({ method, payload });
+    if (method === 'sendChatAction' && actionFails) throw new Error('Action unavailable');
+    return { ok: true, result: true } as never;
+  });
+  await bot.init();
+  const handle = (id = 42) =>
+    bot.handleUpdate({
+      update_id: 1,
+      message: {
+        message_id: 1,
+        date: 0,
+        text: 'oi',
+        from: { id, is_bot: false, first_name: 'User' },
+        chat: { id, type: 'private', first_name: 'User' },
+      },
+    });
+  return {
+    bot,
+    controller,
+    requests,
+    handle,
+    finish: (answer = 'Olá!') => finish(answer),
+    fail: () => fail(new Error('Model unavailable')),
+  };
+}
 
 describe('Telegram adapter', () => {
+  it.each(['answer', 'error', 'abort'] as const)(
+    'keeps typing during a slow response and stops on %s',
+    async (outcome) => {
+      vi.useFakeTimers();
+      const pending = await waitingBot();
+      await pending.handle(99);
+      expect(pending.requests).toEqual([]);
+      const handled = pending.handle();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(pending.requests).toEqual([
+        { method: 'sendChatAction', payload: { chat_id: 42, action: 'typing' } },
+      ]);
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(pending.requests.filter((r) => r.method === 'sendChatAction')).toHaveLength(3);
+      if (outcome === 'abort') {
+        pending.controller.abort();
+        await vi.advanceTimersByTimeAsync(8000);
+        expect(pending.requests).toHaveLength(3);
+      }
+      if (outcome === 'error') pending.fail();
+      else pending.finish();
+      await handled;
+      const replies = pending.requests.filter((r) => r.method === 'sendMessage');
+      expect(replies).toHaveLength(outcome === 'abort' ? 0 : 1);
+      if (outcome === 'answer')
+        expect(replies[0]?.payload).toEqual(expect.objectContaining({ text: 'Olá!' }));
+      const count = pending.requests.length;
+      await vi.advanceTimersByTimeAsync(12000);
+      expect(pending.requests).toHaveLength(count);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('delivers the answer even if the typing request fails', async () => {
+    vi.useFakeTimers();
+    const pending = await waitingBot(true);
+    const handled = pending.handle();
+    await vi.advanceTimersByTimeAsync(0);
+    pending.finish();
+    await handled;
+    expect(pending.requests).toContainEqual({
+      method: 'sendMessage',
+      payload: { chat_id: 42, text: 'Olá!' },
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels a hanging typing request without holding up the answer', async () => {
+    vi.useFakeTimers();
+    const pending = await waitingBot();
+    let wasCancelled = false;
+    pending.bot.api.config.use(async (previous, method, payload, signal) => {
+      if (method !== 'sendChatAction') return previous(method, payload, signal);
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener(
+          'abort',
+          () => {
+            wasCancelled = true;
+            reject(new Error('Cancelled'));
+          },
+          { once: true },
+        );
+      });
+    });
+    const handled = pending.handle();
+    await vi.advanceTimersByTimeAsync(0);
+    pending.finish();
+    await handled;
+    expect(wasCancelled).toBe(true);
+    expect(pending.requests).toContainEqual({
+      method: 'sendMessage',
+      payload: { chat_id: 42, text: 'Olá!' },
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each([undefined, true])(
     'routes Telegram replies with open private access %s and rejects groups',
     async (allowAllPrivateChats) => {
@@ -46,6 +172,7 @@ describe('Telegram adapter', () => {
       };
       const sent: unknown[] = [];
       bot.api.config.use(async (_previous, method, payload) => {
+        if (method === 'sendChatAction') return { ok: true, result: true } as never;
         if (method === 'getFile')
           return {
             ok: true,

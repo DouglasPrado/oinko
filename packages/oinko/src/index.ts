@@ -7,6 +7,12 @@ export * from './contracts/index.js';
 
 // Config
 export { AgentConfigSchema } from './config/config.js';
+export { ContextPolicySchema } from './config/context-policy.js';
+export type { ContextPolicy } from './config/context-policy.js';
+export type {
+  ConversationCheckpoint,
+  ArchivedToolResult,
+} from './contracts/entities/working-context.js';
 export type {
   AgentConfig,
   AgentConfigInput,
@@ -72,8 +78,11 @@ export {
   createBashTool,
   createWebFetchTool,
   createAskUserTool,
+  createConversationSearchTool,
+  CONVERSATION_SEARCH_TOOL_NAME,
+  CONVERSATION_SEARCH_GUIDANCE,
 } from './tools/builtin/index.js';
-export type { AskUserOptions } from './tools/builtin/index.js';
+export type { AskUserOptions, ConversationSearchToolOptions } from './tools/builtin/index.js';
 
 // SQL query tools
 export { createSqlTools } from './tools/sql/index.js';
@@ -191,6 +200,10 @@ export { CostEnricher } from './telemetry/cost-enricher.js';
 export type { CostEnricherOptions } from './telemetry/cost-enricher.js';
 export type { GenerationStats } from './llm/llm-client.js';
 export { GenerationNotReadyError } from './llm/errors.js';
+export { SensitiveDataError } from './memory/errors.js';
+export { DEFAULT_BEHAVIOR_PROMPT } from './core/behavior-prompt.js';
+export { findNeverStore, maskPersonalIdentifiers } from './utils/sensitive-data.js';
+export type { SensitiveKind, SensitiveFinding } from './utils/sensitive-data.js';
 export type { DecisionTraceContext } from './telemetry/decision-bridge.js';
 export type { PurgeOptions, PurgeResult } from './telemetry/purge.js';
 export type {

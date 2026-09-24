@@ -31,9 +31,27 @@ export class WorktreeManager {
         ['check-ref-format', '--branch', task.branch],
         repositoryPath,
       );
+      let base = repo.ref;
+      if (!repo.source.startsWith('/')) {
+        // A managed clone's local HEAD stays at its initial commit. Resolve the
+        // selected remote ref afresh only when creating a new worktree.
+        const remoteRef = repo.ref.replace(/^(?:refs\/remotes\/)?origin\//, '');
+        await this.executor.git(
+          project,
+          ['fetch', '--no-tags', '--', 'origin', remoteRef],
+          repositoryPath,
+        );
+        base = (
+          await this.executor.git(
+            project,
+            ['rev-parse', '--verify', 'FETCH_HEAD^{commit}'],
+            repositoryPath,
+          )
+        ).trim();
+      }
       await this.executor.git(
         project,
-        ['worktree', 'add', '-b', task.branch, worktreePath, repo.ref],
+        ['worktree', 'add', '-b', task.branch, worktreePath, base],
         repositoryPath,
       );
     }

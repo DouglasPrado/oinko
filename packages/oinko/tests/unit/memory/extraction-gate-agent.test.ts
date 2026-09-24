@@ -122,3 +122,54 @@ describe('Agent with a decider gating memory extraction', () => {
     await rm(memoryDir, { recursive: true, force: true });
   });
 });
+
+describe('Agent extraction prompt and memory.sensitiveData', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function captureExtraction(): string[] {
+    const bodies: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      const rawBody = typeof init?.body === 'string' ? init.body : '';
+      if (rawBody.includes('memory extraction subagent')) bodies.push(rawBody);
+      const sse =
+        'data: {"choices":[{"delta":{"content":"ok"},"index":0}]}\n\n' +
+        'data: {"choices":[{"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n';
+      return new Response(sse, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    return bodies;
+  }
+
+  async function runExplicitRemember(sensitiveData?: 'omit' | 'allow'): Promise<string> {
+    const bodies = captureExtraction();
+    const memoryDir = (await mkdtemp(join(tmpdir(), 'gate-lgpd-'))) + '/';
+    const agent = Agent.create({
+      apiKey: 'test-key',
+      memory: { enabled: true, memoryDir, ...(sensitiveData && { sensitiveData }) },
+      knowledge: { enabled: false },
+    });
+    try {
+      await agent.chat('lembre que eu prefiro respostas curtas');
+      for (let i = 0; i < 20 && bodies.length === 0; i++)
+        await new Promise((r) => setTimeout(r, 25));
+      expect(bodies.length).toBeGreaterThan(0);
+      return bodies[0]!;
+    } finally {
+      await agent.destroy();
+      await rm(memoryDir, { recursive: true, force: true });
+    }
+  }
+
+  it('keeps LGPD sensitive categories out of memory by default', async () => {
+    const body = await runExplicitRemember();
+    expect(body).toContain('Never save');
+    expect(body).toContain('religious belief');
+  });
+
+  it('honours an operator that allows them', async () => {
+    const body = await runExplicitRemember('allow');
+    expect(body).toContain('Never save');
+    expect(body).not.toContain('religious belief');
+  });
+});

@@ -8,6 +8,106 @@ import { createAgentHost } from '@oinko/agent-runtime';
 import { startEnvironmentService } from '@oinko/environments';
 import { programmingTools } from '../src/programming-tools.js';
 
+async function scriptedProgrammingTurn(root: string, drain: () => Promise<void>) {
+  const location = { taskId: 'loop', repositoryId: 'app' };
+  const steps = [
+    { name: 'workspace_status', args: {} },
+    {
+      name: 'workspace_task',
+      args: { projectId: 'project', id: 'loop', name: 'Loop', branch: 'task/loop' },
+    },
+    { name: 'workspace_status', args: {} },
+    {
+      name: 'workspace_write',
+      args: { ...location, path: 'from-agent.txt', content: 'agent-loop-content' },
+    },
+    { name: 'workspace_read', args: { ...location, path: 'from-agent.txt' } },
+    {
+      name: 'workspace_exec',
+      args: {
+        ...location,
+        command: 'git add . && git commit -m agent-loop && git branch --show-current',
+      },
+    },
+    { name: 'workspace_preview', args: { action: 'start', taskId: 'loop' } },
+    { name: 'workspace_status', args: {} },
+    { name: 'workspace_logs', args: { kind: 'preview', id: 'loop' } },
+    { name: 'workspace_preview', args: { action: 'stop', previewId: 'loop' } },
+    { name: 'workspace_status', args: {} },
+  ];
+  let index = 0;
+  const results: Record<string, unknown>[] = [];
+  const host = createAgentHost({
+    id: 'coder',
+    dataDir: join(root, 'scripted-agent'),
+    telemetryDbPath: join(root, 'agent-telemetry.db'),
+    telemetryEnabled: false,
+    capturePayloads: 'none',
+    retentionDays: 1,
+    tools: programmingTools(root, 'coder'),
+    agent: {
+      apiKey: 'fixture',
+      model: 'openai/gpt-4o-mini',
+      maxIterations: 20,
+      memory: { enabled: false },
+      knowledge: { enabled: false },
+      fetch: async (request: Request) => {
+        // Only the model is scripted; the actual Agent loop calls every tool through the socket.
+        // Let each asynchronous job finish before the model's next status query.
+        await drain();
+        const body = (await request.json()) as { messages: { role: string; content: string }[] };
+        if (index > 0)
+          results.push(JSON.parse(body.messages.filter((m) => m.role === 'tool').at(-1)!.content));
+        const step = steps[index++];
+        const frames = step
+          ? [
+              {
+                choices: [
+                  {
+                    delta: {
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: `sandbox-call-${index}`,
+                          function: { name: step.name, arguments: JSON.stringify(step.args) },
+                        },
+                      ],
+                    },
+                    index: 0,
+                  },
+                ],
+              },
+              { choices: [{ finish_reason: 'tool_calls', index: 0 }] },
+            ]
+          : [
+              { choices: [{ delta: { content: 'Sandbox verificado.' }, index: 0 }] },
+              { choices: [{ finish_reason: 'stop', index: 0 }] },
+            ];
+        return new Response(
+          frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('') + 'data: [DONE]\n\n',
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        );
+      },
+    },
+  });
+  try {
+    expect(
+      await host.agent.chat(
+        'Crie uma tarefa, altere e confira um arquivo, faça commit e teste e pare a prévia.',
+      ),
+    ).toBe('Sandbox verificado.');
+    expect(results).toHaveLength(steps.length);
+    expect(results[4]).toEqual({ text: 'agent-loop-content' });
+    expect(results[5]?.stdout).toContain('task/loop');
+    expect(results[8]?.text).toContain('bot-preview-ready');
+    expect(results[10]?.previews).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'loop', state: 'stopped' })]),
+    );
+  } finally {
+    await host.close();
+  }
+}
+
 it('registers programming tools in the real agent loop and scopes the result to the authorized bot', async () => {
   const root = mkdtempSync(join(tmpdir(), 'oinko-tool-loop-'));
   const service = await startEnvironmentService(root);
@@ -169,6 +269,62 @@ it.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
       expect(await call('workspace_read', { ...location, path: 'nested/hello.txt' })).toEqual({
         text: 'from-bot',
       });
+      // The bot's preview and log tools cross the same socket as its Git/file tools.
+      const environment = service.controller.environments.environment('node');
+      const recipe = {
+        ...environment,
+        services: [
+          {
+            id: 'worker',
+            image: 'node:22-alpine',
+            command: 'echo bot-preview-ready; sleep infinity',
+          },
+        ],
+      };
+      service.controller.environments.saveEnvironment(recipe, {}, environment.revision);
+      service.controller.environments.saveEnvironment(
+        { ...recipe, id: 'review', name: 'Review' },
+        {},
+        0,
+      );
+      const project = service.controller.workspaces.project('project');
+      service.controller.workspaces.saveProject(
+        { ...project, environmentIds: ['review'] },
+        project.revision,
+      );
+      await scriptedProgrammingTurn(root, () => service.controller.drain());
+      for (const environmentId of ['node', 'review']) {
+        const job = await call('workspace_preview', {
+          action: 'start',
+          taskId: 'change',
+          environmentId,
+        });
+        await service.controller.drain();
+        const state = await call('workspace_status', {});
+        expect(state.jobs.find((item: { id: string }) => item.id === job.id)?.state).toBe(
+          'succeeded',
+        );
+        const preview = state.previews.find(
+          (item: { environmentId: string; taskId: string }) =>
+            item.environmentId === environmentId && item.taskId === 'change',
+        );
+        expect(preview.state).toBe('ready');
+        expect((await call('workspace_logs', { kind: 'preview', id: preview.id })).text).toContain(
+          'bot-preview-ready',
+        );
+        expect((await call('workspace_logs', { kind: 'job', id: job.id })).text).toContain(
+          'Started',
+        );
+      }
+      const previews = service.controller.environments
+        .previews()
+        .filter((preview) => preview.taskId === 'change');
+      expect(new Set(previews.map((preview) => preview.id)).size).toBe(2);
+      for (const preview of previews) {
+        await call('workspace_preview', { action: 'stop', previewId: preview.id });
+        await service.controller.drain();
+        expect(service.controller.environments.preview(preview.id).state).toBe('stopped');
+      }
       expect(
         (
           await call('workspace_exec', {
@@ -206,6 +362,8 @@ it.skipIf(process.env.OINKO_DOCKER_TEST !== '1')(
         text: 'from-bot',
       });
     } finally {
+      for (const preview of service.controller.environments.previews())
+        await service.controller.previews.stop(preview.id).catch(() => {});
       await service.controller.sandbox.stop('project');
       await service.close();
       rmSync(root, { recursive: true, force: true });
