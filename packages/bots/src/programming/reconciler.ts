@@ -35,7 +35,18 @@ export class RunnerReconciler implements Reconciler {
         );
         // The runner journals intent before touching any file: no journal, no write.
         if (!state.found) return { resolution: 'not_applied', evidence: { journal: 'absent' } };
-        if (state.state === 'applied') return { resolution: 'applied', evidence: { applied: state.applied ?? state.result?.applied ?? [] } };
+        if (state.state === 'applied') {
+          const applied = (state.applied ?? state.result?.applied ?? []) as string[];
+          const revision = state.result?.revision;
+          return {
+            resolution: 'applied',
+            evidence: { applied },
+            // The edit happened: keep it as evidence even though its tool never answered.
+            ...(typeof revision === 'string' && {
+              observed: [{ kind: 'edit' as const, repositoryId, paths: applied, revision, operationId: receipt.operationId }],
+            }),
+          };
+        }
         return {
           resolution: 'unknown',
           evidence: { state: state.state, applied: state.applied ?? [], pending: state.pending ?? [], conflicted: state.conflicted ?? [] },
@@ -49,7 +60,29 @@ export class RunnerReconciler implements Reconciler {
             .command<{ job: { state: string; interrupted?: boolean; result?: Record<string, unknown> } }>({ action: 'inspectJob', jobId: receipt.jobId }, { correlation })
             .catch(() => undefined);
           if (!view) return { resolution: 'unknown', evidence: { job: 'not_found' } };
-          if (view.job.state === 'succeeded') return { resolution: 'applied', evidence: { job: receipt.jobId, result: view.job.result?.result } };
+          if (view.job.state === 'succeeded') {
+            const result = view.job.result ?? {};
+            const revision = typeof result.revisionBefore === 'string' ? result.revisionBefore : undefined;
+            const outcome = String(result.result ?? 'infrastructure') as 'passed' | 'failed' | 'skipped' | 'timeout' | 'infrastructure';
+            const repositoryId = String(receipt.intent.repositoryId ?? run.repositoryIds[0] ?? '');
+            return {
+              resolution: 'applied',
+              evidence: { job: receipt.jobId, result: outcome },
+              ...(revision && {
+                observed: [
+                  {
+                    kind: 'check' as const,
+                    checkKind: String(receipt.intent.kind ?? 'test'),
+                    repositoryId,
+                    result: outcome,
+                    revision,
+                    ...(typeof result.revisionAfter === 'string' && { revisionAfter: result.revisionAfter }),
+                    fingerprint: `${String(receipt.intent.kind)}:${receipt.jobId}:${revision}:${outcome}`,
+                  },
+                ],
+              }),
+            };
+          }
           if (view.job.state === 'failed') {
             const kind = String(receipt.intent.kind ?? '');
             return view.job.interrupted && !REPEATABLE_CHECKS.has(kind)

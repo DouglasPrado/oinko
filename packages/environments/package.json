@@ -21,6 +21,10 @@
     "./workspace-ops": {
       "types": "./dist/workspace/ops.d.ts",
       "import": "./dist/workspace/ops.js"
+    },
+    "./command": {
+      "types": "./dist/runtime/command.d.ts",
+      "import": "./dist/runtime/command.js"
     }
   },
   "scripts": {

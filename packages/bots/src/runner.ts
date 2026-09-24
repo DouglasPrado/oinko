@@ -24,7 +24,12 @@ import { programmingTools, PROGRAMMING_INSTRUCTIONS } from './programming-tools.
 import { openProgramming } from './programming/runtime.js';
 import { programmingRunTools } from './programming/run-tools.js';
 
-export async function runBot(store: BotStore, id: string, onClose: () => void) {
+export interface RunBotOptions {
+  /** Test seam: in-process model provider instead of the network (never set by the CLI/dashboard). */
+  fetch?: (request: Request) => Promise<Response>;
+}
+
+export async function runBot(store: BotStore, id: string, onClose: () => void, options: RunBotOptions = {}) {
   const { definition: bot, secrets, paths, revision } = store.runtime(id);
   if (!secrets.apiKey) throw new BotError('Configure a chave da API do modelo antes de iniciar.');
   if (bot.telegram.enabled && !secrets.telegramToken)
@@ -158,6 +163,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void) {
           apiKey: secrets.apiKey!,
           model: bot.model,
           baseUrl: bot.baseUrl,
+          ...(options.fetch && { fetch: options.fetch }),
           ...(bot.context && { context: bot.context }),
           ...(decider && {
             decider,

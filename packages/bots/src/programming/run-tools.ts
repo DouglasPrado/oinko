@@ -295,7 +295,7 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       // Tests and static checks do not change sources: allowed in analysis runs.
       const readOnly = ['test', 'lint', 'typecheck'].includes(args.kind);
       const outcome = await context.operation(
-        { kind: 'workspace.check', class: readOnly ? 'read' : 'mutate', params: { ...where, kind: args.kind, command, cwd, revision: context.revisions.get(where.repositoryId) ?? null, cycle: context.stepId }, intent: { kind: args.kind, cwd, origin } },
+        { kind: 'workspace.check', class: readOnly ? 'read' : 'mutate', params: { ...where, kind: args.kind, command, cwd, revision: context.revisions.get(where.repositoryId) ?? null, cycle: context.stepId }, intent: { kind: args.kind, cwd, origin, repositoryId: where.repositoryId } },
         async (operation) => {
           const job = await send<{ id: string }>(context, { action: 'startCheck', ...where, operationId: operation.operationId, kind: args.kind, command: command!, cwd, timeoutSeconds }, operation.operationId, operation.attemptId);
           operation.bindExecutor('runner', job.id);

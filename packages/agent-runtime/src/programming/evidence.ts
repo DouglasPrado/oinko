@@ -110,6 +110,8 @@ export interface RunContextOptions {
   revisions: Map<string, string>;
   interrupt: () => SafePointInterrupt['reason'] | undefined;
   onOperation?: (delta: 1 | -1) => void;
+  /** Persists each fact as soon as it is observed, so a crash cannot lose it. */
+  onEvidence?: (item: Evidence) => void;
   journal?: TelemetryJournal;
   artifacts?: ArtifactStore;
 }
@@ -145,6 +147,7 @@ export function createRunContext(options: RunContextOptions): RunContext {
     },
     record(item) {
       evidence.push(item);
+      options.onEvidence?.(item);
       if (item.kind === 'edit') options.revisions.set(item.repositoryId, item.revision);
       else if (item.kind === 'check') options.revisions.set(item.repositoryId, item.revisionAfter ?? item.revision);
     },

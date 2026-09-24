@@ -71,6 +71,8 @@ export interface RunExecutor {
 export interface ReconcileResult {
   resolution: 'applied' | 'not_applied' | 'unknown';
   evidence: Record<string, unknown>;
+  /** Facts proven by the reconciliation (e.g. the edit's revision), added to the run's evidence. */
+  observed?: Evidence[];
 }
 /** Finds out what really happened to an uncertain operation (files, jobs, Git, PR). */
 export interface Reconciler {
@@ -604,6 +606,7 @@ export class ProgrammingRunService {
         interrupt: () => execution.interrupt,
         journal: this.journal,
         ...(this.options.artifacts && { artifacts: this.options.artifacts }),
+        onEvidence: (item) => this.store.addEvidence(run.id, stepId, item.kind, evidenceFingerprint(item), item),
         onOperation: (delta) => {
           execution.inFlight += delta;
           if (execution.inFlight === 0 && execution.interrupt === 'pause') execution.controller.abort(new SafePointInterrupt('pause'));
@@ -644,7 +647,6 @@ export class ProgrammingRunService {
       }
       // Shutdown is not a failure of the work: leave the run for recovery.
       if (this.closed && !execution.interrupt) {
-        for (const item of context.evidence) this.store.addEvidence(run.id, stepId, item.kind, evidenceFingerprint(item), item);
         this.store.updateStep(stepId, { status: 'cancelled', finishedAt: this.now(), summary: 'Interrompido pelo encerramento do processo.' });
         span.finish('failed', { cycle }, { code: 'shutdown', message: 'Processo encerrado', retryable: true });
         return;
@@ -653,9 +655,6 @@ export class ProgrammingRunService {
         failure instanceof SafePointInterrupt ||
         execution.controller.signal.reason instanceof SafePointInterrupt ||
         (signal.aborted && execution.interrupt !== undefined);
-      for (const item of context.evidence) {
-        this.store.addEvidence(run.id, stepId, item.kind, evidenceFingerprint(item), item);
-      }
       if (failure && !interrupted) {
         const code = failure instanceof ProgrammingError ? failure.code : 'cycle_error';
         const message = failure instanceof Error ? failure.message : 'Falha no ciclo.';
@@ -877,6 +876,9 @@ export class ProgrammingRunService {
             ? await this.options.reconciler.reconcile(run, receipt).catch(() => ({ resolution: 'unknown' as const, evidence: { error: 'reconciler_failed' } }))
             : { resolution: 'unknown' as const, evidence: { reason: 'no_reconciler' } };
           this.options.recorder.reconcile(run, receipt.operationId, result.resolution, result.evidence);
+          if (result.resolution === 'applied')
+            for (const item of result.observed ?? [])
+              this.store.addEvidence(run.id, receipt.stepId, item.kind, evidenceFingerprint(item), item);
           if (result.resolution === 'unknown') unresolved ??= receipt;
         }
         if (unresolved) {
