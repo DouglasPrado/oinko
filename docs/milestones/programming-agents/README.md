@@ -1,6 +1,6 @@
 # Plano de desenvolvimento autônomo reutilizável
 
-**Status do plano:** pending — somente planejamento; nenhuma capacidade deste plano está declarada implementada.
+**Status do plano:** in_progress — implementado e validado por testes automatizados, Docker real e e2e da dashboard; 29 de 44 stories concluídas com evidência. Pendentes: provedor real (baseline e comparação com 3 repetições), GitHub App real, jornada Telegram real e aceite do operador. Ver [relatório de validação](validation-reports/validation-9c3d44fb133d.md) e [guia de operação](RUNBOOK.md).
 **Data:** 23/09/2026. **Escopo:** plataforma Oinko, disponível a qualquer bot autorizado.
 
 Transformar os recursos existentes de sandbox, worktrees, MCP, contexto adaptativo e telemetria em um processo de desenvolvimento durável: compreender o projeto, editar, testar, verificar a prévia e entregar um draft PR. Toda etapa deixa evidência para melhorar o processo com avaliações controladas.
@@ -19,16 +19,16 @@ O plano contém **10 milestones e 44 stories**, cada uma com dependências, entr
 
 | Milestone | Resultado | Stories | Status |
 | --- | --- | --- | --- |
-| [M00](M00/MILESTONE.md) | Contratos compartilhados e linha de base | 4 | pending |
-| [M01](M01/MILESTONE.md) | Telemetria profunda desde a fundação | 5 | pending |
-| [M02](M02/MILESTONE.md) | Entendimento do projeto e edição precisa | 5 | pending |
-| [M03](M03/MILESTONE.md) | Execução durável e controle do trabalho | 6 | pending |
-| [M04](M04/MILESTONE.md) | Operação pela dashboard, Telegram e MCP | 4 | pending |
-| [M05](M05/MILESTONE.md) | Browser isolado e validação funcional | 4 | pending |
-| [M06](M06/MILESTONE.md) | GitHub App e entrega automática em draft | 4 | pending |
-| [M07](M07/MILESTONE.md) | Contexto eficiente e fallback de modelo | 4 | pending |
-| [M08](M08/MILESTONE.md) | Avaliação e melhoria controlada | 4 | pending |
-| [M09](M09/MILESTONE.md) | Validação integrada e adoção gradual | 4 | pending |
+| [M00](M00/MILESTONE.md) | Contratos compartilhados e linha de base | 4 | in_progress (3/4) |
+| [M01](M01/MILESTONE.md) | Telemetria profunda desde a fundação | 5 | in_progress (4/5) |
+| [M02](M02/MILESTONE.md) | Entendimento do projeto e edição precisa | 5 | in_progress (5/5) |
+| [M03](M03/MILESTONE.md) | Execução durável e controle do trabalho | 6 | in_progress (6/6) |
+| [M04](M04/MILESTONE.md) | Operação pela dashboard, Telegram e MCP | 4 | in_progress (2/4) |
+| [M05](M05/MILESTONE.md) | Browser isolado e validação funcional | 4 | in_progress (3/4) |
+| [M06](M06/MILESTONE.md) | GitHub App e entrega automática em draft | 4 | in_progress (1/4) |
+| [M07](M07/MILESTONE.md) | Contexto eficiente e fallback de modelo | 4 | in_progress (1/4) |
+| [M08](M08/MILESTONE.md) | Avaliação e melhoria controlada | 4 | in_progress (3/4) |
+| [M09](M09/MILESTONE.md) | Validação integrada e adoção gradual | 4 | in_progress (1/4) |
 
 ## Ordem de execução
 

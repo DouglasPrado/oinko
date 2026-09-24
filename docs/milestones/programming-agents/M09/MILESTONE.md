@@ -1,6 +1,6 @@
 # M09 — Validação integrada e adoção gradual
 
-**Status:** pending
+**Status:** in_progress — 1 de 4 stories concluídas; em aberto: M09-S02, M09-S03, M09-S04 (bloqueada: M09-S02). Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,10 +16,10 @@ Dependências externas: [M02-S05](../M02/M02-S05.md), [M03-S06](../M03/M03-S06.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M09-S01](M09-S01.md) | Executar bateria determinística e falhas injetadas | pending | M02-S05, M03-S06, M04-S04, M05-S04, M06-S04, M07-S04 |
-| [M09-S02](M09-S02.md) | Comparar quatro tarefas reais com baseline | pending | M09-S01, M08-S01 |
-| [M09-S03](M09-S03.md) | Provar reuso com dois bots e rollout piloto | pending | M09-S02, M08-S04 |
-| [M09-S04](M09-S04.md) | Publicar guia operacional e encerrar com evidências | pending | M09-S03 |
+| [M09-S01](M09-S01.md) | Executar bateria determinística e falhas injetadas | completed | M02-S05, M03-S06, M04-S04, M05-S04, M06-S04, M07-S04 |
+| [M09-S02](M09-S02.md) | Comparar quatro tarefas reais com baseline | blocked | M09-S01, M08-S01 |
+| [M09-S03](M09-S03.md) | Provar reuso com dois bots e rollout piloto | in_progress | M09-S02, M08-S04 |
+| [M09-S04](M09-S04.md) | Publicar guia operacional e encerrar com evidências | in_progress | M09-S03 |
 
 ## Gate de saída
 

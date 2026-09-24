@@ -1,6 +1,6 @@
 # M06 — GitHub App e entrega automática em draft
 
-**Status:** pending
+**Status:** in_progress — 1 de 4 stories concluídas; em aberto: M06-S01, M06-S03, M06-S04. Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,10 +16,10 @@ Dependências externas: [M00-S02](../M00/M00-S02.md), [M01-S03](../M01/M01-S03.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M06-S01](M06-S01.md) | Conectar GitHub App e instalações por projeto | pending | M00-S02, M01-S03, M04-S01 |
-| [M06-S02](M06-S02.md) | Isolar publicação autenticada e revisar conteúdo | pending | M06-S01, M02-S05, M03-S01 |
-| [M06-S03](M06-S03.md) | Criar ou atualizar draft PR sem duplicação | pending | M06-S02, M03-S04 |
-| [M06-S04](M06-S04.md) | Acompanhar CI e estados externos | pending | M06-S03, M01-S05 |
+| [M06-S01](M06-S01.md) | Conectar GitHub App e instalações por projeto | in_progress | M00-S02, M01-S03, M04-S01 |
+| [M06-S02](M06-S02.md) | Isolar publicação autenticada e revisar conteúdo | completed | M06-S01, M02-S05, M03-S01 |
+| [M06-S03](M06-S03.md) | Criar ou atualizar draft PR sem duplicação | in_progress | M06-S02, M03-S04 |
+| [M06-S04](M06-S04.md) | Acompanhar CI e estados externos | in_progress | M06-S03, M01-S05 |
 
 ## Gate de saída
 

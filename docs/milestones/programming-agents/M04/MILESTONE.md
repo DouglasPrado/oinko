@@ -1,6 +1,6 @@
 # M04 — Operação pela dashboard, Telegram e MCP
 
-**Status:** pending
+**Status:** in_progress — 2 de 4 stories concluídas; em aberto: M04-S02, M04-S03. Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,10 +16,10 @@ Dependências externas: [M00-S02](../M00/M00-S02.md), [M01-S05](../M01/M01-S05.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M04-S01](M04-S01.md) | Configurar capacidades e políticas na dashboard | pending | M00-S02, M03-S01 |
-| [M04-S02](M04-S02.md) | Acompanhar trabalhos e evidências na dashboard | pending | M03-S05, M03-S06, M01-S05 |
-| [M04-S03](M04-S03.md) | Operar tarefas pelo Telegram e CLI | pending | M03-S05, M03-S06 |
-| [M04-S04](M04-S04.md) | Expor controle e consulta no MCP Oinko | pending | M03-S05, M03-S06, M04-S01, M01-S05 |
+| [M04-S01](M04-S01.md) | Configurar capacidades e políticas na dashboard | completed | M00-S02, M03-S01 |
+| [M04-S02](M04-S02.md) | Acompanhar trabalhos e evidências na dashboard | in_progress | M03-S05, M03-S06, M01-S05 |
+| [M04-S03](M04-S03.md) | Operar tarefas pelo Telegram e CLI | in_progress | M03-S05, M03-S06 |
+| [M04-S04](M04-S04.md) | Expor controle e consulta no MCP Oinko | completed | M03-S05, M03-S06, M04-S01, M01-S05 |
 
 ## Gate de saída
 

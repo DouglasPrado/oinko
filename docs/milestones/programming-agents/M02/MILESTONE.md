@@ -1,6 +1,6 @@
 # M02 — Entendimento do projeto e edição precisa
 
-**Status:** pending
+**Status:** in_progress — todas as 5 stories concluídas com evidência; falta o aceite do operador sobre o gate de saída (`milestone_accepted`).
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,11 +16,11 @@ Dependências externas: [M00-S02](../M00/M00-S02.md), [M01-S02](../M01/M01-S02.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M02-S01](M02-S01.md) | Buscar caminhos e conteúdo na worktree | pending | M00-S02, M01-S02 |
-| [M02-S02](M02-S02.md) | Ler intervalos com versão de conteúdo | pending | M02-S01 |
-| [M02-S03](M02-S03.md) | Substituição exata e patch com validação prévia | pending | M02-S02, M01-S02 |
-| [M02-S04](M02-S04.md) | Carregar instruções e descobrir comandos de monorepo | pending | M02-S01, M02-S02 |
-| [M02-S05](M02-S05.md) | Revisar diff e executar verificações pertinentes | pending | M02-S03, M02-S04 |
+| [M02-S01](M02-S01.md) | Buscar caminhos e conteúdo na worktree | completed | M00-S02, M01-S02 |
+| [M02-S02](M02-S02.md) | Ler intervalos com versão de conteúdo | completed | M02-S01 |
+| [M02-S03](M02-S03.md) | Substituição exata e patch com validação prévia | completed | M02-S02, M01-S02 |
+| [M02-S04](M02-S04.md) | Carregar instruções e descobrir comandos de monorepo | completed | M02-S01, M02-S02 |
+| [M02-S05](M02-S05.md) | Revisar diff e executar verificações pertinentes | completed | M02-S03, M02-S04 |
 
 ## Gate de saída
 

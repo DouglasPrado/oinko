@@ -1,6 +1,6 @@
 # M00 — Contratos compartilhados e linha de base
 
-**Status:** pending
+**Status:** in_progress — 3 de 4 stories concluídas; em aberto: M00-S03. Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,10 +16,10 @@ Decisões do usuário consolidadas; baseline ainda não executado.
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M00-S01](M00-S01.md) | Modelar capacidade de programação e ProgrammingRun | pending | — |
-| [M00-S02](M00-S02.md) | Definir políticas por bot, projeto e execução | pending | M00-S01 |
-| [M00-S03](M00-S03.md) | Congelar cenários e medir baseline | pending | M00-S01, M00-S02 |
-| [M00-S04](M00-S04.md) | Planejar migração e evolução compatível | pending | M00-S01, M00-S02 |
+| [M00-S01](M00-S01.md) | Modelar capacidade de programação e ProgrammingRun | completed | — |
+| [M00-S02](M00-S02.md) | Definir políticas por bot, projeto e execução | completed | M00-S01 |
+| [M00-S03](M00-S03.md) | Congelar cenários e medir baseline | in_progress | M00-S01, M00-S02 |
+| [M00-S04](M00-S04.md) | Planejar migração e evolução compatível | completed | M00-S01, M00-S02 |
 
 ## Gate de saída
 

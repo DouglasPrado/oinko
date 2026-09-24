@@ -1,6 +1,6 @@
 # M05 — Browser isolado e validação funcional
 
-**Status:** pending
+**Status:** in_progress — 3 de 4 stories concluídas; em aberto: M05-S04. Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,10 +16,10 @@ Dependências externas: [M00-S02](../M00/M00-S02.md), [M01-S03](../M01/M01-S03.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M05-S01](M05-S01.md) | Provisionar browser isolado por execução | pending | M00-S02, M01-S03, M03-S01 |
-| [M05-S02](M05-S02.md) | Navegar com políticas de rede e login de teste | pending | M05-S01 |
-| [M05-S03](M05-S03.md) | Expor ações, leitura e diagnóstico de browser | pending | M05-S02, M04-S04 |
-| [M05-S04](M05-S04.md) | Vincular preview e verificação funcional à revisão | pending | M05-S03, M02-S05, M03-S06 |
+| [M05-S01](M05-S01.md) | Provisionar browser isolado por execução | completed | M00-S02, M01-S03, M03-S01 |
+| [M05-S02](M05-S02.md) | Navegar com políticas de rede e login de teste | completed | M05-S01 |
+| [M05-S03](M05-S03.md) | Expor ações, leitura e diagnóstico de browser | completed | M05-S02, M04-S04 |
+| [M05-S04](M05-S04.md) | Vincular preview e verificação funcional à revisão | in_progress | M05-S03, M02-S05, M03-S06 |
 
 ## Gate de saída
 

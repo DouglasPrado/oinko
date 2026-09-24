@@ -1,6 +1,6 @@
 # M07 — Contexto eficiente e fallback de modelo
 
-**Status:** pending
+**Status:** in_progress — 1 de 4 stories concluídas; em aberto: M07-S01, M07-S03, M07-S04. Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,10 +16,10 @@ Dependências externas: [M01-S04](../M01/M01-S04.md), [M01-S05](../M01/M01-S05.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M07-S01](M07-S01.md) | Resumir histórico em segundo plano com consistência | pending | M01-S04, M03-S01 |
-| [M07-S02](M07-S02.md) | Selecionar contexto e ferramentas progressivamente | pending | M07-S01, M02-S04, M04-S04 |
-| [M07-S03](M07-S03.md) | Aplicar fallback por indisponibilidade e latência | pending | M07-S02, M01-S04 |
-| [M07-S04](M07-S04.md) | Configurar e comparar eficiência por bot | pending | M07-S03, M04-S01, M01-S05 |
+| [M07-S01](M07-S01.md) | Resumir histórico em segundo plano com consistência | in_progress | M01-S04, M03-S01 |
+| [M07-S02](M07-S02.md) | Selecionar contexto e ferramentas progressivamente | completed | M07-S01, M02-S04, M04-S04 |
+| [M07-S03](M07-S03.md) | Aplicar fallback por indisponibilidade e latência | in_progress | M07-S02, M01-S04 |
+| [M07-S04](M07-S04.md) | Configurar e comparar eficiência por bot | in_progress | M07-S03, M04-S01, M01-S05 |
 
 ## Gate de saída
 

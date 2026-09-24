@@ -1,6 +1,6 @@
 # M01 — Telemetria profunda desde a fundação
 
-**Status:** pending
+**Status:** in_progress — 4 de 5 stories concluídas; em aberto: M01-S05. Pendências reais e de aceite humano em cada story.
 
 [Índice do plano](../README.md) · [Requisitos](../REQUIREMENTS.md)
 
@@ -16,11 +16,11 @@ Dependências externas: [M00-S01](../M00/M00-S01.md), [M00-S02](../M00/M00-S02.m
 
 | Story | Entrega | Status | Depende de |
 | --- | --- | --- | --- |
-| [M01-S01](M01-S01.md) | Envelope, spans e catálogo versionado de eventos | pending | M00-S01, M00-S02 |
-| [M01-S02](M01-S02.md) | Persistir eventos, recibos e recuperar entregas interrompidas | pending | M01-S01, M00-S04 |
-| [M01-S03](M01-S03.md) | Captura segura, acesso e ciclo de vida de artefatos | pending | M01-S01, M01-S02 |
-| [M01-S04](M01-S04.md) | Contabilizar tokens, custo e tempos por run | pending | M01-S01, M01-S02 |
-| [M01-S05](M01-S05.md) | Explorar uma execução na telemetria | pending | M01-S03, M01-S04 |
+| [M01-S01](M01-S01.md) | Envelope, spans e catálogo versionado de eventos | completed | M00-S01, M00-S02 |
+| [M01-S02](M01-S02.md) | Persistir eventos, recibos e recuperar entregas interrompidas | completed | M01-S01, M00-S04 |
+| [M01-S03](M01-S03.md) | Captura segura, acesso e ciclo de vida de artefatos | completed | M01-S01, M01-S02 |
+| [M01-S04](M01-S04.md) | Contabilizar tokens, custo e tempos por run | completed | M01-S01, M01-S02 |
+| [M01-S05](M01-S05.md) | Explorar uma execução na telemetria | in_progress | M01-S03, M01-S04 |
 
 ## Gate de saída
 
