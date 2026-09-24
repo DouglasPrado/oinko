@@ -417,3 +417,32 @@ describe('M09-S01 audit of a complete delivery', () => {
       expect(readFileSync(path).toString('latin1').includes(secret), path).toBe(false);
   }, 60_000);
 });
+
+describe('M02-S01 the run tools only act on the run worktree', () => {
+  it('refuses a repository outside the run and works only after the task exists', async () => {
+    const context = setup({
+      steps: [
+        () => ({ tool: 'workspace_search', args: { query: 'entrega', repositoryId: 'outro-repo' } }),
+        () => ({ tool: 'workspace_read_range', args: { path: '../../etc/passwd' } }),
+        () => ({ tool: 'programming_complete', args: { summary: 'Análise.', report: 'Nada alterado.' } }),
+        () => ({ text: 'fim' }),
+      ],
+      publish: false,
+    });
+    const id = await runOnce(context, 'Analise o projeto.', 'analysis');
+    const results = context.provider.requests.flatMap((request) => request.messages).filter((message) => message.role === 'tool').map((message) => String(message.content));
+    expect(results.some((text) => text.includes('invalid_repository'))).toBe(true);
+    expect(results.some((text) => /invalid_path|symlink_escape|fora da worktree/.test(text))).toBe(true);
+    expect(context.runner.calls.some((call) => call.action === 'searchContent')).toBe(false);
+    // Without a prepared task the tools refuse instead of guessing one.
+    const noTask = setup({ steps: [() => ({ tool: 'workspace_read_range', args: { path: 'page.txt' } }), () => ({ text: 'fim' })], publish: false });
+    const { service } = noTask.programming;
+    const run = service.start(operator, { botId: 'alpha', projectId: 'shop', text: 'x', mode: 'analysis' }).run.id;
+    service.kick();
+    await service.idle();
+    const replies = noTask.provider.requests.flatMap((request) => request.messages).filter((message) => message.role === 'tool').map((message) => String(message.content));
+    expect(replies[0]).toContain('no_task');
+    expect(noTask.programming.store.getRun(run)).toBeDefined();
+    expect(context.programming.store.getRun(id)?.state).toBe('completed');
+  }, 60_000);
+});

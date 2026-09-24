@@ -90,6 +90,8 @@ Para resolver:
 
 - **Retenção**: `retentionDays` da telemetria do bot vale para eventos do journal e artefatos; trabalhos vivos e operações incertas não perdem evidência. Artefato expirado aparece como expirado, nunca some em silêncio.
 - **Backup**: pare os workers e o runner; copie juntos `programming.db` (ou use o backup online `VACUUM INTO` de `ProgrammingDatabase.backup`), `programming-artifacts/`, `programming.key`, `publication.db` + `publication.key` e `browser.key`. Chaves nunca vão para o banco nem para containers; não as versione.
+- **Restaurar**: com workers, runner e dashboard parados, restaure a cópia de `programming.db` com `restoreProgrammingBackup(backup, destino)` de `@oinko/agent-runtime/programming` (confere integridade e versão do esquema antes de substituir; um arquivo inválido não restaura nada) e devolva junto `programming-artifacts/` e as chaves do mesmo momento. Ao subir, trabalhos que estavam `running` são reconciliados como após um reinício (seção 8).
+- **Atualizar e voltar o binário**: toda migration grava antes um backup em `.harness/backups/` (`programming-v<versão anterior>-<instante>.db`). As migrations deste plano são aditivas (v1 runs, v2 avaliação): um binário anterior continua abrindo o banco. Para voltar a um binário anterior a uma migration **não** aditiva, pare tudo e restaure o backup daquela versão; nunca edite o banco à mão.
 - **Rotação**: chave da GitHub App via `saveGithubApp` (confirme com `githubAppStatus { verify: true }` antes de apagar a antiga). Trocar `programming.key` só invalida links de artefato já emitidos.
 
 ## 10. Avaliar e melhorar com controle

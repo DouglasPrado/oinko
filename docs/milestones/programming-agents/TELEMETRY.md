@@ -44,7 +44,7 @@ Decisões registradas (`decision_recorded`) são declarações observáveis (pla
 | Spans e decisões | `telemetry_span_started`, `telemetry_span_finished`, `decision_recorded` |
 | Operações | `operation_intended`, `operation_finished`, `operation_uncertain`, `operation_reconciled`, `process_terminated` |
 | Entrega | `telemetry_delivery_degraded`, `telemetry_recovered` |
-| Artefatos | `artifact_created`, `artifact_accessed`, `artifact_expired`, `capture_policy_applied`, `evidence_opened`, `evidence_invalidated` |
+| Artefatos | `artifact_created`, `artifact_accessed`, `artifact_expired`, `capture_policy_applied`, `evidence_opened`, `evidence_invalidated`, `revision_observed` |
 | Uso | `usage_reported`, `usage_reconciled`, `run_metrics_updated` |
 | Consulta | `telemetry_query` (sem corpo sensível dos filtros) |
 | Workspace | `workspace_search`, `workspace_read`, `workspace_edit_intended`, `workspace_edit_finished`, `workspace_edit_conflict`, `project_instructions_resolved`, `project_commands_discovered`, `git_diff_captured`, `check_started`, `check_finished` |

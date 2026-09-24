@@ -93,6 +93,14 @@ describe('search', () => {
     expect((await ops(root, { op: 'searchContent', query: 'x', limit: 1, cursor: '!!' })).error.code).toBe('invalid_cursor');
   });
 
+  it('reports a search cut by its time budget as timeout, never as "no matches"', async () => {
+    const files = Object.fromEntries(Array.from({ length: 400 }, (_, i) => [`packages/web/src/f${i}.ts`, `export const v${i} = ${'x'.repeat(2000)};\n`]));
+    const { root } = repo({ ...MONOREPO, ...files });
+    const result = await ops(root, { op: 'searchContent', query: 'nunca-aparece', limit: 10, timeoutMs: 0 });
+    expect(result.outcome).toBe('timeout');
+    expect(result.truncated).toBe(true);
+  });
+
   it('never follows a symlink out of the worktree', async () => {
     const { root, base } = repo(MONOREPO);
     writeFileSync(join(base, 'outside-secret.txt'), 'total secret');
@@ -225,6 +233,16 @@ describe('git snapshot and diff', () => {
 });
 
 describe('project context', () => {
+  it('notices instructions that changed during the work by their content hash', async () => {
+    const { root } = repo(MONOREPO);
+    const before = await ops(root, { op: 'projectContext', targets: ['packages/web/src/cart.ts'] });
+    writeFileSync(join(root, 'packages/web/AGENTS.md'), 'Agora rode também o lint antes de concluir.\n');
+    const after = await ops(root, { op: 'projectContext', targets: ['packages/web/src/cart.ts'] });
+    const scoped = (context: any) => context.instructions.find((item: any) => item.path === 'packages/web/AGENTS.md');
+    expect(scoped(after).hash).not.toBe(scoped(before).hash);
+    expect(scoped(after).content).toContain('lint antes de concluir');
+  });
+
   it('resolves scoped AGENTS.md with precedence and discovers commands with their origin', async () => {
     const { root } = repo(MONOREPO);
     const context = await ops(root, { op: 'projectContext', targets: ['packages/web/src/cart.ts'] });

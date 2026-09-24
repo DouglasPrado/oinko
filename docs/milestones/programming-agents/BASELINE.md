@@ -38,11 +38,13 @@ Dataset congelado [`packages/bots/evaluation/programming-baseline.v1.json`](../.
 
 Comando: `OINKO_ROOT=<raiz> pnpm --filter @oinko/bots evaluate --bot <id> --dataset packages/bots/evaluation/programming-baseline.v1.json [--environment simulated|docker|real]`. Revisão da plataforma: `e7c4547` (branch `feat/programming-agents`), 24/09/2026, Node v26.8.1.
 
-| Ambiente | Provedor | Workspace | Casos × repetições | Resultado | Tokens | Custo | Duração (mediana / p90) | Reinícios |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| simulado | modelo determinístico do caso | local simulado (sem isolamento) | 4 × 1 | 4 aprovados (100%) | 4180 (1045 por concluída) | **desconhecido** — 39 chamadas sem custo informado (nunca contado como zero) | 345 ms / 536 ms | 1 |
-| Docker | modelo determinístico do caso | runner real + sandbox Docker | 4 × 1 | 3 aprovados; `visual-selo` **não executado** (sem ambiente de prévia real no harness) | — | desconhecido | — | 1 |
-| provedor real | — | — | 4 × 3 | **não executado**: 12 tentativas *skipped* (`real_provider_unavailable`) | — | — | — | — |
+| Ambiente | Provedor | Workspace | Casos × repetições | Resultado | Chamadas | Tokens (principal / Jev / resumo) | Custo | Intervenções | Duração (mediana / p90) | Reinícios |
+| --- | --- | --- | --- | --- | ---: | --- | --- | ---: | --- | ---: |
+| simulado | modelo determinístico do caso | local simulado (sem isolamento) | 4 × 1 | 4 aprovados (100%) | 39 | 4180 / 0 / 0 (1045 por concluída) | **desconhecido** — 39 chamadas sem custo informado (nunca contado como zero) | 0 | 345 ms / 536 ms | 1 |
+| Docker | modelo determinístico do caso | runner real + sandbox Docker | 4 × 1 | 3 aprovados; `visual-selo` **não executado** (sem ambiente de prévia real no harness) | — | — | desconhecido | 0 | — | 1 |
+| provedor real | — | — | 4 × 3 | **não executado**: 12 tentativas *skipped* (`real_provider_unavailable`) | — | — | — | — | — | — |
+
+Jev e resumo aparecem com zero tokens porque a linha simulada não habilita o Jev nem atinge o limite de resumo do contexto; com provedor real e Jev habilitado, o harness registra essas funções separadamente (`tokens.byRole`).
 
 Leitura honesta:
 
