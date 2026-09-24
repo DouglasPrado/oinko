@@ -15,6 +15,7 @@
     "test:watch": "pnpm --filter @oinko/core test:watch",
     "test:live": "pnpm --filter @oinko/core test:live",
     "test:sandbox": "pnpm build:packages && pnpm --filter @oinko/workspaces test && OINKO_DOCKER_TEST=1 OINKO_RAILPACK_TEST=1 pnpm --filter @oinko/environments test && OINKO_DOCKER_TEST=1 pnpm --filter @oinko/bots test && OINKO_DOCKER_TEST=1 pnpm --filter @oinko/dashboard test:e2e",
+    "validate:programming": "node scripts/validation-suite.mjs",
     "test:mutation": "pnpm --filter @oinko/core test:mutation",
     "lint": "pnpm build:packages && pnpm -r --if-present lint",
     "lint:fix": "pnpm --filter @oinko/core lint:fix",
