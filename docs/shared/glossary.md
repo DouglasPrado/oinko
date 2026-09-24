@@ -62,6 +62,22 @@
 | Job | Operação persistida de preparação, início ou parada, com resultado e logs. |
 | Sandbox | Container do projeto onde são executados comandos e edições solicitados pelo bot. |
 
+### Trabalhos de programação
+
+| Termo | Significado |
+| --- | --- |
+| ProgrammingRun | Execução persistida de um pedido de programação de um bot em um projeto; fila por bot, ciclos, pausa, retomada e recuperação. Não é Task nem Thread. |
+| Ciclo | Uma execução limitada do agente dentro de um run; o trabalho continua no próximo ciclo a partir do estado persistido. |
+| OperationReceipt | Intenção e resultado de um efeito (`intended`, `running`, `succeeded`, `failed`, `uncertain`) com chave idempotente; o incerto é reconciliado, nunca repetido às cegas. |
+| Evidence | Fato observado (edição, informação, check, verificação funcional, publicação, relatório, erro); único critério de progresso e de conclusão. |
+| Criterion | Critério de entrega avaliado contra a evidência da revisão atual; uma edição posterior o invalida. |
+| Artifact | Evidência endereçada por conteúdo (diff, log, captura de tela, relatório), com política de captura, acesso e expiração. |
+| Publication | Draft PR reaproveitável de uma tarefa/repositório, com run originador e runs contribuintes. |
+| EffectivePolicy | Snapshot versionado da política de bot + projeto aplicada a um run; edições valem para os próximos runs, revogações valem já. |
+| Dataset de avaliação | Conjunto versionado por conteúdo de casos congelados com critérios verificáveis e fixture fixa. |
+| Candidato | Mudança proposta de política ou prompt de um bot com hipótese; só é promovido com avaliação que recomende e aprovação explícita. |
+| Promoção / Rollback | Aplicação do candidato à configuração do bot (CAS na revisão) e restauração da anterior, sem alterar snapshots de runs. |
+
 > Regras que se aplicam a todos os blueprints.
 
 | Contexto | Convencao | Exemplo |

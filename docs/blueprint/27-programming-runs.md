@@ -1,6 +1,6 @@
 # Execuções de programação duráveis (ProgrammingRun)
 
-Status: em implementação conforme [milestones programming-agents](../milestones/programming-agents/README.md). Complementa [24](24-workspaces-environments.md) (projetos, tarefas, sandbox), [25](25-oinko-mcp.md) (MCP) e [26](26-adaptive-context.md) (contexto).
+Status: implementado e validado por testes automatizados e Docker; validações com provedor real, GitHub App real, Telegram real e aceite humano pendentes — ver [milestones programming-agents](../milestones/programming-agents/README.md) e o [guia de operação](../milestones/programming-agents/RUNBOOK.md). Complementa [24](24-workspaces-environments.md) (projetos, tarefas, sandbox), [25](25-oinko-mcp.md) (MCP) e [26](26-adaptive-context.md) (contexto).
 
 ## Resultado
 
@@ -32,7 +32,22 @@ Qualquer bot com a capacidade `programming` habilitada e autorizado em um projet
 
 ## Portas
 
-`ProgrammingStore` (persistência), `ProjectAccess` (autorização atual bot → projeto), `WorkspacePort` (operações na worktree via runner), `CycleRunner` (execução de um ciclo pelo agente), `Reconciler` (efeitos incertos), `PublicationPort` (GitHub), `TelemetrySink` (entrega de eventos). Dashboard, canais, MCP e ferramentas do bot usam o mesmo `ProgrammingRunService`.
+`ProgrammingStore` (persistência em `programming.db`), `AccessPort` (autorização atual bot → projeto; `StoreAccess` nos bots), `RunnerPort` (operações na worktree, prévia, navegador e publicação via runner; `EnvironmentClient` em produção, `LocalRunner` só no ambiente simulado), `RunExecutor` (um ciclo pelo agente; `AgentCycleExecutor`), `Reconciler` (efeitos incertos; `RunnerReconciler`), `BotConfigPort` (promoção/rollback de candidatos com CAS), `TelemetryJournal` + entrega ao `telemetry.db` do bot. Dashboard, canais, MCP e ferramentas do bot usam o mesmo `ProgrammingRunService`.
+
+## Implementação
+
+| Área | Onde |
+| --- | --- |
+| Contratos, estados, políticas | `packages/agent-runtime/src/programming/{contracts,state,policy,policy-schema}.ts` |
+| Persistência, migrations, backup | `packages/agent-runtime/src/programming/store/` (v1 runs; v2 avaliação) |
+| Journal, envelope, catálogo, redaction, entrega | `packages/agent-runtime/src/programming/telemetry/` |
+| Serviço (fila, ciclos, safe points, recuperação, critérios) | `packages/agent-runtime/src/programming/{service,evidence,operations}.ts` |
+| Executor de ciclo e ferramentas de controle | `packages/agent-runtime/src/programming/agent-executor.ts` |
+| Ferramentas do agente (workspace, prévia, navegador, funcional, publicação, CI) | `packages/bots/src/programming/{run-tools,delivery-tools}.ts` |
+| Runner (workspace ops, navegador isolado, GitHub App) | `packages/environments/src/{workspace,browser,publication}/` |
+| Canais, notificações, relatório de entrega | `packages/agent-runtime/src/programming/{channel,notifier,delivery-report}.ts` |
+| Avaliação e melhoria | `packages/agent-runtime/src/programming/evaluation/`, `packages/bots/src/programming/evaluation/`, `packages/bots/evaluation/*.json` |
+| Validação e aceite | `packages/agent-runtime/src/programming/validation.ts`, `scripts/validation-suite.mjs` |
 
 ## Telemetria
 
