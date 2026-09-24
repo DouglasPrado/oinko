@@ -27,7 +27,10 @@ const { values } = parseArgs({
   },
 });
 const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' }).trim();
-const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: repo, encoding: 'utf8' }).trim() !== '';
+// Documentation edits do not change what is tested; anything else marks the report.
+const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: repo, encoding: 'utf8' })
+  .split('\n')
+  .filter((line) => line.trim() && !line.slice(3).startsWith('docs/')).length > 0;
 const work = mkdtempSync(join(tmpdir(), 'oinko-validation-'));
 const results = [];
 
@@ -155,7 +158,7 @@ const byEnvironment = { automated: 'Teste automatizado', docker: 'Docker real', 
 const lines = [
   `# Relatório de validação — ${sha.slice(0, 12)}`,
   '',
-  `Gerado por \`node scripts/validation-suite.mjs\` em ${new Date().toISOString()}. Revisão \`${sha}\`${dirty ? ' (**com alterações não commitadas**)' : ''}. Node ${process.version}.`,
+  `Gerado por \`node scripts/validation-suite.mjs\` em ${new Date().toISOString()}. Revisão \`${sha}\`${dirty ? ' (**com alterações de código não commitadas**)' : ' (código sem alterações locais; edições em docs/ não entram no teste)'}. Node ${process.version}.`,
   '',
   'Um cenário *skipped* ou pendente impede afirmar cobertura dele. Resultados reais (provedor, GitHub, Telegram) e aceite humano nunca são simulados aqui.',
   '',
