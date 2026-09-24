@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ContextPolicySchema } from '@oinko/core/context-policy';
 
 export const BotId = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 const HttpUrl = z.url().refine((value) => {
@@ -25,6 +26,7 @@ export const BotDefinitionSchema = z
     model: z.string().trim().min(1).max(200),
     systemPrompt: z.string().trim().min(1).max(100_000),
     baseUrl: HttpUrl.optional(),
+    context: ContextPolicySchema.optional(),
     intelligence: z
       .strictObject({
         enabled: z.boolean(),

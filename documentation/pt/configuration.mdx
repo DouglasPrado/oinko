@@ -100,6 +100,22 @@ const agent = Agent.create({
 });
 ```
 
+## Contexto de trabalho e ferramentas
+
+`context: { enabled: true }` ativa um resumo persistente, turnos recentes e recuperação de resultados antigos. Com um `decider` Jev, `selectTools: true` seleciona as ferramentas iniciais e permite descoberta durante a tarefa. Sem `decider`, todas as ferramentas permanecem disponíveis.
+
+Os padrões são 20.000 tokens estimados de entrada, 8.000 para `fast`, janela recente de 6.000, resumo alvo de 1.200 e resultados antigos de 2.000 caracteres. O histórico original é preservado. Os limites são alvos: o turno atual e conteúdo fixado podem excedê-los, com aviso. Resumos usam o modelo principal, salvo `summaryModel`, e seu consumo aparece na telemetria; tokens do Jev são registrados separadamente.
+
+```typescript
+const agent = Agent.create({
+  apiKey: process.env.LLM_API_KEY!,
+  dbPath: '.harness/data.db',
+  context: { enabled: true, maxInputTokens: 20_000, fastInputTokens: 8_000 },
+});
+```
+
+Para bots, a mesma política está em **Configurar → Contexto e ferramentas** e em `oinko_update_bot`. Salve e reinicie para aplicar. Stores personalizados precisam implementar persistência de checkpoints e resultados de ferramentas.
+
 ## Politica de Custo
 
 Limite gastos de tokens por execucao e por sessao:

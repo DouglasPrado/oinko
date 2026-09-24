@@ -85,6 +85,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void) {
           apiKey: secrets.apiKey!,
           model: bot.model,
           baseUrl: bot.baseUrl,
+          ...(bot.context && { context: bot.context }),
           ...(bot.intelligence?.enabled && {
             decider: new JevDecider({ apiKey: secrets.typesafeKey!, timeout: 15_000 }),
             ...(bot.intelligence.fastModel && {

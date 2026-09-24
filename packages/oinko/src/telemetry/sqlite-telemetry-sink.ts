@@ -393,6 +393,8 @@ export class SqliteTelemetrySink implements TelemetrySink {
       questions_json: json(record.questions) ?? '{}',
       answers_json: json(record.answers) ?? '{}',
       duration_ms: record.durationMs,
+      input_tokens: record.usage?.inputTokens ?? null,
+      output_tokens: record.usage?.outputTokens ?? null,
       error: this.scrub(record.error),
       created_at: record.createdAt,
     });

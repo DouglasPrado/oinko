@@ -156,6 +156,7 @@ export interface TelemetryDecision {
     { value: string | number | boolean; confidence: number; probabilities?: Record<string, number> }
   >;
   durationMs: number;
+  usage?: TokenUsage;
   error?: string;
   createdAt: number;
 }

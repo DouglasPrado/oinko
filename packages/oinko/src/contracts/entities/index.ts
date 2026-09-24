@@ -4,6 +4,8 @@ export type { ToolCall, AgentToolResult } from './tool-call.js';
 export type { KnowledgeDocument, KnowledgeChunk, RetrievedKnowledge } from './knowledge.js';
 export type { ExecutionContext } from './execution-context.js';
 export type { TokenUsage } from './token-usage.js';
+export { DECISION_USAGE } from './decider.js';
+export type { DecisionUsage } from './decider.js';
 export type {
   AgentTool,
   ToolValidationContext,

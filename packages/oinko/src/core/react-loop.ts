@@ -1,6 +1,6 @@
 import type { LLMClient } from '../llm/llm-client.js';
 import type { ToolExecutor } from '../tools/tool-executor.js';
-import type { LLMMessage } from '../llm/message-types.js';
+import type { LLMMessage, ToolDefinition } from '../llm/message-types.js';
 import type { TokenUsage } from '../contracts/entities/token-usage.js';
 import type { LLMUsageDetail } from '../contracts/entities/telemetry.js';
 import type { AgentEvent, RecoveryReason } from '../contracts/entities/agent-event.js';
@@ -26,6 +26,8 @@ import {
 } from '../llm/errors.js';
 import { SKILL_TOOL_NAME } from '../tools/skill-tool.js';
 import { normalizeMessagesForAPI } from './message-normalize.js';
+import { estimateTokens } from '../utils/token-counter.js';
+import { excerptTool } from './working-context.js';
 
 const MAX_OUTPUT_TOKENS_RECOVERY_LIMIT = 3;
 const MAX_BUDGET_CONTINUATIONS = 4;
@@ -82,6 +84,9 @@ export interface ReactLoopConfig {
   threadId?: string;
   /** Inicio do turno (epoch ms). Repassado as tools que leem o historico. */
   turnStartedAt?: number;
+  toolDefinitions?: () => ToolDefinition[];
+  oldToolResultChars?: number;
+  summarize?: (transcript: string, previous: string) => Promise<string>;
 }
 
 /** O que uma chamada de LLM deixa para a telemetria. */
@@ -106,6 +111,7 @@ export interface LLMCallTelemetry {
    * decidiu isso". O prompt guardado na execucao so cobre a primeira.
    */
   requestMessages: readonly LLMMessage[];
+  requestTools?: readonly ToolDefinition[];
   /** Tool calls que o modelo pediu nesta chamada, em JSON. */
   responseToolCalls?: string;
 }
@@ -142,8 +148,6 @@ export async function* executeReactLoop(
 
   let currentModel = config.model;
   const usage: TokenUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-  const toolDefs =
-    toolExecutor.listTools().length > 0 ? toolExecutor.getToolDefinitions() : undefined;
 
   // DI: use injected callModel or default to client.streamChat
   const callModel = deps?.callModel ?? ((params) => client.streamChat(params));
@@ -156,6 +160,12 @@ export async function* executeReactLoop(
   let state: LoopState = createInitialState([...initialMessages]);
 
   while (true) {
+    const definitions = config.toolDefinitions?.() ?? toolExecutor.getToolDefinitions();
+    const toolDefs = definitions.length > 0 ? definitions : undefined;
+    const messageBudget =
+      maxContextTokens && config.toolDefinitions
+        ? Math.max(1024, maxContextTokens - estimateTokens(JSON.stringify(definitions)))
+        : maxContextTokens;
     const { turnCount, consecutiveErrors } = state;
     // Rebound when autocompact succeeds, so every later iteration builds on
     // the summary instead of summarizing the same history all over again.
@@ -211,6 +221,19 @@ export async function* executeReactLoop(
 
     // --- Compaction pipeline (before LLM call) ---
     let compactedMessages = [...messages] as LLMMessage[];
+    if (config.oldToolResultChars) {
+      compactedMessages = compactedMessages.map((m, index) =>
+        m.role === 'tool' &&
+        typeof m.content === 'string' &&
+        index < compactedMessages.length - DEFAULT_TAIL_PROTECTION &&
+        !(m as LLMMessage & { _pinned?: boolean })._pinned
+          ? {
+              ...m,
+              content: excerptTool(m.content, m.tool_call_id ?? '', config.oldToolResultChars!),
+            }
+          : m,
+      );
+    }
 
     // 0. Tool result budget — aggregate truncation (largest first)
     if (maxContextTokens) {
@@ -256,11 +279,13 @@ export async function* executeReactLoop(
     }
 
     // 2. Autocompact — summarize if threshold exceeded
-    if (maxContextTokens) {
+    if (messageBudget) {
       const autoResult = await autocompact(compactedMessages, client, {
-        maxContextTokens,
+        maxContextTokens: messageBudget,
         compactionThreshold: compactionThreshold ?? DEFAULT_COMPACTION_THRESHOLD,
         tailProtection: DEFAULT_TAIL_PROTECTION,
+        summarize: config.summarize,
+        preserveCurrentTurn: !!config.oldToolResultChars,
       });
       if (autoResult) {
         compactedMessages = autoResult.messages;
@@ -343,6 +368,7 @@ export async function* executeReactLoop(
                   endedAt: Date.now(),
                   responseText: fullText,
                   requestMessages: normalizedMessages,
+                  ...(toolDefs && { requestTools: toolDefs }),
                   ...(toolCalls.length > 0 && {
                     responseToolCalls: JSON.stringify(toolCalls),
                   }),
@@ -631,6 +657,8 @@ export async function* executeReactLoop(
           const compactResult = await autocompact([...state.messages], client, {
             maxContextTokens,
             compactionThreshold: 0.1, // Force compaction
+            summarize: config.summarize,
+            preserveCurrentTurn: !!config.oldToolResultChars,
             tailProtection: DEFAULT_TAIL_PROTECTION,
           });
 

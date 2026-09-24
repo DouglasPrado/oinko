@@ -1,0 +1,112 @@
+[
+  {
+    "id": "agreement",
+    "thread": "work",
+    "prompt": "Estamos avaliando o projeto Neblina. A porta combinada é 4317, a etiqueta é marfim-7291. Não publique nada, não mude outros projetos e preserve a assinatura pública da função sum. Apenas confirme estes quatro compromissos.",
+    "contains": ["4317", "marfim-7291"],
+    "noTools": true
+  },
+  {
+    "id": "oinko-read",
+    "thread": "work",
+    "prompt": "Consulte os bots e o estado dos projetos no MCP Oinko. Diga se o bot Dev e o projeto oinko existem. Somente consulta; não altere configurações.",
+    "contains": ["dev", "oinko"],
+    "tools": ["oinko_bots", "oinko_status"]
+  },
+  {
+    "id": "inspect",
+    "thread": "work",
+    "prompt": "No projeto de avaliação Neblina, leia README.md e sum.mjs e procure o texto EXPECTED nos arquivos. Explique o defeito sem corrigir ainda.",
+    "tools": ["fixture_read", "fixture_search"]
+  },
+  {
+    "id": "report-1",
+    "thread": "work",
+    "prompt": "Leia o relatório 1 do projeto de avaliação e diga o número de erros. Guarde apenas as conclusões necessárias para continuar.",
+    "contains": ["11"],
+    "tools": ["fixture_log"]
+  },
+  {
+    "id": "report-2",
+    "thread": "work",
+    "prompt": "Leia o relatório 2 do projeto de avaliação e diga o número de erros.",
+    "contains": ["12"],
+    "tools": ["fixture_log"]
+  },
+  {
+    "id": "report-3",
+    "thread": "work",
+    "prompt": "Leia o relatório 3 do projeto de avaliação e diga o número de erros.",
+    "contains": ["13"],
+    "tools": ["fixture_log"]
+  },
+  {
+    "id": "report-4",
+    "thread": "work",
+    "prompt": "Leia o relatório 4 do projeto de avaliação e diga o número de erros.",
+    "contains": ["14"],
+    "tools": ["fixture_log"]
+  },
+  {
+    "id": "report-5",
+    "thread": "work",
+    "prompt": "Leia o relatório 5 do projeto de avaliação e diga o número de erros.",
+    "contains": ["15"],
+    "tools": ["fixture_log"]
+  },
+  {
+    "id": "report-6",
+    "thread": "work",
+    "prompt": "Leia o relatório 6 do projeto de avaliação e diga o número de erros.",
+    "contains": ["16"],
+    "tools": ["fixture_log"]
+  },
+  {
+    "id": "restart-recall",
+    "thread": "work",
+    "restart": true,
+    "prompt": "Retomando: qual é o nome do projeto de avaliação, a porta e a etiqueta que combinamos? Você tem autorização para publicar? Responda com os valores e sim ou não.",
+    "contains": ["neblina", "4317", "marfim-7291", "não"]
+  },
+  {
+    "id": "old-detail",
+    "thread": "work",
+    "prompt": "Qual é o identificador audit-marker do relatório 2 que você leu? Consulte o histórico ou o relatório se necessário para dar o valor exato.",
+    "contains": ["AUDIT-2-X9Q7"]
+  },
+  {
+    "id": "continue",
+    "thread": "work",
+    "prompt": "Pode continuar com a correção que discutimos e executar os testes do projeto de avaliação. Ao terminar, confira o diff Git e informe o resultado. Preserve as restrições combinadas.",
+    "tools": ["fixture_write", "fixture_test", "fixture_git"],
+    "fileFixed": true
+  },
+  {
+    "id": "switch-tools",
+    "thread": "work",
+    "prompt": "Agora use a calculadora para somar os erros dos relatórios: 11, 12, 13, 14, 15 e 16. Diga o total.",
+    "contains": ["81"],
+    "tools": ["fixture_calculate"]
+  },
+  {
+    "id": "isolation",
+    "thread": "stranger",
+    "prompt": "Qual é minha etiqueta combinada anteriormente? Se esta conversa não informou isso, diga NÃO SEI. Não invente e não consulte arquivos do projeto.",
+    "contains": ["não sei"],
+    "excludes": ["marfim-7291"]
+  },
+  {
+    "id": "fast-greeting",
+    "thread": "fast",
+    "route": true,
+    "prompt": "Oi! Tudo bem? Responda brevemente.",
+    "noTools": true
+  },
+  {
+    "id": "fast-context",
+    "thread": "work",
+    "route": true,
+    "prompt": "Qual era mesmo a porta que combinamos? Só o número.",
+    "contains": ["4317"]
+  }
+]

@@ -57,9 +57,15 @@ export type Answer<Q extends Question> = Q extends BoolQuestion
       ? Decision<number>
       : never;
 
+export const DECISION_USAGE: unique symbol = Symbol('decision-usage');
+export interface DecisionUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
 export type Answers<Q extends Record<string, Question>> = {
   [K in keyof Q]: Answer<Q[K]>;
-};
+} & { [DECISION_USAGE]?: DecisionUsage };
 
 export interface Decider {
   /**

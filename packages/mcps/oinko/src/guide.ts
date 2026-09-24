@@ -43,6 +43,13 @@ trocar o .env do checkout não atualiza automaticamente as credenciais dos bots 
 intelligence configura o Jev: enabled, fastModel opcional e minConfidence (0..1). Envie o objeto
 completo; null remove a configuração. Jev usa credentials.typesafeKey, independente da chave LLM.
 Sem fastModel não há troca de modelo; sem confiança suficiente, permanece o modelo principal.
+context configura o histórico enviado: enabled ativa resumo persistente, janela recente e consulta
+a resultados arquivados. maxInputTokens/fastInputTokens são orçamentos estimados de entrada;
+recentTokens/summaryTokens controlam a janela e o resumo; toolResultChars limita resultados antigos.
+selectTools usa o Jev para escolher ferramentas, com descoberta durante o trabalho; requer
+intelligence.enabled para seleção inteligente. Sem Jev, todas as ferramentas continuam disponíveis.
+maxTools controla a seleção inicial e minToolConfidence a confiança. Envie a política completa;
+null desabilita a otimização sem apagar a conversa. Alterações exigem reinício do bot em execução.
 Campos omitidos e tokens existentes são preservados. Telegram e telemetria recebem merge;
 arrays como mcps e allowedUserIds são substituídos por completo, então preserve os demais itens.
 null limpa um campo opcional. O ID não pode ser alterado. Revisão vencida exige nova consulta.

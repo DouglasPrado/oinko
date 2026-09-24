@@ -27,6 +27,9 @@ O socket dos bots usa `/tmp` em Unix, com usuário e diretório de dados na iden
 
 A credencial `typesafeKey` é independente da chave do OpenRouter, cifrada no cadastro e exposta apenas pelo indicador `hasTypesafeKey`. Um bot com Jev habilitado sem essa credencial recusa iniciar com erro explícito. O runner monta `JevDecider` do SDK com timeout de 15 segundos; o SDK registra suas decisões e falhas na telemetria da execução. A configuração e a chave podem ser atualizadas pelo MCP administrativo; a dashboard preserva essa configuração ao editar outros campos. Não há ativação implícita por variável de ambiente. A telemetria lê tanto `requested_model` quanto `model` para distinguir uma troca real de modelo de uma decisão não aplicada.
 
+Contexto e ferramentas: a política opcional `context` habilita resumo persistente, janela recente e resultados arquivados por conversa. O formulário permite configurar orçamento normal e fast, tamanho de resumo, janela, resultados antigos e seleção inicial de ferramentas. Jev recebe um catálogo compacto junto com mensagem e estado da tarefa. A ferramenta de descoberta amplia o catálogo durante o trabalho. Sem Jev, todas as ferramentas autorizadas permanecem disponíveis. A mesma política é editável via `oinko_update_bot`; salvar exige reinício para aplicar. A telemetria distingue estimativas de composição, uso real das chamadas (incluindo resumos) e tokens do Jev, cujo custo não é informado pela API.
+
+
 ## Dados e migração
 
 O cadastro fica em `.harness/bots.db`, separado dos bancos do SDK. Segredos são cifrados com AES-256-GCM; a chave local fica em `.harness/bots.key`, com permissão 600. API e formulário retornam apenas indicadores de credenciais configuradas. Atualizações verificam a revisão para evitar sobrescrever uma edição concorrente.
@@ -61,3 +64,5 @@ A interface cadastra MCP HTTP com Bearer opcional e Higgsfield com OAuth compart
 ## Componentes da experiência
 
 A interface usa componentes shadcn/Radix locais: cards e badges para resumo/estado, breadcrumbs para contexto, tabs para vistas do mesmo recurso, sheets para configurações/terminal/logs, dialog para criar tarefa, menus para ações do sandbox, accordion para detalhes dos serviços e reutilização de configuração, alert para falhas, skeleton para carregamento, empty para primeiros passos, table e progress para telemetria, tooltip para retenção. Campos avançados e credenciais permanecem disponíveis. Sheets restauram o foco ao fechar.
+
+Operação de contexto e seleção de ferramentas: [guia de configuração](CONTEXT.md).

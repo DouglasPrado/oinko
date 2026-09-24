@@ -13,6 +13,11 @@ const BotChanges = z.strictObject({
   model: fields.model.optional(),
   systemPrompt: fields.systemPrompt.optional(),
   baseUrl: fields.baseUrl.nullable(),
+  context: fields.context
+    .nullable()
+    .describe(
+      'Política completa de contexto: enabled, maxInputTokens, fastInputTokens, recentTokens, summaryTokens, toolResultChars, selectTools, maxTools e minToolConfidence. Campos internos omitidos usam os padrões. null desabilita; não apaga histórico.',
+    ),
   intelligence: fields.intelligence
     .nullable()
     .describe(

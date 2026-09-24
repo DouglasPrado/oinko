@@ -67,6 +67,35 @@ it('reads the shared registry without exposing stored credentials', async () => 
   }
 });
 
+it('saves the same context policy used by the dashboard and clears it explicitly', async () => {
+  const { client, store } = await fixture();
+  const result = await client.callTool({
+    name: 'oinko_update_bot',
+    arguments: {
+      botId: 'dev',
+      revision: 1,
+      changes: { context: { enabled: true, maxInputTokens: 16000, selectTools: true } },
+    },
+  });
+  expect(result.isError).not.toBe(true);
+  expect(store.get('dev').context).toMatchObject({
+    enabled: true,
+    maxInputTokens: 16000,
+    fastInputTokens: 8000,
+    selectTools: true,
+  });
+  await client.callTool({
+    name: 'oinko_update_bot',
+    arguments: { botId: 'dev', revision: 2, changes: { name: 'Dev renamed' } },
+  });
+  expect(store.get('dev').context?.maxInputTokens).toBe(16000);
+  await client.callTool({
+    name: 'oinko_update_bot',
+    arguments: { botId: 'dev', revision: 3, changes: { context: null } },
+  });
+  expect(store.get('dev').context).toBeUndefined();
+});
+
 it('merges partial settings without changing omitted defaults, credentials or paths', async () => {
   const { client, store } = await fixture();
   const before = store.runtime('dev');

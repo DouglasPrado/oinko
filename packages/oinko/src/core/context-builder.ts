@@ -52,6 +52,8 @@ export function buildContext(options: {
   maxPinnedMessages: number;
   /** Decides whether images survive as images. Omitted, they do. */
   model?: string;
+  /** History was already compacted at complete-turn boundaries. Never cut it a second time. */
+  preserveHistory?: boolean;
 }): ContextBuildResult {
   const { systemPrompt, injections, history, maxTokens, reserveTokens, maxPinnedMessages, model } =
     options;
@@ -99,15 +101,24 @@ export function buildContext(options: {
   // rest. Selection is by budget; emission keeps the original order, because
   // a pinned `tool` result floated above its assistant is an orphan that
   // normalization drops — which is how a loaded skill used to vanish.
-  const cost = (i: number): number => estimateContentTokens(history[i]!.content);
+  const cost = (i: number): number =>
+    estimateContentTokens(history[i]!.content) +
+    (history[i]!.toolCalls ? estimateTokens(JSON.stringify(history[i]!.toolCalls)) : 0);
   const pinnedIdx = history.flatMap((m, i) => (m.pinned ? [i] : [])).slice(0, maxPinnedMessages);
   const reserved = new Set(pinnedIdx);
   const included = new Set<number>();
+  if (options.preserveHistory) {
+    history.forEach((_m, i) => {
+      included.add(i);
+      used += cost(i);
+    });
+  }
 
   // Track how many pinned did not fit so the caller can surface a warning
   // instead of silently losing critical context.
   let droppedPinnedCount = 0;
   for (const i of pinnedIdx) {
+    if (included.has(i)) continue;
     const parent = parentToolCallIndex(history, i);
     const group = [i, ...(parent !== undefined ? [parent] : [])].filter((k) => !included.has(k));
     const tokens = group.reduce((sum, k) => sum + cost(k), 0);

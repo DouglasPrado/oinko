@@ -1,8 +1,8 @@
 [
   {
-    "name": "dist/ total (raw + gzipped via tar) \u2014 459 KB antes da camada de telemetria, 498 KB com ela; 552 KB antes da busca em conversas, do piso de LGPD na memoria e dos prompts de contexto, 611 KB com eles",
+    "name": "dist/ total (raw) — 611 KB antes do contexto adaptativo; inclui resumo persistente, arquivo de ferramentas, seleção Jev e política compartilhada",
     "path": "dist/**/*.{js,d.ts}",
-    "limit": "620 KB",
+    "limit": "670 KB",
     "brotli": false,
     "gzip": false
   },

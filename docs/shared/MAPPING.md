@@ -26,6 +26,8 @@ Blueprint Tecnico (docs/blueprint/)     ← FONTE PRIMARIA
 
 ## Mapeamento Blueprint → Backend
 
+Contexto adaptativo: `docs/blueprint/26-adaptive-context.md` → `packages/oinko/src/core/{adaptive-context,working-context,context-summary-writer}.ts`, seleção em `tools/tool-selection.ts`, consulta em `tools/builtin/tool-result.ts`, armazenamento em `ConversationStore`/SQLite. Configuração compartilhada por `packages/bots`, dashboard e MCP Oinko. Regressões: `working-context.test.ts`, `tool-selection.test.ts`, `09-adaptive-context.test.ts`, `decision-usage.test.ts`, `context-policy.spec.ts`. Avaliação real repetível: `packages/oinko/scripts/context-evaluation/`.
+
 Telemetria por bot: `docs/dashboard/PLAN.md` → `apps/dashboard/src/server/repositories/telemetry-sources.ts` e `features/telemetry`. Regressões de isolamento e navegação: `tests/unit/telemetry-sources.test.ts` e `tests/e2e/telemetry-bots.spec.ts` na dashboard.
 
 Bots configuráveis: `docs/dashboard/PLAN.md` → `packages/bots` e `apps/dashboard/src/server/bots`. Histórico e isolamento: `packages/agent-runtime/tests`; CLI e ciclo de serviço: `packages/channels/cli/tests`; texto, imagem e áudio Telegram: `packages/channels/telegram/tests`. Cada bot usa `.harness/bots/<id>` e o executor compartilhado.
