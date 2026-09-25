@@ -27,6 +27,7 @@ import { openProgramming } from './programming/runtime.js';
 import { isOinkoMcp, scopeOinkoMcp } from './programming/equivalence.js';
 import { programmingRunTools } from './programming/run-tools.js';
 import { createDeliveryTools } from './programming/delivery-tools.js';
+import { hiddenToolsFor } from './programming/hidden-tools.js';
 
 export interface RunBotOptions {
   /** Test seam: in-process model provider instead of the network (never set by the CLI/dashboard). */
@@ -238,7 +239,7 @@ export async function runBot(store: BotStore, id: string, onClose: () => void, o
         },
       });
       if (programming && host.programmingAgent) {
-        cycles = new AgentCycleExecutor(host.programmingAgent);
+        cycles = new AgentCycleExecutor(host.programmingAgent, { hiddenTools: hiddenToolsFor });
         programming.startWorker();
         const close = host.close;
         // Stop executing before the agents go away; runs stay recoverable.

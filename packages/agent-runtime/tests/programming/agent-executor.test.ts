@@ -200,6 +200,27 @@ describe('M07-S02 progressive context in the run journal', () => {
     expect(runControlTools().find((tool) => tool.name === 'programming_request_input')?.description).toMatch(/não para permissão/);
   });
 
+  it('hides from each cycle the tools its run cannot use', async () => {
+    const access = twoBotMatrix();
+    const agent = new ReplayAgent(() => [{ type: 'text_delta', content: 'ciclo' } as AgentEvent]);
+    const executor = new AgentCycleExecutor(agent, { hiddenTools: (run) => (run.taskId ? [{ name: 'workspace_prepare_task' }] : [{ name: 'browser_open', denied: 'browser' }]) });
+    const harness = createService(tempRoot(), access, {
+      executor: {
+        runCycle: async (input) => {
+          const outcome = await executor.runCycle(input);
+          input.context.record(edit('r1'));
+          input.context.record(check('r1', 'passed'));
+          return { ...outcome, completion: { summary: 'ok' } };
+        },
+      },
+    });
+    const { run } = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'x' });
+    await harness.service.idle();
+    expect(harness.store.getRun(run.id)?.state).toBe('completed');
+    expect(agent.calls[0]!.options?.hiddenTools).toEqual(['browser_open']);
+    await harness.close();
+  });
+
   it('marks the run control tools as always available under tool selection', () => {
     expect(runControlTools().every((tool) => tool.alwaysAvailable)).toBe(true);
   });

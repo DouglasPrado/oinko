@@ -71,6 +71,8 @@ export class ToolExecutor {
   constructor(
     options: ToolExecutorOptions = {},
     private readonly parent?: ToolExecutor,
+    /** Names this view neither lists nor runs, wherever they are registered. */
+    private readonly hidden: ReadonlySet<string> = new Set(),
   ) {
     this.hooks = options;
     this.decider = options.decider;
@@ -78,8 +80,11 @@ export class ToolExecutor {
     this.archiveResult = options.archiveResult;
   }
 
-  /** An execution-local overlay; newly connected tools remain visible through the parent. */
-  scope(): ToolExecutor {
+  /**
+   * An execution-local overlay; newly connected tools remain visible through
+   * the parent. `hidden` tools are left out of it: not offered, not run.
+   */
+  scope(hidden: Iterable<string> = []): ToolExecutor {
     return new ToolExecutor(
       {
         ...this.hooks,
@@ -88,10 +93,12 @@ export class ToolExecutor {
         archiveResult: this.archiveResult,
       },
       this,
+      new Set([...this.hidden, ...hidden]),
     );
   }
 
   private getTool(name: string): AgentTool | undefined {
+    if (this.hidden.has(name)) return undefined;
     return this.tools.get(name) ?? this.parent?.getTool(name);
   }
 
@@ -109,7 +116,7 @@ export class ToolExecutor {
         ...(this.parent?.listTools() ?? []).map((t) => [t.name, t] as const),
         ...this.tools,
       ]).values(),
-    ];
+    ].filter((tool) => !this.hidden.has(tool.name));
   }
 
   getToolDefinitions(): ToolDefinition[] {

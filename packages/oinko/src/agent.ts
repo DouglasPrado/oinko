@@ -90,6 +90,12 @@ export interface ChatOptions {
    * bounded cycles sets it per cycle; the configured value is the default.
    */
   maxIterations?: number;
+  /**
+   * Tools this execution must not see, e.g. capabilities the host's policy
+   * denies for this job. They are not offered to the model and are refused
+   * if called; other executions still see them.
+   */
+  hiddenTools?: readonly string[];
 }
 
 /**
@@ -333,12 +339,13 @@ export class Agent {
     const taskContext = contextPolicy
       ? routingTaskContext(this.conversations, threadId, this.config.systemPrompt)
       : undefined;
+    const turnTools = options?.hiddenTools?.length ? this.toolExecutor.scope(options.hiddenTools) : this.toolExecutor;
     const screening = decider
       ? await screenTurn(userContent, decider, {
           ...(taskContext && { taskContext }),
           ...(contextPolicy?.selectTools && {
             tools: {
-              catalog: this.toolExecutor.listTools(),
+              catalog: turnTools.listTools(),
               maxTools: contextPolicy.maxTools,
               minConfidence: contextPolicy.minToolConfidence,
             },
@@ -441,7 +448,7 @@ export class Agent {
       definitions: toolDefinitions,
       available: availableTools,
       discovery,
-    } = toolsForTurn(this.toolExecutor, contextPolicy, screening.toolNames);
+    } = toolsForTurn(turnTools, contextPolicy, screening.toolNames);
     if (discovery) injections.push(discovery);
     if (availableTools.length > 0) {
       const toolContent = buildToolUsagePrompt(availableTools);

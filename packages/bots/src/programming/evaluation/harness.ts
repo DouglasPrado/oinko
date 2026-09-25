@@ -34,6 +34,7 @@ import { openProgramming, type ProgrammingRuntime } from '../runtime.js';
 import type { RunnerPort } from '../tool-kit.js';
 import { LocalRunner } from './local-runner.js';
 import { simulatedProvider } from './simulated-provider.js';
+import { hiddenToolsFor } from '../hidden-tools.js';
 
 /** Marker of a root created by the harness: nothing else is ever evaluated into. */
 const MARKER = '.harness/evaluation-root';
@@ -276,7 +277,8 @@ async function attempt(testCase: EvaluationCase, repetition: number, definition:
       }),
     ];
     for (const tool of tools) created.addTool(tool);
-    cycles.current = new AgentCycleExecutor(created);
+    // Same tool offer as production, so the evaluation measures what runs.
+    cycles.current = new AgentCycleExecutor(created, { hiddenTools: hiddenToolsFor });
     return created;
   };
   let agent = makeAgent(programming);

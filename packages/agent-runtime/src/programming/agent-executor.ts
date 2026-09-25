@@ -75,11 +75,19 @@ export function cyclePrompt(input: CycleInput): string {
 export class AgentCycleExecutor implements RunExecutor {
   constructor(
     private readonly agent: StreamingAgent,
-    private readonly options: { threadId?: (runId: string) => string } = {},
+    private readonly options: {
+      threadId?: (runId: string) => string;
+      /**
+       * Tools a cycle of this run is not offered; `denied` marks the ones its
+       * policy refuses, so a call anyway is journaled as a permission denial.
+       */
+      hiddenTools?: (run: CycleInput['run']) => readonly { name: string; denied?: string }[];
+    } = {},
   ) {}
 
   async runCycle(input: CycleInput): Promise<CycleOutcome> {
     const policy = input.run.policySnapshot.policy as Partial<EffectivePolicy>;
+    const hidden = new Map((this.options.hiddenTools?.(input.run) ?? []).map((item) => [item.name, item.denied]));
     const traceIds: string[] = [];
     let text = '';
     let error: Error | undefined;
@@ -95,6 +103,7 @@ export class AgentCycleExecutor implements RunExecutor {
       signal: input.context.signal,
       ...(policy.models?.main && { model: policy.models.main }),
       maxIterations: policy.cycle?.maxIterations ?? 12,
+      ...(hidden.size && { hiddenTools: [...hidden.keys()] }),
       correlation: {
         botId: input.run.botId,
         projectId: input.run.projectId,
@@ -140,6 +149,9 @@ export class AgentCycleExecutor implements RunExecutor {
         }
       } else if (event.type === 'tool_call_start') {
         const name = event.toolCall.function.name;
+        // Not offered and refused by the SDK; still a safety incident when the policy denies it.
+        const denied = hidden.get(name);
+        if (denied) input.context.emit('permission_denied', { class: denied, operation: name, code: 'not_offered' }, 'denied');
         if (name === 'ToolSearch' || name === 'ToolResult' || name === 'ConversationSearch') watched.set(event.toolCall.id, name);
       } else if (event.type === 'tool_call_end' && watched.has(event.toolCallId)) {
         const name = watched.get(event.toolCallId)!;
