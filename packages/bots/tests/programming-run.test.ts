@@ -270,6 +270,42 @@ describe('programming run with the real agent loop and simulated provider', () =
     expect(store.listReceipts(id).map((receipt) => [receipt.kind, receipt.state])).toEqual([['workspace.applyPatch', 'failed']]);
   }, 60_000);
 
+  it('accepts the input shapes a weaker model sends (absolute paths, strings for booleans and numbers, nested plan steps)', async () => {
+    const readHash = (messages: any[]) => JSON.parse(String(messages.find((message) => message.role === 'tool').content)).hash;
+    const steps: ((messages: any[]) => ScriptStep)[] = [
+      // Shapes seen from minimax-m3 in a real run.
+      () => ({ tool: 'workspace_read_range', args: { path: '/workspace/tasks/fix/app/sum.cjs', startLine: '1' } }),
+      (messages) => ({ tool: 'workspace_patch', args: { edits: [{ action: 'replace', path: './sum.cjs', expectedHash: readHash(messages), oldText: 'a - b', newText: 'a + b', replaceAll: 'false' }] } }),
+      () => ({ tool: 'programming_update_plan', args: { steps: [{ item: { item: 'Corrigir a soma' } }, 'Rodar o teste', [{ text: 'Concluir' }]] } }),
+      () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'node sum.test.cjs', cwd: '/workspace/tasks/fix/app', timeoutSeconds: '60' } }),
+      () => ({ tool: 'programming_complete', args: { summary: 'Soma corrigida.' } }),
+      () => ({ text: 'Concluí.' }),
+    ];
+    let index = 0;
+    const context = setup({ script: (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Parado.' }) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    const results = context.provider.requests.at(-1)!.messages.filter((message) => message.role === 'tool').map((message) => String(message.content));
+    for (const result of results) expect(result).not.toMatch(/"error"|Validation error/);
+    expect(store.getRun(id)?.state).toBe('completed');
+    expect(store.planRevisions(id).at(-1)?.plan).toEqual(['Corrigir a soma', 'Rodar o teste', 'Concluir']);
+  }, 60_000);
+
+  it('keeps an over-long question instead of refusing it', async () => {
+    const steps: ScriptStep[] = [{ tool: 'programming_request_input', args: { question: `Qual tema padrão? ${'contexto '.repeat(400)}` } }, { text: 'Aguardando.' }];
+    let index = 0;
+    const context = setup({ script: () => steps[index++] ?? { text: 'Parado.' } });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Tema escuro.' }).run.id;
+    service.kick();
+    await service.idle();
+    const run = store.getRun(id)!;
+    expect(run.blocked).toMatchObject({ code: 'needs_input', needs: expect.stringMatching(/^Qual tema padrão\?/) });
+    expect(run.blocked!.needs!.length).toBeLessThanOrEqual(2000);
+  }, 60_000);
+
   it('blocks the run naming the fix when the environment runner is older than the tools, without falling back to the shell', async () => {
     const steps: ScriptStep[] = [
       { tool: 'workspace_read_range', args: { path: 'sum.cjs' } },

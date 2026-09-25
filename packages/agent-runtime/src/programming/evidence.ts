@@ -31,6 +31,8 @@ export type Evidence =
       revisionAfter?: string;
       fingerprint: string;
       artifactId?: string;
+      /** First error lines of the output, for the next cycle to act on without the whole log. */
+      errors?: string[];
     }
   | {
       kind: 'functional';

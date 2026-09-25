@@ -9,11 +9,22 @@ import {
   type ProgrammingRunService,
   type RunContext,
 } from '@oinko/agent-runtime/programming';
+import { errorLines } from './check-errors.js';
 import { hash, toolKit, type Json, type RunnerPort } from './tool-kit.js';
 
 export type { RunnerPort } from './tool-kit.js';
 
-const RelPath = z.string().min(1).max(500);
+/**
+ * Inputs as a weaker model sends them are accepted and normalized, never
+ * refused for form: a path absolute inside the sandbox worktree or with
+ * ./, and booleans or numbers written as strings. The JSON Schema the
+ * model sees keeps the precise types.
+ */
+const relativePath = (value: unknown) =>
+  typeof value === 'string' ? value.trim().replace(/^\/workspace\/tasks\/[^/]+\/[^/]+(\/|$)/, '').replace(/^(\.\/)+/, '') || '.' : value;
+const RelPath = z.preprocess(relativePath, z.string().min(1).max(500));
+const Bool = z.preprocess((value) => (value === 'true' ? true : value === 'false' ? false : value), z.boolean());
+const int = <S extends z.ZodNumber>(schema: S) => z.preprocess((value) => (typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value) : value), schema);
 /** Only the hash the runner returned proves which content an edit expects. */
 const FileHash = z
   .string()
@@ -48,23 +59,23 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     query: z.string().max(300).default(''),
     path: RelPath.optional(),
     glob: z.string().max(300).optional(),
-    includeIgnored: z.boolean().default(false),
-    includeGenerated: z.boolean().default(false),
+    includeIgnored: Bool.default(false),
+    includeGenerated: Bool.default(false),
     cursor: z.string().max(500).optional(),
-    limit: z.number().int().min(1).max(500).default(100),
+    limit: int(z.number().int().min(1).max(500)).default(100),
     repositoryId: Repo,
   });
   const search = find.extend({
     query: z.string().min(1).max(1000),
-    regex: z.boolean().default(false),
-    caseSensitive: z.boolean().default(false),
-    contextLines: z.number().int().min(0).max(5).default(0),
+    regex: Bool.default(false),
+    caseSensitive: Bool.default(false),
+    contextLines: int(z.number().int().min(0).max(5)).default(0),
   });
   const read = z.object({
     path: RelPath,
-    startLine: z.number().int().min(1).default(1),
-    endLine: z.number().int().min(1).optional(),
-    maxBytes: z.number().int().min(256).max(100_000).default(40_000),
+    startLine: int(z.number().int().min(1)).default(1),
+    endLine: int(z.number().int().min(1)).optional(),
+    maxBytes: int(z.number().int().min(256).max(100_000)).default(40_000),
     repositoryId: Repo,
   });
   const replace = z.object({
@@ -72,11 +83,11 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     expectedHash: FileHash,
     oldText: z.string().min(1),
     newText: z.string(),
-    replaceAll: z.boolean().default(false),
+    replaceAll: Bool.default(false),
     repositoryId: Repo,
   });
   const Edit = z.discriminatedUnion('action', [
-    z.object({ action: z.literal('replace'), path: RelPath, expectedHash: FileHash, oldText: z.string().min(1), newText: z.string(), replaceAll: z.boolean().default(false) }),
+    z.object({ action: z.literal('replace'), path: RelPath, expectedHash: FileHash, oldText: z.string().min(1), newText: z.string(), replaceAll: Bool.default(false) }),
     z.object({ action: z.literal('create'), path: RelPath, content: z.string().max(400_000) }),
     z.object({ action: z.literal('delete'), path: RelPath, expectedHash: FileHash }),
   ]);
@@ -86,12 +97,12 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     kind: z.enum(['install', 'test', 'lint', 'build', 'typecheck', 'format', 'custom']),
     command: z.string().min(1).max(4000).optional().describe('Omita para usar o comando descoberto/configurado do projeto.'),
     cwd: RelPath.optional(),
-    timeoutSeconds: z.number().int().min(1).max(3600).optional(),
+    timeoutSeconds: int(z.number().int().min(1).max(3600)).optional(),
     scope: z.enum(['package', 'repository']).default('package').describe('package: só o pacote afetado (padrão); repository: todo o repositório, exige justificativa.'),
     justification: z.string().min(10).max(500).optional().describe('Por que a verificação precisa ir além do pacote afetado.'),
     repositoryId: Repo,
   });
-  const exec = z.object({ command: z.string().min(1).max(20_000), timeoutSeconds: z.number().int().min(1).max(600).default(120), repositoryId: Repo });
+  const exec = z.object({ command: z.string().min(1).max(20_000), timeoutSeconds: int(z.number().int().min(1).max(600)).default(120), repositoryId: Repo });
 
   async function edit(context: RunContext, repositoryId: string | undefined, kind: 'workspace.replace' | 'workspace.applyPatch', edits: z.output<typeof Edit>[]) {
     const where = location(context, repositoryId);
@@ -267,6 +278,7 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       );
       const result = outcome.result as { jobId: string; result: Evidence extends infer E ? (E extends { kind: 'check'; result: infer R } ? R : never) : never; revisionBefore?: string; revisionAfter?: string; outputTail?: string; exitCode?: number; classification?: string; stale?: boolean };
       const log = await send<{ text: string }>(context, { action: 'jobLogs', jobId: result.jobId }).catch(() => ({ text: result.outputTail ?? '' }));
+      const errors = result.result === 'passed' ? [] : errorLines(log.text || result.outputTail || '', cwd);
       const artifact = context.saveArtifact({ type: 'log', content: log.text, repositoryId: where.repositoryId, ...(result.revisionBefore && { treeHash: result.revisionBefore }) });
       const revision = result.revisionBefore ?? 'unknown';
       context.record({
@@ -278,9 +290,11 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
         ...(result.revisionAfter && { revisionAfter: result.revisionAfter }),
         fingerprint: `${args.kind}:${hash(command)}:${revision}:${result.result}`,
         ...(artifact && { artifactId: artifact.id }),
+        ...(errors.length && { errors }),
       });
       context.emit('check_finished', { kind: args.kind, repositoryId: where.repositoryId, result: result.result, classification: result.classification ?? 'unknown', revision, jobId: result.jobId, exitCode: result.exitCode ?? null, stale: result.stale ?? false }, result.result === 'passed' ? 'succeeded' : 'failed', { operationId: outcome.receipt.operationId });
-      return { ...result, command, cwd, origin, ...(artifact && { logArtifactId: artifact.id }), outputTail: (result.outputTail ?? '').slice(-3000) };
+      // The errors to fix first; the tail stays for context.
+      return { ...result, command, cwd, origin, ...(errors.length && { errors }), ...(artifact && { logArtifactId: artifact.id }), outputTail: (result.outputTail ?? '').slice(-3000) };
     }, { timeoutMs: 3_700_000 }),
 
     tool('workspace_exec', 'Executa um comando no terminal da worktree do run (Git, inspeção, geradores). Para editar arquivos use workspace_replace/workspace_patch; para validações, workspace_check. O que o comando mudar na worktree conta como edição do run; resultados repetidos não contam como progresso.', exec, async (args, context) => {

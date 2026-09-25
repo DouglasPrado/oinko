@@ -26,6 +26,7 @@ import {
   type Evidence,
   type RunContext,
 } from './evidence.js';
+import { criterionGuidance, describeRunState } from './run-state.js';
 import type { OperationRecorder } from './operations.js';
 import { deliveryReport } from './delivery-report.js';
 import type { ArtifactStore } from './artifacts.js';
@@ -53,6 +54,8 @@ export interface CycleInput {
   previousSummary?: string;
   /** Essential context kept across cycles even when history is reduced (latest per title). */
   pinned?: { title: string; text: string }[];
+  /** Recorded state the cycle starts from: revision, changed files, checks and what each criterion needs. */
+  state?: string;
   context: RunContext;
 }
 
@@ -672,6 +675,7 @@ export class ProgrammingRunService {
             ...(feedback && { feedback }),
             ...(previousSummary && { previousSummary }),
             ...(pins.size && { pinned: [...pins].map(([title, text]) => ({ title, text })) }),
+            state: describeRunState({ criteria, evidence: this.store.evidence<Evidence>(run.id).map((item) => item.value), revisions }),
             context,
           }),
         );
@@ -783,12 +787,16 @@ export class ProgrammingRunService {
           this.notify(this.store.requireRun(run.id), 'run_completed', `${outcome.completion.summary}\n${this.report(run.id)}`.trim());
           return;
         }
-        feedback = `A conclusão não foi aceita. Pendências: ${blockers
+        // Say exactly what satisfies each blocker: left to guess, a model invents requirements.
+        feedback = `A conclusão não foi aceita. O que falta:\n${blockers
           .map((blocker) => {
             const criterion = evaluation.criteria.find((item) => item.id === blocker.ref);
-            return criterion ? `${criterion.description} (${criterion.status})` : `${blocker.code} ${blocker.ref}`;
+            if (criterion) return `- ${criterion.id} [${criterion.status}]: ${criterionGuidance(criterion)}`;
+            if (blocker.code === 'uncertain_operation' || blocker.code === 'pending_operation')
+              return `- operação ${blocker.ref} sem resultado confirmado: a plataforma a reconcilia; não repita nem contorne`;
+            return `- ${blocker.code} ${blocker.ref}`;
           })
-          .join('; ')}. Produza a evidência que falta antes de concluir.`;
+          .join('\n')}\nNada além disso é exigido: não publique, não faça commit nem mova arquivos só para concluir.`;
       } else feedback = undefined;
       const noProgress = verdict.progressed ? 0 : run.noProgressCount + 1;
       run = this.store.updateRun(run.id, run.revision, { noProgressCount: noProgress });
