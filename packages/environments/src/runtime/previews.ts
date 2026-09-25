@@ -156,6 +156,15 @@ export class PreviewManager {
         ['compose', '-p', prepared.name, ...file, 'down', '--volumes', '--remove-orphans', '--rmi', 'local'],
         { env: prepared.runtimeEnv, timeoutMs: 180_000 },
       );
+      // Built images are tagged `<name>-<service>:preview`, which `--rmi local` keeps;
+      // matching by that name leaves the base images other previews share alone.
+      const listed = await this.run(
+        'docker',
+        ['images', '--filter', `reference=${prepared.name}-*:preview`, '--format', '{{.Repository}}:{{.Tag}}'],
+        { timeoutMs: 15_000, allowFailure: true },
+      );
+      const images = listed.stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+      if (images.length) await this.run('docker', ['rmi', '--force', ...images], { timeoutMs: 120_000 });
     }
     rmSync(join(this.root, '.harness/runtime/previews', id), { recursive: true, force: true });
     this.store.deletePreview(id);

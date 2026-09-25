@@ -111,7 +111,7 @@ it('keeps preview resources and concurrency independent for the same worktree in
 it('deletes a preview for good (route, containers, volumes, built images and record) and keeps the task', async () => {
   const root = mkdtempSync(join(tmpdir(), 'oinko-preview-delete-'));
   const store = new EnvironmentStore(root);
-  const run = vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
+  const run = vi.fn<(command: string, args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>>(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
   const sandbox = new DockerSandbox(root, (id) => store.environment(id), run);
   const manager = new PreviewManager(root, store, sandbox, run);
   vi.spyOn(manager.router, 'publish').mockResolvedValue([]);
@@ -125,8 +125,14 @@ it('deletes a preview for good (route, containers, volumes, built images and rec
     const preview = await manager.start(project, task);
     const name = store.runtime(preview.id)!.name;
     run.mockClear();
+    // Images built for the preview carry their own tag, which `--rmi local` keeps.
+    run.mockImplementation(async (_command, args) => ({ stdout: args[0] === 'images' ? `${name}-web:preview\n` : '', stderr: '', exitCode: 0 }));
     await manager.remove(preview.id);
-    const down = run.mock.calls.map((call) => (call as unknown as [string, string[]])[1]).find((args) => args.includes('down'));
+    const calls = run.mock.calls.map((call) => call[1]);
+    expect(calls).toContainEqual(expect.arrayContaining(['images', '--filter', `reference=${name}-*:preview`]));
+    // Only this preview's images: base images other previews share are not touched.
+    expect(calls).toContainEqual(['rmi', '--force', `${name}-web:preview`]);
+    const down = calls.find((args) => args.includes('down'));
     expect(down).toEqual(expect.arrayContaining(['-p', name, 'down', '--volumes', '--remove-orphans', '--rmi', 'local']));
     expect(unpublish).toHaveBeenCalledWith(name);
     expect(store.previews()).toEqual([]);
