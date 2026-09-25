@@ -305,8 +305,16 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     tool('workspace_exec', 'Executa um comando no terminal da worktree do run (Git, inspeção, geradores). Para editar arquivos use workspace_replace/workspace_patch; para validações, workspace_check. O que o comando mudar na worktree conta como edição do run; resultados repetidos não contam como progresso.', exec, async (args, context) => {
       const where = location(context, args.repositoryId);
       // The baseline predates the command, so what it changes is the run's, never the person's.
-      await ensureBaseline(context, where);
-      const before = await snapshot(context, where);
+      // Seeing the change is best effort: a full disk must not stop the command that frees it.
+      // An outdated runner still blocks the run (the signal is set by the failed call).
+      const observe = <T>(action: Promise<T>) =>
+        action.catch((error: unknown) => {
+          if (context.signals.blocked) throw error;
+          return undefined;
+        });
+      // Without a baseline, a change cannot be told apart from the person's: not attributed.
+      const baselined = await observe(ensureBaseline(context, where).then(() => true));
+      const before = baselined ? await observe(snapshot(context, where)) : undefined;
       const outcome = await context.operation(
         { kind: 'workspace.exec', class: 'mutate', params: { ...where, command: args.command, cycle: context.stepId }, intent: { command: args.command.slice(0, 500) } },
         async (operation) => {
@@ -317,8 +325,8 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       const result = outcome.result as { stdout: string; stderr: string; exitCode: number };
       const fingerprint = hash([args.command, result.exitCode, result.stdout.slice(-4000), result.stderr.slice(-4000)]);
       context.record(result.exitCode === 0 ? { kind: 'information', source: 'exec', fingerprint } : { kind: 'error', fingerprint, message: `${args.command.slice(0, 200)} → ${result.exitCode}: ${(result.stderr || result.stdout).slice(-300)}` });
-      const after = await snapshot(context, where);
-      if (after.revision !== before.revision) {
+      const after = before && (await observe(snapshot(context, where)));
+      if (before && after && after.revision !== before.revision) {
         const paths = [...new Set([...Object.keys(before.files), ...Object.keys(after.files)])].filter((file) => before.files[file] !== after.files[file]).sort();
         context.record({ kind: 'edit', repositoryId: where.repositoryId, paths, revision: after.revision, operationId: outcome.receipt.operationId });
         context.emit('workspace_edit_finished', { repositoryId: where.repositoryId, kind: 'workspace.exec', state: 'succeeded', files: paths.length }, 'succeeded', { operationId: outcome.receipt.operationId });

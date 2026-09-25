@@ -407,6 +407,25 @@ describe('programming run with the real agent loop and simulated provider', () =
     expect(run.blocked!.needs!.length).toBeLessThanOrEqual(2000);
   }, 60_000);
 
+  it('still runs a shell command when the snapshot around it fails, so the agent can free space', async () => {
+    class FullDiskRunner extends LocalRunner {
+      override async command<T>(command: any, options: { correlation?: any } = {}): Promise<T> {
+        if (command.action === 'gitSnapshot') throw new Error('fatal: Out of diskspace');
+        return super.command<T>(command, options);
+      }
+    }
+    const steps: ScriptStep[] = [{ tool: 'workspace_exec', args: { command: 'echo liberando espaço' } }, { text: 'Liberei.' }];
+    let index = 0;
+    const context = setup({ script: () => steps[index++] ?? { text: 'Parado.' }, runner: (worktree) => new FullDiskRunner(worktree) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Libere espaço.' }).run.id;
+    service.kick();
+    await service.idle();
+    const result = JSON.parse(String(context.provider.requests[1]!.messages.filter((message) => message.role === 'tool').at(-1)!.content));
+    expect(result).toMatchObject({ exitCode: 0, stdout: expect.stringContaining('liberando espaço') });
+    expect(store.listReceipts(id).map((receipt) => [receipt.kind, receipt.state])).toEqual([['workspace.exec', 'succeeded']]);
+  }, 60_000);
+
   it('blocks the run naming the fix when the environment runner is older than the tools, without falling back to the shell', async () => {
     const steps: ScriptStep[] = [
       { tool: 'workspace_read_range', args: { path: 'sum.cjs' } },
