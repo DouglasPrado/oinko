@@ -7,9 +7,10 @@ const run = (policy: Record<string, unknown>, taskId?: string) => ({ taskId, req
 it('offers a cycle only the tools its run policy lets it use', () => {
   const hidden = hiddenToolsFor(run({ allowEdits: true, allowBrowser: false, allowPublication: false }, 'dark-ui'));
   const restricted = names(hidden);
-  for (const name of ['browser_open', 'browser_click', 'functional_check', 'workspace_preview', 'publication_publish', 'publication_ci', 'workspace_prepare_task'])
+  for (const name of ['browser_open', 'browser_click', 'functional_check', 'publication_publish', 'publication_ci', 'workspace_prepare_task'])
     expect(restricted, name).toContain(name);
-  for (const name of ['workspace_read_range', 'workspace_patch', 'workspace_check', 'workspace_exec', 'programming_complete']) expect(restricted, name).not.toContain(name);
+  // A preview is how the person sees a visible change: it never depended on the browser.
+  for (const name of ['workspace_read_range', 'workspace_patch', 'workspace_check', 'workspace_exec', 'workspace_preview', 'programming_complete']) expect(restricted, name).not.toContain(name);
   expect(hiddenToolsFor(run({ allowEdits: true, allowBrowser: true, allowPublication: true }))).toEqual([]);
   // What the policy refuses is marked, so a call anyway still counts as a denial.
   expect(hidden.find((item) => item.name === 'publication_publish')).toEqual({ name: 'publication_publish', denied: 'publish' });

@@ -1,6 +1,7 @@
 import type { ProgrammingRun } from '@oinko/agent-runtime/programming';
 
-const BROWSER = ['workspace_preview', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_wait', 'browser_screenshot', 'browser_diagnostics', 'browser_close', 'functional_check'];
+// workspace_preview is not here: a preview is how the person sees a visible change, browser or not.
+const BROWSER = ['browser_open', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_fill', 'browser_wait', 'browser_screenshot', 'browser_diagnostics', 'browser_close', 'functional_check'];
 const PUBLICATION = ['publication_review', 'publication_publish', 'publication_ci'];
 const EDITS = ['workspace_replace', 'workspace_patch'];
 

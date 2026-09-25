@@ -188,10 +188,12 @@ describe('M07-S02 progressive context in the run journal', () => {
       } as never);
     const restricted = prompt({ allowPublication: false, allowBrowser: false });
     expect(restricted).toMatch(/não publica[\s\S]*não peça autorização para publicar/i);
-    expect(restricted).toMatch(/navegador não está habilitado/i);
+    expect(restricted).toMatch(/navegador isolado não está habilitado/i);
+    // Without a browser, a visible change is still delivered as a preview link for the person.
+    expect(restricted).toMatch(/workspace_preview[\s\S]*link/);
     const open = prompt({ allowPublication: true, allowBrowser: true });
     expect(open).toContain('Publicação em draft PR está autorizada');
-    expect(open).not.toMatch(/não publica|navegador não está habilitado/i);
+    expect(open).not.toMatch(/não publica|navegador isolado não está habilitado/i);
   });
 
   it('keeps questions for decisions only the person can make, never permission for its own technical steps', () => {
