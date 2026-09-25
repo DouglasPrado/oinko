@@ -64,7 +64,7 @@ function fixture() {
     );
     return join(workspace, 'tasks', id, 'app');
   };
-  return { source, git, commit, initial, create };
+  return { source, workspace, git, commit, initial, create };
 }
 
 it('starts new remote tasks at the latest default branch and preserves existing worktrees', async () => {
@@ -105,4 +105,18 @@ it('does not silently use a stale remote base when fetching fails', async () => 
   await f.create('first');
   renameSync(f.source, `${f.source}-offline`);
   await expect(f.create('second')).rejects.toThrow();
+});
+
+it('makes Git trust only content and mtime in the sandbox clone, so a mounted folder never fakes local changes', async () => {
+  const f = fixture();
+  await f.create('first');
+  const repository = join(f.workspace, 'repositories', 'app');
+  // On a host folder mounted into the sandbox, ctime and inode flicker: Git then
+  // refuses rebase and merge over "local changes" that do not exist.
+  expect(f.git(repository, 'config', '--get', 'core.trustctime')).toBe('false');
+  expect(f.git(repository, 'config', '--get', 'core.checkStat')).toBe('minimal');
+  // A clone made before the setting existed gets it on the next task.
+  f.git(repository, 'config', '--unset', 'core.checkStat');
+  await f.create('second');
+  expect(f.git(repository, 'config', '--get', 'core.checkStat')).toBe('minimal');
 });

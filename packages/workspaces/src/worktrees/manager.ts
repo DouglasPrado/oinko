@@ -21,6 +21,14 @@ export class WorktreeManager {
             '/workspace',
           );
       }
+      // Worktrees live on a host folder mounted into the sandbox, where ctime and
+      // inode flicker: Git would see local changes that do not exist and refuse
+      // rebase and merge ("would be overwritten"). Idempotent, so older clones get it too.
+      for (const [key, value] of [
+        ['core.trustctime', 'false'],
+        ['core.checkStat', 'minimal'],
+      ] as const)
+        await this.executor.git(project, ['config', key, value], repositoryPath);
       const worktreePath = `/workspace/tasks/${task.id}/${repo.id}`;
       const existing = await this.executor
         .git(project, ['branch', '--show-current'], worktreePath)
