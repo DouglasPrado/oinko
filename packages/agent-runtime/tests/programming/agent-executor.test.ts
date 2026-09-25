@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent, ChatOptions } from '@oinko/core';
-import { AgentCycleExecutor, cyclePrompt, readJournal, runControlTools, type StreamingAgent } from '../../src/programming/index.js';
+import { AgentCycleExecutor, PROGRAMMING_RUN_INSTRUCTIONS, cyclePrompt, readJournal, runControlTools, type StreamingAgent } from '../../src/programming/index.js';
 import { botView, tempRoot, twoBotMatrix } from './helpers.js';
 import { check, createService, edit, operator } from './service-helpers.js';
 
@@ -192,6 +192,12 @@ describe('M07-S02 progressive context in the run journal', () => {
     const open = prompt({ allowPublication: true, allowBrowser: true });
     expect(open).toContain('Publicação em draft PR está autorizada');
     expect(open).not.toMatch(/não publica|navegador não está habilitado/i);
+  });
+
+  it('keeps questions for decisions only the person can make, never permission for its own technical steps', () => {
+    expect(PROGRAMMING_RUN_INSTRUCTIONS).toMatch(/nunca para pedir permissão para passos técnicos/);
+    expect(PROGRAMMING_RUN_INSTRUCTIONS).toMatch(/commit[\s\S]*não (é|são) necessário/i);
+    expect(runControlTools().find((tool) => tool.name === 'programming_request_input')?.description).toMatch(/não para permissão/);
   });
 
   it('marks the run control tools as always available under tool selection', () => {

@@ -541,6 +541,65 @@ describe('M03-S06 user direction and delivery criteria', () => {
     await harness.close();
   });
 
+  /** First cycle asks a question; later cycles finish. */
+  const asks = (question: string) => (): CycleOutcome => ({ summary: 'Preciso de uma decisão.', traceIds: [], needsInput: question });
+
+  it('delivers the answer given on resume to the next cycle, next to the question it answers', async () => {
+    const access = twoBotMatrix();
+    const executor = new ScriptedExecutor([asks('Posso fazer commit dos testes?'), progress('r1'), finish]);
+    const harness = createService(tempRoot(), access, { executor });
+    const id = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'tema escuro' }).run.id;
+    await until(() => harness.store.getRun(id)?.state === 'blocked');
+    harness.service.control(operator, id, 'resume', { note: 'pode, e depois conclua' });
+    await harness.service.idle();
+    expect(harness.store.getRun(id)?.state).toBe('completed');
+    const [answer] = executor.inputs[1]!.directions;
+    expect(answer).toContain('Posso fazer commit dos testes?');
+    expect(answer).toContain('pode, e depois conclua');
+    // Delivered once, not again in later cycles.
+    expect(executor.inputs[2]!.directions).toEqual([]);
+    await harness.close();
+  });
+
+  it('a direction sent while the run waits for an answer is the answer: it resumes the run and reaches the agent', async () => {
+    const access = twoBotMatrix();
+    const executor = new ScriptedExecutor([asks('Qual tema usar por padrão?'), progress('r1'), finish]);
+    const harness = createService(tempRoot(), access, { executor });
+    const id = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'tema escuro' }).run.id;
+    await until(() => harness.store.getRun(id)?.state === 'blocked');
+    const steer = harness.service.control(operator, id, 'steer', { text: 'Use o do sistema e finalize.' });
+    expect(steer).toMatchObject({ status: 'applied', run: { state: 'queued' } });
+    await harness.service.idle();
+    expect(harness.store.getRun(id)?.state).toBe('completed');
+    expect(executor.inputs[1]!.directions.join('\n')).toContain('Use o do sistema e finalize.');
+    await harness.close();
+  });
+
+  it('keeps a direction sent to a paused run for its next cycle', async () => {
+    const access = twoBotMatrix();
+    const gate = deferred();
+    const executor = new ScriptedExecutor([
+      async (input) => {
+        await gate.promise;
+        input.context.record({ kind: 'information', source: 'read', fingerprint: 'a' });
+        return { summary: '1', traceIds: [] };
+      },
+      progress('r1'),
+      finish,
+    ]);
+    const harness = createService(tempRoot(), access, { executor });
+    const id = harness.service.start(operator, { botId: 'alpha', projectId: 'one', text: 'x' }).run.id;
+    await until(() => executor.inputs.length === 1);
+    harness.service.control(operator, id, 'pause');
+    gate.resolve();
+    await until(() => harness.store.getRun(id)?.state === 'paused');
+    expect(harness.service.control(operator, id, 'steer', { text: 'Priorize os testes.' }).run.state).toBe('paused');
+    harness.service.control(operator, id, 'resume');
+    await harness.service.idle();
+    expect(executor.inputs[1]!.directions).toEqual(['Priorize os testes.']);
+    await harness.close();
+  });
+
   it('requires confirmation for an incompatible objective and records the decision', () => {
     const access = twoBotMatrix();
     const harness = createService(tempRoot(), access);
@@ -548,7 +607,8 @@ describe('M03-S06 user direction and delivery criteria', () => {
     const refused = harness.service.control(operator, id, 'steer', { text: 'mude tudo', objective: 'reescrever checkout' });
     expect(refused.status).toBe('rejected');
     const confirmed = harness.service.control(operator, id, 'steer', { text: 'mude tudo', objective: 'reescrever checkout', confirm: true });
-    expect(confirmed.status).toBe('applied');
+    // Accepted into the plan; the agent reads it when the queued run first executes.
+    expect(confirmed.status).toBe('requested');
     expect(harness.store.planRevisions(id).at(-1)).toMatchObject({ objective: 'reescrever checkout', compatible: false });
     expect(harness.types(id).filter((type) => type === 'decision_recorded')).toHaveLength(2);
   });

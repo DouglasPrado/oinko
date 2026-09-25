@@ -87,6 +87,7 @@ Para resolver:
 | `browser.key` | chave do cofre de credenciais de teste |
 | `bots/<id>/telemetry.db` | telemetria do bot, incluindo eventos entregues dos trabalhos |
 | `runtime/runner-process.log`, `runner-error.log` | logs do runner |
+| `bots/<id>/worker.log` | saída do worker do bot: rejeições e exceções não tratadas, com os segredos do bot redigidos (rotaciona em 5 MB) |
 
 - **Retenção**: `retentionDays` da telemetria do bot vale para eventos do journal e artefatos; trabalhos vivos e operações incertas não perdem evidência. Artefato expirado aparece como expirado, nunca some em silêncio.
 - **Backup**: pare os workers e o runner; copie juntos `programming.db` (ou use o backup online `VACUUM INTO` de `ProgrammingDatabase.backup`), `programming-artifacts/`, `programming.key`, `publication.db` + `publication.key` e `browser.key`. Chaves nunca vão para o banco nem para containers; não as versione.
@@ -120,6 +121,8 @@ Cada tentativa roda numa raiz isolada, sem GitHub App e sem publicador; a CLI re
 | Respostas lentas | modelo rápido parado | eventos `model_fallback_triggered` mostram a troca após 15 s; ajuste *Fallback após*; se o principal também falhar, o ciclo termina com erro e o trabalho continua no próximo |
 | PR com resultado incerto | resposta perdida após push/criação | seção 8: reconciliar antes de repetir; o mesmo `operationId` nunca duplica |
 | Trabalho bloqueado "sem progresso" | três ciclos sem evidência nova | ler o último erro no detalhe; orientar e retomar com nota |
+| Trabalho "Na fila" que não anda | o worker do bot está parado (caiu ou não foi iniciado) | retomar pela dashboard inicia o worker e avisa se não conseguiu; veja `bots/<id>/worker.log` para saber por que ele caiu |
+| Agente pergunta de novo o que você já respondeu | a resposta não chegou ao ciclo (versões antes de 25/09) | responda pela nota de **Retomar** ou por uma orientação: as duas chegam ao próximo ciclo junto com a pergunta, e a orientação a um run que espera resposta o retoma |
 | Trabalho bloqueado `runner_outdated` ("versão anterior… não conhece a operação") | o runner em execução foi iniciado antes do último build e não conhece os comandos novos (`/health` lista os que ele atende) | pausar os trabalhos ativos, encerrar o processo do runner (`ps` mostra `apps/environment-runner/dist/main.js`; containers e worktrees continuam), deixar a próxima operação subir o runner atual e retomar com nota. Depois de `pnpm build:packages`, reinicie também dashboard e workers |
 
 ## 13. Limites conhecidos

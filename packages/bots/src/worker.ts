@@ -1,8 +1,23 @@
 import { BotStore } from './store.js';
 import { runBot } from './runner.js';
 import { BotError } from './schema.js';
+import { crashLine } from './crash-log.js';
 
 const store = new BotStore(process.env.OINKO_ROOT!);
+const secrets = () => {
+  try {
+    return Object.values(store.runtime(process.argv[2]!).secrets).filter((value): value is string => typeof value === 'string');
+  } catch {
+    return [];
+  }
+};
+// A stray rejection (a channel losing the network, say) must not silently
+// take down every conversation and run of the bot: log it and keep serving.
+process.on('unhandledRejection', (reason) => console.error(crashLine('unhandledRejection', reason, secrets())));
+process.on('uncaughtException', (error) => {
+  console.error(crashLine('uncaughtException', error, secrets()));
+  process.exit(1);
+});
 let service: Awaited<ReturnType<typeof runBot>> | undefined;
 const stop = () => {
   void service?.close();

@@ -176,6 +176,14 @@ function correlationOf(run: ProgrammingRun, stepId?: string) {
  * request returns as soon as it is persisted; execution happens in the bot's
  * process, one active run per bot, surviving disconnects and restarts.
  */
+/** What the person said, framed with the question the run was waiting on so the agent knows what it answers. */
+function answerFor(run: ProgrammingRun, text: string): string {
+  const blocked = run.state === 'blocked' ? run.blocked : undefined;
+  if (blocked?.code === 'needs_input' && blocked.needs) return `Resposta da pessoa à sua pergunta «${blocked.needs.slice(0, 800)}»: ${text}`;
+  if (blocked) return `Ao retomar o run bloqueado (${blocked.message.slice(0, 300)}), a pessoa disse: ${text}`;
+  return `Ao retomar o run, a pessoa disse: ${text}`;
+}
+
 export class ProgrammingRunService {
   private readonly store: ProgrammingStore;
   private readonly journal: TelemetryJournal;
@@ -394,6 +402,10 @@ export class ProgrammingRunService {
         clearBlocked: true,
       });
       this.store.resolveControl(request.id, 'applied', { state: 'queued' });
+      // The note is what the person answered: the next cycle reads it next to the question.
+      const note = String(request.payload.note ?? '').trim();
+      if (note)
+        this.store.insertControl({ id: newId('ctl'), runId: run.id, kind: 'steer', status: 'requested', actor, payload: { text: answerFor(run, note), source: 'resume' }, createdAt: this.now() });
       this.journal.record('run_state_changed', correlation, { from: run.state, to: 'queued', reason: 'resume' });
       this.journal.record('run_resumed', correlation, { reason: 'user', actorKind: actor.kind, note: String(request.payload.note ?? '') });
       return next;
@@ -409,7 +421,10 @@ export class ProgrammingRunService {
     const objective = typeof request.payload.objective === 'string' ? request.payload.objective.trim() : undefined;
     const current = this.store.planRevisions(run.id).at(-1)!;
     const incompatible = !!objective && objective !== current.objective;
-    return this.store.transaction(() => {
+    // A direction to a run waiting for an answer is that answer: it resumes the run.
+    const answers = run.state === 'blocked' && run.blocked?.code === 'needs_input' && !incompatible;
+    if (answers) request = { ...request, payload: { ...request.payload, text: answerFor(run, text) } };
+    const result = this.store.transaction(() => {
       this.store.insertControl(request);
       this.journal.record('user_direction_received', correlation, { interface: via, actorKind: actor.kind, text });
       if (incompatible && request.payload.confirm !== true) {
@@ -453,19 +468,27 @@ export class ProgrammingRunService {
       if (incompatible)
         this.journal.record('decision_recorded', correlation, { point: 'objective_change', choice: 'confirmed', from: current.objective, to: objective });
       this.journal.record('plan_revised', correlation, { revision, source: 'user', compatible: !incompatible });
-      const updated = this.store.updateRun(run.id, run.revision, { planRevision: revision });
-      // A running run consumes the direction at its next safe point; otherwise it is already in effect.
-      if (run.state !== 'running') this.store.resolveControl(request.id, 'applied', { planRevision: revision });
+      let updated = this.store.updateRun(run.id, run.revision, { planRevision: revision });
+      // The direction stays pending until a cycle reads it: marking it applied
+      // while nothing runs would drop it before the agent ever saw it.
+      if (answers) {
+        updated = this.store.transitionRun(updated.id, updated.revision, 'queued', { phase: 'queued', noProgressCount: 0, clearBlocked: true }).run;
+        this.journal.record('run_state_changed', correlation, { from: 'blocked', to: 'queued', reason: 'answered' });
+        this.journal.record('run_resumed', correlation, { reason: 'answered', actorKind: actor.kind });
+        return { status: 'applied' as const, run: updated, message: 'Resposta registrada; o run voltou à fila e a lê no próximo ciclo.', pendingReconciliation: [] };
+      }
       return {
-        status: run.state === 'running' ? ('requested' as const) : ('applied' as const),
+        status: 'requested' as const,
         run: updated,
         message:
           run.state === 'running'
             ? 'Orientação registrada; será aplicada no próximo ponto seguro, sem criar outro run.'
-            : 'Orientação registrada no plano do run.',
+            : 'Orientação registrada; o agente a lê no próximo ciclo, quando o run voltar a executar.',
         pendingReconciliation: [],
       };
     });
+    if (answers) this.kick();
+    return result;
   }
 
   // ---- execution -----------------------------------------------------------

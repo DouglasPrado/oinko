@@ -103,7 +103,8 @@ test('distinguishes a requested pause from a paused run and keeps it across relo
   await expect(page.getByText('Na fila · pausa solicitada').first()).toBeVisible();
   await page.getByLabel('Orientação').fill('Priorize os módulos de pagamento.');
   await page.getByRole('button', { name: 'Enviar orientação', exact: true }).click();
-  await expect(page.getByText('Orientação registrada no plano do run.')).toBeVisible();
+  // Kept for the agent: it reads the direction in its next cycle, not before.
+  await expect(page.getByText('Orientação registrada; o agente a lê no próximo ciclo, quando o run voltar a executar.')).toBeVisible();
   await expect(page.getByRole('list', { name: 'Eventos' }).getByText('user_direction_received')).toBeVisible();
 });
 

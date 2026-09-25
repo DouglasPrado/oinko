@@ -1,5 +1,6 @@
 import { fork } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
+import { closeSync, existsSync, mkdirSync, openSync, renameSync, statSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -98,6 +99,11 @@ export class BotManager {
           );
       }
     }
+    // What the worker prints (and why it died) stays next to the bot's data.
+    mkdirSync(current.paths.dataDir, { recursive: true, mode: 0o700 });
+    const logPath = join(current.paths.dataDir, 'worker.log');
+    if (existsSync(logPath) && statSync(logPath).size > 5_000_000) renameSync(logPath, `${logPath}.1`);
+    const log = openSync(logPath, 'a', 0o600);
     await new Promise<void>((resolve, reject) => {
       const child = fork(
         this.options.workerPath ??
@@ -106,9 +112,10 @@ export class BotManager {
         {
           detached: true,
           env: { ...process.env, OINKO_ROOT: this.store.root },
-          stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+          stdio: ['ignore', log, log, 'ipc'],
         },
       );
+      closeSync(log);
       const timer = setTimeout(() => {
         child.kill();
         reject(new BotError('O bot demorou para iniciar. Confira as conexões e tente novamente.'));
