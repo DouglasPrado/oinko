@@ -48,7 +48,8 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
   const { runner } = options;
   const pollMs = options.pollMs ?? 1000;
 
-  const { location, send, classify, tool } = toolKit(runner);
+  const kit = toolKit(runner);
+  const { location, send, classify, tool } = kit;
 
   const prepare = z.object({
     name: z.string().min(1).max(120).optional(),
@@ -229,12 +230,7 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     ),
 
     tool('workspace_diff', 'Mostra o diff das alterações deste run (sem atribuir ao run mudanças que já existiam antes dele) e a revisão atual.', diff, async (args, context) => {
-      const where = location(context, args.repositoryId);
-      await ensureBaseline(context, where);
-      const result = await send<Json>(context, { action: 'gitDiff', ...where, baselineRef: context.run.id }).catch(classify);
-      const artifact = context.saveArtifact({ type: 'diff', content: String(result.patch ?? ''), repositoryId: where.repositoryId, treeHash: String(result.revision), mediaType: 'text/x-diff' });
-      context.emit('git_diff_captured', { repositoryId: where.repositoryId, treeHash: result.revision, baseSha: result.baseSha, files: (result.runFiles as unknown[]).length, preexisting: (result.preexisting as unknown[]).length, patchBytes: result.patchBytes });
-      context.revisions.set(where.repositoryId, String(result.revision));
+      const { result, artifact } = await captureDiff(context, location(context, args.repositoryId));
       return { ...result, ...(artifact && { artifactId: artifact.id }), patch: String(result.patch ?? '').slice(0, 20_000) };
     }, { readOnly: true }),
 
@@ -322,23 +318,48 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
     }, { timeoutMs: 700_000 }),
   ];
 
-  /**
-   * The worktree state before the run's first edit, persisted by the runner
-   * (first snapshot wins), so user changes are never attributed to the run.
-   */
-  async function ensureBaseline(context: RunContext, where: { taskId: string; repositoryId: string }) {
-    const key = `${context.run.id}:${where.taskId}:${where.repositoryId}`;
-    if (baselines.has(key)) return;
-    const snapshot = await send<{ saved: boolean; revision: string }>(context, { action: 'gitSnapshot', ...where, saveAs: context.run.id });
-    baselines.add(key);
-    if (!context.revisions.has(where.repositoryId)) context.revisions.set(where.repositoryId, snapshot.revision);
-  }
   const baselines = new Set<string>();
+  const ensureBaseline = (context: RunContext, where: Where) => baseline(kit, baselines, context, where);
+  const captureDiff = (context: RunContext, where: Where) => recordDiff(kit, baselines, context, where);
   /** Current revision and the hash of each changed file, to see what a shell command changed. */
-  const snapshot = (context: RunContext, where: { taskId: string; repositoryId: string }) =>
+  const snapshot = (context: RunContext, where: Where) =>
     send<{ revision: string; files: Record<string, string> }>(context, { action: 'gitSnapshot', ...where });
 
   return [...tools, ...runControlTools()];
+}
+
+type Kit = ReturnType<typeof toolKit>;
+type Where = { taskId: string; repositoryId: string };
+
+/**
+ * The worktree state before the run's first edit, persisted by the runner
+ * (first snapshot wins), so user changes are never attributed to the run.
+ */
+async function baseline(kit: Kit, seen: Set<string>, context: RunContext, where: Where) {
+  const key = `${context.run.id}:${where.taskId}:${where.repositoryId}`;
+  if (seen.has(key)) return;
+  const snapshot = await kit.send<{ saved: boolean; revision: string }>(context, { action: 'gitSnapshot', ...where, saveAs: context.run.id });
+  seen.add(key);
+  if (!context.revisions.has(where.repositoryId)) context.revisions.set(where.repositoryId, snapshot.revision);
+}
+
+/** The run's diff of one repository, kept as an artifact of the revision it shows. */
+async function recordDiff(kit: Kit, seen: Set<string>, context: RunContext, where: Where) {
+  await baseline(kit, seen, context, where);
+  const result = await kit.send<Json>(context, { action: 'gitDiff', ...where, baselineRef: context.run.id }).catch(kit.classify);
+  const artifact = context.saveArtifact({ type: 'diff', content: String(result.patch ?? ''), repositoryId: where.repositoryId, treeHash: String(result.revision), mediaType: 'text/x-diff' });
+  context.emit('git_diff_captured', { repositoryId: where.repositoryId, treeHash: result.revision, baseSha: result.baseSha, files: (result.runFiles as unknown[]).length, preexisting: (result.preexisting as unknown[]).length, patchBytes: result.patchBytes });
+  context.revisions.set(where.repositoryId, String(result.revision));
+  return { result, artifact };
+}
+
+/** Records the diff of every repository of the run at its current revision (a completion was accepted without one). */
+export function captureRunDiff(runner: RunnerPort): (context: RunContext) => Promise<void> {
+  const kit = toolKit(runner);
+  return async (context) => {
+    if (!context.run.taskId) return;
+    for (const repositoryId of context.run.repositoryIds) await recordDiff(kit, new Set(), context, kit.location(context, repositoryId));
+  };
 }
 
 export const PROGRAMMING_TOOL_NAMES = [

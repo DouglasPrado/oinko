@@ -270,6 +270,35 @@ describe('programming run with the real agent loop and simulated provider', () =
     expect(store.listReceipts(id).map((receipt) => [receipt.kind, receipt.state])).toEqual([['workspace.applyPatch', 'failed']]);
   }, 60_000);
 
+  it('records the delivered diff when a completion is accepted even if the agent never asked for it', async () => {
+    const steps: ((messages: any[]) => ScriptStep)[] = [
+      () => ({ tool: 'workspace_read_range', args: { path: 'sum.cjs' } }),
+      (messages) => ({ tool: 'workspace_replace', args: { path: 'sum.cjs', expectedHash: lastResult(messages).hash, oldText: 'a - b', newText: 'a + b' } }),
+      () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'node sum.test.cjs' } }),
+      () => ({ tool: 'programming_complete', args: { summary: 'Soma corrigida.' } }),
+      () => ({ text: 'Concluí.' }),
+    ];
+    let index = 0;
+    const context = setup({ script: (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Parado.' }) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    expect(store.getRun(id)?.state).toBe('completed');
+    const diffs = context.programming.artifacts.listForRun(id).filter((artifact) => artifact.type === 'diff');
+    expect(diffs).toHaveLength(1);
+    expect(context.programming.artifacts.read(operator, diffs[0]!.id).content.toString('utf8')).toContain('+module.exports = (a, b) => a + b;');
+  }, 60_000);
+
+  it('does not record the diff twice when the agent already captured the final one', async () => {
+    const context = setup();
+    const { service } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    expect(context.programming.artifacts.listForRun(id).filter((artifact) => artifact.type === 'diff')).toHaveLength(1);
+  }, 60_000);
+
   it('accepts the input shapes a weaker model sends (absolute paths, strings for booleans and numbers, nested plan steps)', async () => {
     const readHash = (messages: any[]) => JSON.parse(String(messages.find((message) => message.role === 'tool').content)).hash;
     const steps: ((messages: any[]) => ScriptStep)[] = [

@@ -27,7 +27,7 @@ import { BotStore } from '../store.js';
 import { StoreAccess } from './access.js';
 import { RunnerReconciler } from './reconciler.js';
 import { botConfigPort } from './evaluation/bot-config.js';
-import type { RunnerPort } from './run-tools.js';
+import { captureRunDiff, type RunnerPort } from './run-tools.js';
 
 export interface ProgrammingRuntimeOptions {
   root: string;
@@ -138,6 +138,8 @@ export function openProgramming(options: ProgrammingRuntimeOptions) {
       if (['run_completed', 'run_failed', 'run_cancelled'].includes(event.type)) options.onRunFinished?.(run);
     },
     ...(options.probe && { probe: options.probe }),
+    // Same runner as the tools: an accepted delivery always has its diff.
+    ...(options.runner && { captureDiff: captureRunDiff(options.runner) }),
     // The dashboard page enforces its own access; the link only points to it.
     runLink: (run) => (dashboardUrl ? `${dashboardUrl}/bots/${encodeURIComponent(run.botId)}/trabalhos/${encodeURIComponent(run.id)}` : undefined),
     ...(options.now && { now: options.now }),

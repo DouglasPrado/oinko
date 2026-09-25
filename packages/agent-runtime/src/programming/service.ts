@@ -135,6 +135,12 @@ export interface ProgrammingRunServiceOptions {
   onRunEvent?: (run: ProgrammingRun, event: { type: string; message: string }) => void;
   /** Reads current code/configuration revisions after each cycle (external changes invalidate evidence). */
   probe?: RevisionProbe;
+  /**
+   * Records the diff of the delivered revision when a change run's
+   * completion is accepted without one: the person reviews the delivery by
+   * its diff, whether or not the agent remembered to capture it.
+   */
+  captureDiff?: (context: RunContext) => Promise<void>;
   /** Authorized page of a run (e.g. the dashboard), included in final messages. */
   runLink?: (run: ProgrammingRun) => string | undefined;
   now?: () => number;
@@ -781,6 +787,8 @@ export class ProgrammingRunService {
           blockers: blockers.map((blocker) => `${blocker.code}:${blocker.ref}`),
         });
         if (!blockers.length) {
+          if (run.request.mode !== 'analysis' && this.options.captureDiff && !this.hasFinalDiff(run.id, revisions))
+            await this.options.captureDiff(context).catch(() => undefined);
           const publication = evaluation.criteria.some((criterion) => criterion.kind === 'publication' && criterion.status === 'satisfied');
           this.finish(run, 'completed', { summary: outcome.completion.summary, delivery: publication ? 'draft_pr' : 'technical', uncertainOperations: [] });
           this.journal.record('run_completed', correlationOf(run), { outcome: 'completed', delivery: publication ? 'draft_pr' : 'technical' });
@@ -884,6 +892,13 @@ export class ProgrammingRunService {
       this.journal.record('run_blocked', correlationOf(current), { code: reason.code, reason: reason.message, needs: reason.needs ?? '' });
     });
     this.notify(this.store.requireRun(run.id), 'run_blocked', `${reason.needs ? `${reason.message} ${reason.needs}` : reason.message}\n${this.report(run.id)}`.trim());
+  }
+
+  /** Whether every repository's current revision already has its diff recorded. */
+  private hasFinalDiff(runId: string, revisions: ReadonlyMap<string, string>): boolean {
+    const diffs = new Set((this.options.artifacts?.listForRun(runId) ?? []).filter((artifact) => artifact.type === 'diff').map((artifact) => artifact.treeHash));
+    const current = [...revisions.entries()].filter(([key]) => !key.startsWith('env:')).map(([, revision]) => revision);
+    return current.length > 0 && current.every((revision) => diffs.has(revision));
   }
 
   /** Real validations, draft links and pending criteria of a run, for final messages. */
