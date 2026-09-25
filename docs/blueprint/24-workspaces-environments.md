@@ -29,7 +29,7 @@ A dashboard cadastra projetos Git (incluindo monorepos e conjuntos de repositór
 4. Compose importado é validado antes de executar. Recursos privilegiados, mounts externos, sockets e redes do host são recusados. Configuração gerada pertence ao runner.
 5. Segredos são cifrados no cadastro, campos de escrita na API, mascarados nos logs do gerenciador e não incorporados em labels/imagens por configuração automática.
 6. Dashboard exige sessão e mesma origem nas mutações. Socket do runner é local e restrito ao usuário. Ferramentas de bot verificam autorização por projeto.
-7. Cada prévia possui nomes, rede e volumes próprios. Parar não remove worktrees ou dados. Trocar worktree recria os serviços adequados.
+7. Cada prévia possui nomes, rede e volumes próprios. Parar não remove worktrees ou dados. Trocar worktree recria os serviços adequados. Excluir (`deletePreview`, só administrador e com confirmação na dashboard) remove serviços, rota, volumes e imagens geradas no build da prévia; tarefa, branch e worktree continuam.
 8. Development monta código e permite hot reload; image constrói uma versão do código e exige rebuild para atualizar. A interface distingue os modos.
 9. Traefik publica apenas serviços explicitamente selecionados. O acesso por celular usa endereço/IP alcançável na LAN, e não presume que localhost do celular aponta para o Mac.
 10. Operações longas sobrevivem ao fechamento/reinício da dashboard e informam falhas reais, sem converter mocks ou testes unitários em aceitação do runtime.

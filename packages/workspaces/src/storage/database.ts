@@ -55,6 +55,10 @@ export class LocalDatabase {
       throw error;
     }
   }
+  /** Deletes a document; true when it existed. */
+  remove(kind: string, id: string): boolean {
+    return Number(this.db.prepare('DELETE FROM documents WHERE kind=? AND id=?').run(kind, id).changes) > 0;
+  }
   close() {
     this.db.close();
   }

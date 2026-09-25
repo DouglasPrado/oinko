@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { GitBranch, Plus, Terminal, ExternalLink, Play, Square, ScrollText } from 'lucide-react';
+import { GitBranch, Plus, Terminal, ExternalLink, Play, Square, ScrollText, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Sheet,
@@ -46,6 +47,8 @@ export function WorkspaceTasks({
     [repo, setRepo] = useState(project.repositories[0]?.id ?? ''),
     [command, setCommand] = useState('git status --short'),
     [output, setOutput] = useState('');
+  // Preview awaiting confirmation: deleting drops its data, so it is never one click.
+  const [deleting, setDeleting] = useState<{ id: string; task: string } | null>(null);
   const tasks = state.tasks.filter((t) => t.projectId === project.id);
   const pending =
     busy ||
@@ -148,6 +151,15 @@ export function WorkspaceTasks({
                       </Button>
                       <Button
                         size="sm"
+                        variant="destructive"
+                        disabled={pending}
+                        onClick={() => setDeleting({ id: preview.id, task: task.name })}
+                      >
+                        <Trash2 aria-hidden />
+                        Excluir prévia
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="ghost"
                         onClick={() =>
                           void showLogs(
@@ -209,6 +221,33 @@ export function WorkspaceTasks({
           })}
         </div>
       )}
+      <Dialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir a prévia?</DialogTitle>
+            <DialogDescription>
+              {deleting?.task}: remove os serviços, a rota, os volumes com os dados da prévia e as
+              imagens geradas no build. A tarefa, a branch e a worktree continuam; você pode subir
+              uma prévia nova depois.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleting(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleting) trigger({ action: 'deletePreview', previewId: deleting.id });
+                setDeleting(null);
+              }}
+            >
+              <Trash2 aria-hidden />
+              Excluir prévia
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent>
           <DialogHeader>

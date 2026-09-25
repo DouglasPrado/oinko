@@ -31,6 +31,7 @@ export const RunnerCommand = z.discriminatedUnion('action', [
   z.object({ action: z.literal('stopSandbox'), projectId: Id }),
   z.object({ action: z.literal('startPreview'), taskId: Id, environmentId: Id.optional() }),
   z.object({ action: z.literal('stopPreview'), previewId: Id }),
+  z.object({ action: z.literal('deletePreview'), previewId: Id }),
   z.object({ action: z.literal('previewLogs'), previewId: Id }),
   z.object({ action: z.literal('jobLogs'), jobId: Id }),
   z.object({

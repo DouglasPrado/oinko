@@ -159,5 +159,12 @@ test('configures projects, runs worktrees and opens real previews on desktop and
     await page.keyboard.press('Escape');
     await card.getByRole('button', { name: 'Parar prévia', exact: true }).click();
     await expect(card.getByText('Parado', { exact: true })).toBeVisible({ timeout: 30_000 });
+    // Deleting asks first, then removes the preview for good; the task stays.
+    await card.getByRole('button', { name: 'Excluir prévia', exact: true }).click();
+    const confirm = page.getByRole('dialog', { name: 'Excluir a prévia?' });
+    await expect(confirm).toContainText('A tarefa, a branch e a worktree continuam');
+    await confirm.getByRole('button', { name: 'Excluir prévia', exact: true }).click();
+    await expect(card.getByText('Sem prévia', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await expect(card.getByRole('button', { name: 'Subir prévia', exact: true })).toBeEnabled();
   }
 });

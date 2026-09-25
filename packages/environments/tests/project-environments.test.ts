@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
@@ -102,6 +102,38 @@ it('keeps preview resources and concurrency independent for the same worktree in
     await expect(manager.start(project, task, undefined, 'unrelated')).rejects.toThrow(
       /não pertence/,
     );
+  } finally {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it('deletes a preview for good (route, containers, volumes, built images and record) and keeps the task', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'oinko-preview-delete-'));
+  const store = new EnvironmentStore(root);
+  const run = vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0 }));
+  const sandbox = new DockerSandbox(root, (id) => store.environment(id), run);
+  const manager = new PreviewManager(root, store, sandbox, run);
+  vi.spyOn(manager.router, 'publish').mockResolvedValue([]);
+  vi.spyOn(manager.router, 'ready').mockResolvedValue(undefined);
+  const unpublish = vi.spyOn(manager.router, 'unpublish').mockResolvedValue(undefined);
+  const project = ProjectSchema.parse({ id: 'shop', name: 'Shop', environmentId: 'dev', repositories: [{ id: 'app', source: 'https://example.com/app.git' }] });
+  try {
+    store.saveEnvironment({ id: 'dev', name: 'dev', services: [{ id: 'web', image: 'node:22-alpine' }] }, {}, 0);
+    const task = TaskSchema.parse({ id: 'one', projectId: 'shop', name: 'One', branch: 'task/one', state: 'ready' });
+    mkdirSync(join(sandbox.path('shop'), 'tasks', 'one', 'app'), { recursive: true });
+    const preview = await manager.start(project, task);
+    const name = store.runtime(preview.id)!.name;
+    run.mockClear();
+    await manager.remove(preview.id);
+    const down = run.mock.calls.map((call) => (call as unknown as [string, string[]])[1]).find((args) => args.includes('down'));
+    expect(down).toEqual(expect.arrayContaining(['-p', name, 'down', '--volumes', '--remove-orphans', '--rmi', 'local']));
+    expect(unpublish).toHaveBeenCalledWith(name);
+    expect(store.previews()).toEqual([]);
+    expect(store.runtime(preview.id)).toBeUndefined();
+    expect(existsSync(join(root, '.harness/runtime/previews', preview.id))).toBe(false);
+    // The worktree is not the preview's to delete.
+    expect(existsSync(join(sandbox.path('shop'), 'tasks', 'one', 'app'))).toBe(true);
   } finally {
     store.close();
     rmSync(root, { recursive: true, force: true });

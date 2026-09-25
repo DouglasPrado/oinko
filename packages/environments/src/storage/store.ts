@@ -155,6 +155,11 @@ export class EnvironmentStore {
   savePreview(value: Preview) {
     return this.db.save('preview', value, this.db.get<Preview>('preview', value.id)?.revision ?? 0);
   }
+  /** Forgets a preview and its prepared runtime (secrets included). */
+  deletePreview(id: string) {
+    this.db.remove('runtime', id);
+    this.db.remove('preview', id);
+  }
   saveRuntime(id: string, value: PreparedCompose) {
     this.db.save(
       'runtime',

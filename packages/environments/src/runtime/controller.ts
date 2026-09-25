@@ -266,6 +266,12 @@ export class EnvironmentController {
           : '',
       };
     }
+    if (command.action === 'deletePreview') {
+      // Deleting drops the preview's data: an administrator's decision, never a bot's.
+      admin();
+      const preview = this.environments.preview(command.previewId);
+      return this.enqueue('deletePreview', preview.projectId, () => this.previews.remove(preview.id));
+    }
     if (command.action === 'previewLogs' || command.action === 'stopPreview') {
       const preview = this.environments.preview(command.previewId);
       this.workspaces.authorize(preview.projectId, botId);

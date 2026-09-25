@@ -1,3 +1,4 @@
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { WorkspaceError, type Project, type Task } from '@oinko/workspaces';
@@ -137,6 +138,28 @@ export class PreviewManager {
       );
     }
     return this.store.savePreview({ ...preview, state: 'stopped', error: undefined });
+  }
+  /**
+   * Deletes a preview for good: its route, containers, network, volumes (its
+   * data) and the images its build produced, then its runtime files and
+   * record. The task, branch and worktree are not the preview's and stay.
+   */
+  async remove(id: string) {
+    const preview = this.store.preview(id);
+    const prepared = this.store.runtime(id);
+    if (prepared) {
+      await this.router.unpublish(prepared.name);
+      // Without the Compose file (runtime folder already gone) the project name is enough.
+      const file = existsSync(prepared.path) ? ['-f', prepared.path] : [];
+      await this.run(
+        'docker',
+        ['compose', '-p', prepared.name, ...file, 'down', '--volumes', '--remove-orphans', '--rmi', 'local'],
+        { env: prepared.runtimeEnv, timeoutMs: 180_000 },
+      );
+    }
+    rmSync(join(this.root, '.harness/runtime/previews', id), { recursive: true, force: true });
+    this.store.deletePreview(id);
+    return { deleted: preview.id };
   }
   async logs(id: string) {
     const preview = this.store.preview(id);

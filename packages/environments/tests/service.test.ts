@@ -76,3 +76,16 @@ it('answers a malformed command as invalid_request naming the field, so callers 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+it('lets only the administrator delete a preview: it removes data a bot cannot bring back', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'oinko-runner-'));
+  const service = await startEnvironmentService(root);
+  const call = (command: unknown, botId?: string) => environmentRequest(root, '/command', { command, botId });
+  try {
+    await expect(call({ action: 'deletePreview', previewId: 'shop-preview' }, 'coder')).rejects.toThrow(/administrador/);
+    await expect(call({ action: 'deletePreview', previewId: 'shop-preview' })).rejects.toThrow(/Prévia não encontrada/);
+  } finally {
+    await service.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -72,6 +72,7 @@ const DONE: Partial<Record<RunnerCommandInput['action'], string>> = {
   stopSandbox: 'Parando o sandbox',
   startPreview: 'Subindo a prévia',
   stopPreview: 'Parando a prévia',
+  deletePreview: 'Excluindo a prévia',
 };
 const DONE_DETAIL: Partial<Record<RunnerCommandInput['action'], string>> = {
   saveSettings: 'As próximas prévias usarão este endereço.',
@@ -84,6 +85,7 @@ const JOB_LABEL: Record<string, string> = {
   createTask: 'Preparar worktrees',
   startPreview: 'Subir prévia',
   stopPreview: 'Parar prévia',
+  deletePreview: 'Excluir prévia',
   startSandbox: 'Preparar sandbox',
   stopSandbox: 'Parar sandbox',
 };
