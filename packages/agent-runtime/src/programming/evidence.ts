@@ -101,6 +101,8 @@ export interface RunContext {
   /** Latest known revision per repository (tree hash or commit). */
   revisions: Map<string, string>;
   record(item: Evidence): void;
+  /** Every fact recorded for the run so far, earlier cycles included. */
+  history(): readonly Evidence[];
   /** Journals a catalog event correlated with this run and step. */
   emit(
     type: TelemetryEventType,
@@ -158,6 +160,8 @@ export interface RunContextOptions {
   onInterval?: (kind: 'context' | 'model' | 'tool', startedAt: number, endedAt: number) => void;
   journal?: TelemetryJournal;
   artifacts?: ArtifactStore;
+  /** The run's persisted evidence; defaults to this cycle's. */
+  history?: () => readonly Evidence[];
 }
 
 export function createRunContext(options: RunContextOptions): RunContext {
@@ -192,6 +196,7 @@ export function createRunContext(options: RunContextOptions): RunContext {
     saveArtifact(input) {
       return options.artifacts?.put(run, { ...input, stepId: options.stepId });
     },
+    history: () => options.history?.() ?? evidence,
     record(item) {
       evidence.push(item);
       options.onEvidence?.(item);

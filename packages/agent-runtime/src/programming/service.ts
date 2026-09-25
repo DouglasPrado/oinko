@@ -660,6 +660,7 @@ export class ProgrammingRunService {
         journal: this.journal,
         ...(this.options.artifacts && { artifacts: this.options.artifacts }),
         onEvidence: (item) => this.store.addEvidence(run.id, stepId, item.kind, evidenceFingerprint(item), item),
+        history: () => this.store.evidence<Evidence>(run.id).map((item) => item.value),
         onInterval: (kind, startedAt, endedAt) => this.options.usage.recordInterval(run.id, kind, startedAt, endedAt),
         onOperation: (delta) => {
           execution.inFlight += delta;

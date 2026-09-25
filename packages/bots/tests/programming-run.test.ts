@@ -55,7 +55,7 @@ class OutdatedRunner extends LocalRunner {
   }
 }
 
-function setup(options: { maxIterations?: number; script?: (messages: any[], call: number) => ScriptStep; runner?: (worktree: string) => LocalRunner } = {}) {
+function setup(options: { maxIterations?: number; script?: (messages: any[], call: number) => ScriptStep; runner?: (worktree: string) => LocalRunner; files?: Record<string, string> } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'oinko-programming-run-'));
   cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   const bots = new BotStore(root);
@@ -74,7 +74,7 @@ function setup(options: { maxIterations?: number; script?: (messages: any[], cal
   workspaces.saveProject({ id: 'shop', name: 'Shop', repositories: [{ id: 'app', source: 'https://example.com/shop.git' }], allowedBotIds: ['alpha'] }, 0);
   workspaces.saveTask({ id: 'fix', projectId: 'shop', name: 'Fix', branch: 'task/fix', state: 'ready' }, 0);
   workspaces.close();
-  const repo = gitRepo(BUG);
+  const repo = gitRepo(options.files ?? BUG);
   cleanup.push(repo.cleanup);
   const runner = options.runner?.(repo.worktree) ?? new LocalRunner(repo.worktree);
   const provider = scriptedProvider(options.script ?? bugScript());
@@ -268,6 +268,33 @@ describe('programming run with the real agent loop and simulated provider', () =
     expect(JSON.parse(results[2]!).error.code).toBe('invalid_request');
     // The refused hash never became an operation; the refused patch is a known failure.
     expect(store.listReceipts(id).map((receipt) => [receipt.kind, receipt.state])).toEqual([['workspace.applyPatch', 'failed']]);
+  }, 60_000);
+
+  it('checks the package of the files the run changed when no cwd is given, not the whole repository', async () => {
+    const MONOREPO = {
+      'package.json': JSON.stringify({ name: 'root', private: true, scripts: { test: 'node -e "process.exit(3)"' } }),
+      'packages/app/package.json': JSON.stringify({ name: 'app', scripts: { test: 'node sum.test.cjs' } }),
+      'packages/app/sum.cjs': 'module.exports = (a, b) => a - b;\n',
+      'packages/app/sum.test.cjs': BUG['sum.test.cjs'],
+    };
+    const steps: ((messages: any[]) => ScriptStep)[] = [
+      () => ({ tool: 'workspace_read_range', args: { path: 'packages/app/sum.cjs' } }),
+      (messages) => ({ tool: 'workspace_replace', args: { path: 'packages/app/sum.cjs', expectedHash: lastResult(messages).hash, oldText: 'a - b', newText: 'a + b' } }),
+      () => ({ text: 'Editei; testo no próximo ciclo.' }),
+      () => ({ tool: 'workspace_check', args: { kind: 'test' } }),
+      () => ({ tool: 'programming_complete', args: { summary: 'Soma corrigida.' } }),
+      () => ({ text: 'Concluí.' }),
+    ];
+    let index = 0;
+    const context = setup({ files: MONOREPO, script: (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Parado.' }) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', taskId: 'fix', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    const check = context.provider.requests.flatMap((request) => request.messages).filter((message) => message.role === 'tool').map((message) => { try { return JSON.parse(String(message.content)); } catch { return {}; } }).find((result) => result.kind === 'test' || result.cwd);
+    // The edit was in an earlier cycle: the package still comes from the run's history.
+    expect(check).toMatchObject({ cwd: 'packages/app', result: 'passed' });
+    expect(store.getRun(id)?.state).toBe('completed');
   }, 60_000);
 
   it('records the delivered diff when a completion is accepted even if the agent never asked for it', async () => {

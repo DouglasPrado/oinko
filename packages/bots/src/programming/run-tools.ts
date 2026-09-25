@@ -245,7 +245,9 @@ export function programmingRunTools(options: RunToolsOptions): AgentTool[] {
       let cwd = args.scope === 'repository' ? '.' : (args.cwd ?? '.');
       let origin = 'explicit';
       if (!command) {
-        const discovered = await send<{ commands: { kind: string; command: string; cwd: string; origin: string }[] }>(context, { action: 'projectContext', ...where, targets: args.cwd ? [args.cwd] : [] }).catch(classify);
+        // Without a cwd, the package of the files this run changed: its own scripts come first.
+        const edited = args.cwd || args.scope === 'repository' ? [] : [...new Set(context.history().flatMap((item) => (item.kind === 'edit' && item.repositoryId === where.repositoryId ? item.paths : [])))].slice(0, 20);
+        const discovered = await send<{ commands: { kind: string; command: string; cwd: string; origin: string }[] }>(context, { action: 'projectContext', ...where, targets: args.cwd ? [args.cwd] : edited }).catch(classify);
         const match = discovered.commands.find((item) => item.kind === args.kind);
         if (!match) throw new KnownFailure('no_command', `Nenhum comando de ${args.kind} descoberto; informe command.`);
         ({ command, cwd, origin } = match);
