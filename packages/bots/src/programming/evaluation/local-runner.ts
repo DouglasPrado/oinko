@@ -25,6 +25,7 @@ interface Job {
  */
 export class LocalRunner implements RunnerPort {
   readonly calls: { action: string; correlation?: unknown }[] = [];
+  private readonly taskBranches = new Map<string, string>();
   readonly jobs = new Map<string, any>();
   readonly tasks = new Map<string, string>();
   private readonly baselines = new Map<string, any>();
@@ -90,8 +91,16 @@ export class LocalRunner implements RunnerPort {
             : [],
         } as T;
       case 'createTask': {
-        this.tasks.set(command.definition.id, 'ready');
-        const job = { id: `job-${++this.sequence}`, state: 'succeeded' };
+        // Like the runner: an ID is reusable only after a failure and with the same branch,
+        // and git refuses a branch that already exists (the fixture's own `main`).
+        const { id, branch } = command.definition as { id: string; branch: string };
+        const previous = this.taskBranches.get(id);
+        if (previous !== undefined && (previous !== branch || this.tasks.get(id) !== 'failed'))
+          throw Object.assign(new Error('ID de tarefa já utilizado.'), { code: 'task_exists' });
+        this.taskBranches.set(id, branch);
+        const exists = branch === 'main';
+        this.tasks.set(id, exists ? 'failed' : 'ready');
+        const job = { id: `job-${++this.sequence}`, state: exists ? 'failed' : 'succeeded', ...(exists && { error: `fatal: a branch named '${branch}' already exists` }) };
         this.jobs.set(job.id, job);
         return job as T;
       }

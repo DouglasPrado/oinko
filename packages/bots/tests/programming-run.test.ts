@@ -270,6 +270,51 @@ describe('programming run with the real agent loop and simulated provider', () =
     expect(store.listReceipts(id).map((receipt) => [receipt.kind, receipt.state])).toEqual([['workspace.applyPatch', 'failed']]);
   }, 60_000);
 
+  it('prepares the run task on its own branch whatever branch the model asks for, and retries after a failure', async () => {
+    const steps: ((messages: any[]) => ScriptStep)[] = [
+      // minimax-m3 asked for the base branch, then kept retrying with other names.
+      () => ({ tool: 'workspace_prepare_task', args: { branch: 'main' } }),
+      () => ({ tool: 'workspace_read_range', args: { path: 'sum.cjs' } }),
+      (messages) => ({ tool: 'workspace_replace', args: { path: 'sum.cjs', expectedHash: lastResult(messages).hash, oldText: 'a - b', newText: 'a + b' } }),
+      () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'node sum.test.cjs' } }),
+      () => ({ tool: 'programming_complete', args: { summary: 'Soma corrigida.' } }),
+      () => ({ text: 'Concluí.' }),
+    ];
+    let index = 0;
+    const context = setup({ script: (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Parado.' }) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', text: 'Corrija a função sum.' }).run.id;
+    service.kick();
+    await service.idle();
+    const run = store.getRun(id)!;
+    expect(run.state).toBe('completed');
+    expect(run.taskId).toBe(`run-${id.slice(4, 12)}`);
+    const prepared = store.listReceipts(id).filter((receipt) => receipt.kind === 'workspace.createTask');
+    expect(prepared.map((receipt) => [receipt.state, receipt.intent.branch])).toEqual([['succeeded', `oinko/${id.slice(4, 12)}`]]);
+  }, 60_000);
+
+  it('never gets stuck on a task ID a failed attempt left behind, and never leaves it uncertain', async () => {
+    const steps: ((messages: any[]) => ScriptStep)[] = [
+      () => ({ tool: 'workspace_prepare_task', args: {} }),
+      () => ({ tool: 'workspace_read_range', args: { path: 'sum.cjs' } }),
+      (messages) => ({ tool: 'workspace_replace', args: { path: 'sum.cjs', expectedHash: lastResult(messages).hash, oldText: 'a - b', newText: 'a + b' } }),
+      () => ({ tool: 'workspace_check', args: { kind: 'test', command: 'node sum.test.cjs' } }),
+      () => ({ tool: 'programming_complete', args: { summary: 'Soma corrigida.' } }),
+      () => ({ text: 'Concluí.' }),
+    ];
+    let index = 0;
+    const context = setup({ script: (messages) => (steps[index] ? steps[index++]!(messages) : { text: 'Parado.' }) });
+    const { service, store } = context.programming;
+    const id = service.start(operator, { botId: 'alpha', projectId: 'shop', text: 'Corrija a função sum.' }).run.id;
+    const short = id.slice(4, 12);
+    // An earlier attempt (older version) registered this run's task ID on another branch and failed.
+    await context.runner.command({ action: 'createTask', definition: { id: `run-${short}`, projectId: 'shop', name: 'x', branch: 'main' } });
+    service.kick();
+    await service.idle();
+    expect(store.getRun(id)).toMatchObject({ state: 'completed', taskId: `run-${short}-2` });
+    expect(store.listReceipts(id).filter((receipt) => receipt.state === 'uncertain')).toEqual([]);
+  }, 60_000);
+
   it('checks the package of the files the run changed when no cwd is given, not the whole repository', async () => {
     const MONOREPO = {
       'package.json': JSON.stringify({ name: 'root', private: true, scripts: { test: 'node -e "process.exit(3)"' } }),

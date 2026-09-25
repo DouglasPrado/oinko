@@ -290,7 +290,8 @@ export class EnvironmentController {
           previous.branch !== command.definition.branch ||
           previous.state !== 'failed')
       )
-        throw new WorkspaceError('ID de tarefa já utilizado.');
+        // Coded: nothing was created, so a caller can pick another ID instead of guessing.
+        throw Object.assign(new WorkspaceError('ID de tarefa já utilizado.'), { code: 'task_exists' });
       const task = this.workspaces.saveTask(
         { ...command.definition, state: 'creating' },
         previous?.revision ?? 0,

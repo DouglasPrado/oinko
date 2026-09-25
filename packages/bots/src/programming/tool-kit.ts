@@ -16,7 +16,7 @@ export type Json = Record<string, unknown>;
 export const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
 
 /** Runner errors that mean nothing was written (safe, known failures); invalid_request is refused before any effect. */
-const CONFLICT_CODES = new Set(['invalid_request', 'edit_conflict', 'external_change', 'idempotency_conflict', 'invalid_path', 'symlink_escape', 'not_found', 'binary_file', 'unsupported_encoding', 'invalid_range', 'invalid_cursor', 'invalid_regex']);
+const CONFLICT_CODES = new Set(['invalid_request', 'task_exists', 'edit_conflict', 'external_change', 'idempotency_conflict', 'invalid_path', 'symlink_escape', 'not_found', 'binary_file', 'unsupported_encoding', 'invalid_range', 'invalid_cursor', 'invalid_regex']);
 
 const RUNNER_OUTDATED = 'runner_outdated';
 const blockedFailure = (context: RunContext) =>
